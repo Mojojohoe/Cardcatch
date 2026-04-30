@@ -53,6 +53,8 @@ import {
 } from 'lucide-react';
 import { GameService, parseCard, DESPERATION_SLICES } from './services/gameService';
 import { RoomData, PlayerData, Suit, CARD_UNICODE, SUITS, PlayerRole, Difficulty, GameSettings, MAJOR_ARCANA, PowerCard } from './types';
+import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerInteraction';
+import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 
 const SUIT_ICONS: Record<string, string> = {
   Hearts: '♥',
@@ -615,131 +617,6 @@ const InsightModal: React.FC<{
         <button onClick={onClose} className="bg-yellow-500 text-black px-12 py-4 rounded-full font-black uppercase tracking-widest text-base shadow-[0_0_40px_rgba(234,179,8,0.3)] transition-all hover:scale-110 active:scale-95">
            {intel.type === 'Priestess' ? 'Close Vision' : 'Continue'}
         </button>
-      </div>
-    </div>
-  );
-};
-
-const FortuneWheelVisual: React.FC<{
-  spinning: boolean;
-  offset: number;
-  sizeClass?: string;
-}> = ({ spinning, offset, sizeClass = 'w-60 h-60' }) => {
-  const wheelSlices = [
-    { label: 'LOSE_ROUND', size: 3, color: '#7f1d1d' },
-    { label: 'WIN_ROUND', size: 3, color: '#14532d' },
-    { label: 'WIN_2_CARDS', size: 5, color: '#1e3a8a' },
-    { label: 'DOUBLE_JOKER', size: 1, color: '#581c87' },
-    { label: 'JACKPOT', size: 2, color: '#854d0e' },
-    { label: 'POWER_CARD', size: 1, color: '#0f766e' },
-    { label: 'LOSE_2_CARDS', size: 5, color: '#7c2d12' },
-  ];
-  const totalSize = wheelSlices.reduce((acc, s) => acc + s.size, 0);
-  const wheelRotation = useMemo(() => -(360 * 10 + offset * 360), [offset]);
-  const wheelGradient = useMemo(() => {
-    let start = 0;
-    return wheelSlices.map((slice) => {
-      const from = (start / totalSize) * 100;
-      start += slice.size;
-      const to = (start / totalSize) * 100;
-      return `${slice.color} ${from}% ${to}%`;
-    }).join(', ');
-  }, [totalSize]);
-
-  return (
-    <div className={`relative ${sizeClass} mx-auto`}>
-      <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[14px] border-t-yellow-400" />
-      <motion.div
-        animate={{ rotate: spinning ? wheelRotation : -(offset * 360) }}
-        transition={{ duration: spinning ? 2.5 : 0.2, ease: [0.12, 0, 0, 1] }}
-        className="w-full h-full rounded-full border-[10px] border-amber-600/60 overflow-hidden relative shadow-[0_0_40px_rgba(245,158,11,0.3)]"
-      >
-        <div className="absolute inset-0" style={{ background: `conic-gradient(${wheelGradient})` }} />
-        <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full opacity-30 pointer-events-none">
-          {(() => {
-            let running = 0;
-            return wheelSlices.map((slice, idx) => {
-              running += slice.size;
-              const angle = (running / totalSize) * 360;
-              const x2 = 50 + 50 * Math.cos(((angle - 90) * Math.PI) / 180);
-              const y2 = 50 + 50 * Math.sin(((angle - 90) * Math.PI) / 180);
-              return <line key={idx} x1="50" y1="50" x2={x2} y2={y2} stroke="white" strokeWidth="0.4" />;
-            });
-          })()}
-        </svg>
-      </motion.div>
-      <div className="absolute inset-0 flex items-center justify-center z-10">
-        <div className="w-16 h-16 rounded-full bg-amber-700 border-4 border-amber-300 flex items-center justify-center">
-          <span className="text-[10px] font-black text-black uppercase">Fortune</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const PowerDecisionModal: React.FC<{
-  decision: { powerCardId: number; options: string[]; disabledReasons?: Record<string, string>; wheelResult?: string | null };
-  onSubmit: (option: string, wheelOffset?: number) => void;
-}> = ({ decision, onSubmit }) => {
-  const [wheelSpinning, setWheelSpinning] = useState(false);
-  const [wheelOffset, setWheelOffset] = useState(0);
-  const [revealed] = useState<string | null>(decision.wheelResult || null);
-  const isWheel = decision.powerCardId === 10;
-
-  const spinWheel = () => {
-    const nextOffset = Math.random();
-    setWheelOffset(nextOffset);
-    setWheelSpinning(true);
-    setTimeout(() => {
-      setWheelSpinning(false);
-      onSubmit('SPIN_WHEEL', nextOffset);
-    }, 2500);
-  };
-
-  const optionMeta: Record<string, { title: string; description: string }> = {
-    STEAL_JOKER: { title: 'Steal Joker', description: 'Take one Joker from the opponent if they have one.' },
-    FROGIFY: { title: 'Frogify', description: 'Transform opponent played card into Frogs-1.' },
-    DEVIL_KING: { title: 'Royal Pact', description: 'Discard 2 random cards to make your played card a King.' },
-    DEVIL_BLOCK: { title: 'Seal Their Arcana', description: 'Discard 2 random cards to block opponent power this round.' },
-    DEVIL_RANDOMIZE: { title: 'Chaotic Suits', description: 'Discard 2 random cards and randomize both played suits.' }
-  };
-  return (
-    <div className="absolute inset-0 z-[260] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-yellow-500/40 bg-slate-950 p-6 space-y-4">
-        <h3 className="text-xl font-black uppercase text-yellow-400">
-          {decision.powerCardId === 1 ? 'Cast Spell' : decision.powerCardId === 15 ? 'Devil Deal' : 'Wheel Of Fortune'}
-        </h3>
-        {isWheel ? (
-          <div className="space-y-4">
-            <FortuneWheelVisual spinning={wheelSpinning} offset={wheelOffset} />
-            <button
-              onClick={spinWheel}
-              disabled={wheelSpinning}
-              className="w-full py-3 rounded-xl bg-amber-500 text-black font-black uppercase disabled:opacity-50"
-            >
-              {wheelSpinning ? 'Spinning...' : 'Spin'}
-            </button>
-            {revealed && <p className="text-center text-amber-300 font-bold">Outcome: {revealed.replaceAll('_', ' ')}</p>}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3">
-            {decision.options.map(option => (
-              <div key={option} className={`rounded-xl border p-3 ${decision.disabledReasons?.[option] ? 'border-slate-700 bg-slate-900/30 opacity-60' : 'border-emerald-600/40 bg-emerald-900/30'}`}>
-                <button
-                  onClick={() => onSubmit(option)}
-                  disabled={Boolean(decision.disabledReasons?.[option])}
-                  className="w-full text-left disabled:cursor-not-allowed"
-                >
-                  <div className="text-sm font-black uppercase text-white">{optionMeta[option]?.title || option.replaceAll('_', ' ')}</div>
-                  <div className="text-[11px] text-slate-300 mt-1">{optionMeta[option]?.description || ''}</div>
-                  {decision.disabledReasons?.[option] && (
-                    <div className="text-[10px] text-red-300 mt-2 uppercase font-bold">{decision.disabledReasons[option]}</div>
-                  )}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1752,37 +1629,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             ))}
           </div>
           {room.status === 'powering' && opponentPendingDecision && (
-            <div className="mt-2 flex flex-col items-center gap-2">
-              <span className="text-[9px] font-black uppercase tracking-widest text-amber-300">
-                {opponentPendingDecision.powerCardId === 1
-                  ? `${opponent.name} is casting a spell`
-                  : opponentPendingDecision.powerCardId === 15
-                    ? `${opponent.name} is making a deal`
-                    : `${opponent.name} is spinning fate`}
-              </span>
-              <div className="flex gap-2 flex-wrap justify-center">
-                {(opponentPendingDecision.options || []).map((option) => (
-                  <div
-                    key={option}
-                    className={`w-[130px] min-h-[64px] px-2 py-2 rounded-lg border text-[8px] font-black uppercase flex flex-col justify-between ${
-                      opponentPendingDecision.selectedOption === option
-                        ? 'border-yellow-400 text-yellow-300 bg-yellow-400/10 shadow-[0_0_18px_rgba(250,204,21,0.2)]'
-                        : 'border-slate-700 text-slate-300 bg-slate-900/60'
-                    }`}
-                  >
-                    <span>{option.replaceAll('_', ' ')}</span>
-                    <span className="text-[7px] text-slate-400 normal-case leading-tight mt-1">
-                      {opponentPendingDecision.powerCardId === 1 && option === 'STEAL_JOKER' && 'Attempts to steal a Joker.'}
-                      {opponentPendingDecision.powerCardId === 1 && option === 'FROGIFY' && 'Turns target into Frogs-1.'}
-                      {opponentPendingDecision.powerCardId === 15 && option === 'DEVIL_KING' && 'Pays 2 cards for a King.'}
-                      {opponentPendingDecision.powerCardId === 15 && option === 'DEVIL_BLOCK' && 'Pays 2 cards to block power.'}
-                      {opponentPendingDecision.powerCardId === 15 && option === 'DEVIL_RANDOMIZE' && 'Pays 2 cards to randomize suits.'}
-                      {opponentPendingDecision.powerCardId === 10 && 'Spins outcome wheel.'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <OpponentDecisionStrip opponentName={opponent.name} decision={opponentPendingDecision} />
           )}
         </div>
       )}
