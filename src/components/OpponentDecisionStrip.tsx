@@ -11,7 +11,20 @@ export const OpponentDecisionStrip: React.FC<{
       ? `${opponentName} is casting a spell`
       : decision.powerCardId === 15
         ? `${opponentName} is making a deal`
+        : decision.powerCardId === 2
+          ? `${opponentName} is consulting the High Priestess`
         : `${opponentName} is spinning fate`;
+
+  if (decision.powerCardId === 2) {
+    return (
+      <div className="mt-2 flex flex-col items-center gap-1 max-w-[min(100%,18rem)] text-center px-2">
+        <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300">{headline}</span>
+        <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500 leading-snug">
+          The veil listens · held card may shift before reveal
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-2 flex flex-col items-center gap-2">

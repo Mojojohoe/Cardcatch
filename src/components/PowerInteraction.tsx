@@ -1,18 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
+import { CardVisual } from './GameVisuals';
 
 export interface PendingDecisionView {
   powerCardId: number;
   options: string[];
   disabledReasons?: Record<string, string>;
   wheelResult?: string | null;
+  priestessOpponentUsesPower?: boolean;
+  priestessOpponentName?: string;
 }
 
 export const FortuneWheelVisual: React.FC<{
   spinning: boolean;
   offset: number;
   sizeClass?: string;
-}> = ({ spinning, offset, sizeClass = 'w-60 h-60' }) => {
+}> = ({ spinning, offset, sizeClass = 'w-72 h-72' }) => {
   const wheelSlices = [
     { label: 'LOSE_ROUND', size: 3, color: '#7f1d1d' },
     { label: 'WIN_ROUND', size: 3, color: '#14532d' },
@@ -43,6 +46,28 @@ export const FortuneWheelVisual: React.FC<{
         className="w-full h-full rounded-full border-[10px] border-amber-600/60 overflow-hidden relative shadow-[0_0_40px_rgba(245,158,11,0.3)]"
       >
         <div className="absolute inset-0" style={{ background: `conic-gradient(${wheelGradient})` }} />
+        {(() => {
+          let running = 0;
+          return wheelSlices.map((slice, idx) => {
+            const start = (running / totalSize) * 360;
+            running += slice.size;
+            const end = (running / totalSize) * 360;
+            const mid = (start + end) / 2;
+            return (
+              <div
+                key={`${slice.label}-${idx}`}
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                style={{ transform: `rotate(${mid - 90}deg)` }}
+              >
+                <div className="absolute right-[2%] w-[36%] text-center">
+                  <span className="text-[8px] sm:text-[9px] font-black uppercase text-white/90 leading-none tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                    {slice.label.replaceAll('_', ' ')}
+                  </span>
+                </div>
+              </div>
+            );
+          });
+        })()}
         <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full opacity-30 pointer-events-none">
           {(() => {
             let running = 0;
@@ -67,12 +92,16 @@ export const FortuneWheelVisual: React.FC<{
 
 export const PowerDecisionModal: React.FC<{
   decision: PendingDecisionView;
-  onSubmit: (option: string, wheelOffset?: number) => void;
-}> = ({ decision, onSubmit }) => {
-  const [wheelSpinning, setWheelSpinning] = useState(false);
-  const [wheelOffset, setWheelOffset] = useState(0);
-  const [revealed] = useState<string | null>(decision.wheelResult || null);
+  /** Locked engage card — must equal what was submitted with Engage. */
+  priestessLockedCard?: string | null;
+  /** Full hand (includes locked card): swap target must exist here. */
+  priestessHand?: string[];
+  onSubmit: (option: string, wheelOffset?: number, priestessSwapToCard?: string | null) => void;
+}> = ({ decision, priestessLockedCard = null, priestessHand = [], onSubmit }) => {
+  const [wheelOffset] = useState(0.25);
+  const [priestessPickIndex, setPriestessPickIndex] = useState<number | null>(null);
   const isWheel = decision.powerCardId === 10;
+  const isPriestess = decision.powerCardId === 2;
 
   const optionMeta: Record<string, { title: string; description: string }> = {
     STEAL_JOKER: { title: 'Steal Joker', description: 'Take one Joker from the opponent if they have one.' },
@@ -84,37 +113,121 @@ export const PowerDecisionModal: React.FC<{
 
   const spinWheel = () => {
     const nextOffset = Math.random();
-    setWheelOffset(nextOffset);
-    setWheelSpinning(true);
-    setTimeout(() => {
-      setWheelSpinning(false);
-      onSubmit('SPIN_WHEEL', nextOffset);
-    }, 2500);
+    onSubmit('SPIN_WHEEL', nextOffset);
   };
+
+  const oppName = decision.priestessOpponentName || 'Opponent';
+  const oppUsesPower = Boolean(decision.priestessOpponentUsesPower);
+  const locked = priestessLockedCard || '';
+  const swapCard =
+    priestessPickIndex !== null && priestessPickIndex >= 0 && priestessPickIndex < priestessHand.length
+      ? priestessHand[priestessPickIndex]
+      : null;
+  const swapIsValid =
+    swapCard !== null && swapCard !== locked && priestessHand.some((c) => c === swapCard);
 
   return (
     <div className="absolute inset-0 z-[260] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-yellow-500/40 bg-slate-950 p-6 space-y-4">
+      <div className={`w-full ${isPriestess ? 'max-w-4xl' : 'max-w-xl'} rounded-2xl border border-yellow-500/40 bg-slate-950 p-6 space-y-4 max-h-[min(720px,calc(100vh-48px))] overflow-y-auto`}>
         <h3 className="text-xl font-black uppercase text-yellow-400">
-          {decision.powerCardId === 1 ? 'Cast Spell' : decision.powerCardId === 15 ? 'Devil Deal' : 'Wheel Of Fortune'}
+          {decision.powerCardId === 1
+            ? 'Cast Spell'
+            : decision.powerCardId === 15
+              ? 'Devil Deal'
+              : decision.powerCardId === 2
+                ? 'Consult High Priestess'
+                : 'Wheel Of Fortune'}
         </h3>
+        {isPriestess && locked ? (
+          <div className="space-y-4">
+            <p className="text-center text-[11px] sm:text-xs font-black uppercase tracking-widest text-slate-400 leading-relaxed">
+              Committed card on the altar · opponent intel · seal your choice before the veil lifts
+            </p>
+            <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/40 px-4 py-3 text-center">
+              <p className="text-[11px] font-black uppercase tracking-wider text-indigo-200">
+                {oppUsesPower ? (
+                  <>
+                    <span className="text-yellow-300">{oppName}</span> is playing a Major Arcana this round.
+                  </>
+                ) : (
+                  <>
+                    <span className="text-slate-200">{oppName}</span> is not playing a Major Arcana this round.
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="flex flex-col items-center gap-3">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Committed to the round</span>
+              <div className="scale-90 origin-top">
+                <CardVisual card={locked} revealed noAnimate />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 text-center">
+                Your hand · select a different card to swap · tap again to deselect
+              </p>
+              <div className="flex flex-wrap justify-center gap-2 py-2 max-h-[220px] overflow-y-auto rounded-xl border border-slate-800/80 bg-black/40 p-3">
+                {priestessHand.map((card, idx) => (
+                  <button
+                    type="button"
+                    key={`pv-${idx}-${card}`}
+                    onClick={() => setPriestessPickIndex((cur) => (cur === idx ? null : idx))}
+                    className={`rounded-lg outline-none ring-offset-2 ring-offset-slate-950 transition-transform hover:scale-105 active:scale-95 ${
+                      priestessPickIndex === idx ? 'ring-2 ring-yellow-400' : 'ring-0'
+                    }`}
+                  >
+                    <div className={`scale-[0.55] sm:scale-[0.65] origin-center ${card === locked ? 'opacity-100' : ''}`}>
+                      <CardVisual card={card} revealed noAnimate disabled={false} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => onSubmit('PRIESTESS_RESOLVE')}
+                className="flex-1 py-3 rounded-xl border border-emerald-600/60 bg-emerald-900/40 text-emerald-200 font-black uppercase text-xs tracking-widest hover:bg-emerald-800/50"
+              >
+                Hold committed card
+              </button>
+              <button
+                type="button"
+                disabled={!swapIsValid}
+                onClick={() => onSubmit('PRIESTESS_RESOLVE', undefined, swapCard)}
+                className={`flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest border ${
+                  swapIsValid
+                    ? 'border-yellow-500 bg-yellow-500 text-black hover:bg-yellow-400'
+                    : 'border-slate-700 bg-slate-900 text-slate-600 cursor-not-allowed'
+                }`}
+              >
+                Swap to chosen card
+              </button>
+            </div>
+          </div>
+        ) : null}
         {isWheel ? (
           <div className="space-y-4">
-            <FortuneWheelVisual spinning={wheelSpinning} offset={wheelOffset} />
+            <FortuneWheelVisual spinning={false} offset={wheelOffset} sizeClass="w-80 h-80 sm:w-96 sm:h-96" />
             <button
               onClick={spinWheel}
-              disabled={wheelSpinning}
               className="w-full py-3 rounded-xl bg-amber-500 text-black font-black uppercase disabled:opacity-50"
             >
-              {wheelSpinning ? 'Spinning...' : 'Spin'}
+              Spin Wheel
             </button>
-            {revealed && <p className="text-center text-amber-300 font-bold">Outcome: {revealed.replaceAll('_', ' ')}</p>}
+            <p className="text-center text-amber-300/90 text-xs uppercase tracking-wider font-black">
+              Spin once to resolve in the shared round sequence.
+            </p>
           </div>
-        ) : (
+        ) : !isPriestess ? (
           <div className="grid grid-cols-1 gap-3">
             {decision.options.map(option => (
               <div key={option} className={`rounded-xl border p-3 ${decision.disabledReasons?.[option] ? 'border-slate-700 bg-slate-900/30 opacity-60' : 'border-emerald-600/40 bg-emerald-900/30'}`}>
                 <button
+                  type="button"
                   onClick={() => onSubmit(option)}
                   disabled={Boolean(decision.disabledReasons?.[option])}
                   className="w-full text-left disabled:cursor-not-allowed"
@@ -128,7 +241,7 @@ export const PowerDecisionModal: React.FC<{
               </div>
             ))}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

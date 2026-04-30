@@ -53,7 +53,7 @@ type GameEvent =
   | { type: 'SELECT_DRAFT', uid: string, powerCardId: number }
   | { type: 'CHEAT_POWER', uid: string, powerCardId: number }
   | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null }
-  | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number };
+  | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number; priestessSwapToCard?: string | null };
 
 const STORAGE_KEY = 'preydator_settings';
 
@@ -72,7 +72,7 @@ const loadSettings = (): GameSettings => {
     disableJokers: false,
     disablePowerCards: false,
     enableDesperation: false,
-    tiers: ['TIER 1']
+    tiers: ['TIER 0']
   };
 };
 
@@ -279,7 +279,7 @@ export class GameService {
         }
       } else if (event.type === 'SUBMIT_POWER_DECISION') {
         if (remoteUid) {
-          this.handleSubmitPowerDecision(remoteUid, event.option, event.wheelOffset);
+          this.handleSubmitPowerDecision(remoteUid, event.option, event.wheelOffset, event.priestessSwapToCard);
         }
       }
     } else {
@@ -429,11 +429,13 @@ export class GameService {
           ...this.state.players[this.myUid],
           role: settings.hostRole === 'Preydator' ? 'Preydator' : hostRole,
           hand: hostHand,
+          desperationTier: settings.enableDesperation && (settings.hostRole !== 'Predator') ? 1 : 0
         },
         [guestUid]: {
           ...this.state.players[guestUid],
           role: settings.hostRole === 'Preydator' ? 'Preydator' : guestRole,
           hand: guestHand,
+          desperationTier: settings.enableDesperation && guestRole !== 'Predator' ? 1 : 0
         }
       },
       status: settings.disablePowerCards ? 'playing' : 'drafting',
@@ -465,58 +467,31 @@ export class GameService {
     const allConfirmed = Object.values(updatedPlayers).every((p: PlayerData) => p.confirmed);
 
     if (allConfirmed) {
-      const p1Uid = this.myUid;
-      const p2Uid = Object.keys(updatedPlayers).find(id => id !== p1Uid)!;
-      
-      const hp1 = updatedPlayers[p1Uid].currentPowerCard === 2 && !updatedPlayers[p1Uid].priestessVisionUsed;
-      const hp2 = updatedPlayers[p2Uid].currentPowerCard === 2 && !updatedPlayers[p2Uid].priestessVisionUsed;
-
-      if (hp1 || hp2) {
-        if (hp1) {
-          updatedPlayers[p1Uid].secretIntel = {
-            type: 'Priestess',
-            cards: [updatedPlayers[p2Uid].currentMove!],
-            powerCards: updatedPlayers[p2Uid].powerCards
-          };
-          updatedPlayers[p1Uid].confirmed = false;
-          updatedPlayers[p1Uid].priestessVisionUsed = true;
-        }
-        if (hp2) {
-          updatedPlayers[p2Uid].secretIntel = {
-            type: 'Priestess',
-            cards: [updatedPlayers[p1Uid].currentMove!],
-            powerCards: updatedPlayers[p1Uid].powerCards
-          };
-          updatedPlayers[p2Uid].confirmed = false;
-          updatedPlayers[p2Uid].priestessVisionUsed = true;
-        }
-
+      const pendingPowerDecisions = this.createPendingPowerDecisions(updatedPlayers);
+      const hasPendingDecisions = Object.values(pendingPowerDecisions).some(Boolean);
+      if (hasPendingDecisions) {
+        const uidsLocked = Object.keys(updatedPlayers);
+        const engageMoves: Record<string, string> = {
+          [uidsLocked[0]]: updatedPlayers[uidsLocked[0]].currentMove!,
+          [uidsLocked[1]]: updatedPlayers[uidsLocked[1]].currentMove!
+        };
         this.state = {
           ...this.state,
           players: updatedPlayers,
+          status: 'powering',
+          engageMoves,
+          pendingPowerDecisions,
           updatedAt: Date.now()
         };
       } else {
-        const pendingPowerDecisions = this.createPendingPowerDecisions(updatedPlayers);
-        const hasPendingDecisions = Object.values(pendingPowerDecisions).some(Boolean);
-        if (hasPendingDecisions) {
-          this.state = {
-            ...this.state,
-            players: updatedPlayers,
-            status: 'powering',
-            pendingPowerDecisions,
-            updatedAt: Date.now()
-          };
-        } else {
-          this.state = {
-            ...this.state,
-            players: updatedPlayers,
-            status: 'results',
-            pendingPowerDecisions: {},
-            lastOutcome: this.calculateOutcome(this.state, updatedPlayers),
-            updatedAt: Date.now()
-          };
-        }
+        this.state = {
+          ...this.state,
+          players: updatedPlayers,
+          status: 'results',
+          pendingPowerDecisions: {},
+          lastOutcome: this.calculateOutcome(this.state, updatedPlayers),
+          updatedAt: Date.now()
+        };
       }
     } else {
       this.state = {
@@ -623,11 +598,11 @@ export class GameService {
     }
   }
 
-  async submitPowerDecision(option: string, wheelOffset?: number) {
+  async submitPowerDecision(option: string, wheelOffset?: number, priestessSwapToCard?: string | null) {
     if (this.isHost) {
-      this.handleSubmitPowerDecision(this.myUid, option, wheelOffset);
+      this.handleSubmitPowerDecision(this.myUid, option, wheelOffset, priestessSwapToCard);
     } else {
-      this.sendEvent({ type: 'SUBMIT_POWER_DECISION', uid: this.myUid, option, wheelOffset });
+      this.sendEvent({ type: 'SUBMIT_POWER_DECISION', uid: this.myUid, option, wheelOffset, priestessSwapToCard });
     }
   }
 
@@ -774,6 +749,16 @@ export class GameService {
           options: ['SPIN_WHEEL'],
           selectedOption: null
         };
+      } else if (power === 2) {
+        const oppUsesPower = players[oppUid].currentPowerCard !== null;
+        decisions[uid] = {
+          powerCardId: 2,
+          options: ['PRIESTESS_RESOLVE'],
+          selectedOption: null,
+          priestessOpponentUsesPower: oppUsesPower,
+          priestessOpponentName: players[oppUid].name,
+          priestessSwapToCard: null
+        };
       } else if (power === 15) {
         const opponentUsedPower = players[oppUid].currentPowerCard !== null && !blocked[oppUid];
         const spareCards = players[uid].hand.filter(card => card !== players[uid].currentMove).length;
@@ -800,15 +785,29 @@ export class GameService {
     return decisions;
   }
 
-  private handleSubmitPowerDecision(uid: string, option: string, wheelOffset?: number) {
+  private handleSubmitPowerDecision(uid: string, option: string, wheelOffset?: number, priestessSwapToCard?: string | null) {
     if (!this.state || this.state.status !== 'powering') return;
     const pending = { ...(this.state.pendingPowerDecisions || {}) };
     const current = pending[uid];
     if (!current || current.selectedOption !== null) return;
     if (!current.options.includes(option) && option !== 'SPIN_WHEEL') return;
     if (current.disabledReasons?.[option]) return;
+    if (current.powerCardId === 2 && option !== 'PRIESTESS_RESOLVE') return;
 
     current.selectedOption = option;
+    if (current.powerCardId === 2) {
+      const player = this.state.players[uid];
+      const locked = this.state.engageMoves?.[uid] ?? player.currentMove!;
+      let swapAccepted: string | null = null;
+      if (
+        priestessSwapToCard &&
+        priestessSwapToCard !== locked &&
+        player.hand.includes(priestessSwapToCard)
+      ) {
+        swapAccepted = priestessSwapToCard;
+      }
+      current.priestessSwapToCard = swapAccepted;
+    }
     if (current.powerCardId === 10) {
       const offset = typeof wheelOffset === 'number' ? wheelOffset : Math.random();
       current.wheelOffset = offset;
@@ -961,7 +960,11 @@ export class GameService {
     const p2Uid = uids.find(id => id !== p1Uid)!;
 
     let targetSuit = roomData.targetSuit!;
-    const initialCardsPlayed = { [p1Uid]: players[p1Uid].currentMove!, [p2Uid]: players[p2Uid].currentMove! };
+    const engageLocks =
+      roomData.engageMoves && roomData.engageMoves[p1Uid] && roomData.engageMoves[p2Uid]
+        ? { ...roomData.engageMoves }
+        : ({ [p1Uid]: players[p1Uid].currentMove!, [p2Uid]: players[p2Uid].currentMove! } as Record<string, string>);
+    const initialCardsPlayed = { ...engageLocks };
     let c1 = players[p1Uid].currentMove!;
     let c2 = players[p2Uid].currentMove!;
     let power1 = players[p1Uid].currentPowerCard;
@@ -1013,6 +1016,62 @@ export class GameService {
       if (coinFlip === 'Host') blockedPowers[p2Uid] = true;
       else blockedPowers[p1Uid] = true;
     }
+
+    const priestessFront: ResolutionEvent[] = [];
+    const applyPriestessConsult = (
+      uid: string,
+      decision: PendingPowerDecision | null | undefined,
+      isP1: boolean
+    ) => {
+      const playedPowerId = players[uid].currentPowerCard;
+      if (playedPowerId !== 2 || blockedPowers[uid]) return;
+
+      const locked = engageLocks[uid];
+      const rawSwap =
+        typeof decision?.priestessSwapToCard === 'string' && decision.priestessSwapToCard.trim() !== ''
+          ? decision!.priestessSwapToCard
+          : null;
+      let finalCard = locked;
+      if (
+        rawSwap &&
+        rawSwap !== locked &&
+        players[uid].hand.includes(rawSwap)
+      ) {
+        finalCard = rawSwap;
+      }
+      const oppName = decision?.priestessOpponentName || 'Opponent';
+      const oppUsed = Boolean(decision?.priestessOpponentUsesPower);
+      priestessFront.push({
+        type: 'POWER_TRIGGER',
+        uid,
+        powerCardId: 2,
+        message: oppUsed
+          ? `${players[uid].name} consults the High Priestess · ${oppName} is playing a Major Arcana this round.`
+          : `${players[uid].name} consults the High Priestess · ${oppName} is not playing a Major Arcana this round.`
+      });
+      if (finalCard !== locked) {
+        priestessFront.push({
+          type: 'CARD_SWAP',
+          uid,
+          cardId: finalCard,
+          message: `${players[uid].name} changes their committed card via the Priestess.`
+        });
+      } else {
+        priestessFront.push({
+          type: 'POWER_TRIGGER',
+          uid,
+          powerCardId: 2,
+          message: `${players[uid].name} holds course with ${locked.replace('-', ' of ')}.`
+        });
+      }
+
+      if (isP1) c1 = finalCard;
+      else c2 = finalCard;
+    };
+
+    applyPriestessConsult(p1Uid, p1Decision, true);
+    applyPriestessConsult(p2Uid, p2Decision, false);
+    events.splice(0, 0, ...priestessFront);
 
     // Interactive powers (Magician / Devil / Wheel) resolve before standard before-resolution effects.
     const applyMagicianDecision = (uid: string, oppUid: string, decision?: PendingPowerDecision | null) => {
@@ -1151,7 +1210,7 @@ export class GameService {
 
     const hermitSwap = (pUid: string, oCard: string) => {
       const p = players[pUid];
-      return p.hand.find(card => {
+      const winningCard = p.hand.find(card => {
         const pCard = parseCard(card);
         const oCardP = parseCard(oCard);
         if (pCard.isJoker) return true;
@@ -1160,22 +1219,51 @@ export class GameService {
         if (pCard.suit !== targetSuit && oCardP.suit === targetSuit) return false;
         return getCardValue(card) > getCardValue(oCard);
       });
+      if (winningCard) {
+        return { card: winningCard, reason: 'win' as const };
+      }
+      const drawingCard = p.hand.find(card => {
+        const pCard = parseCard(card);
+        const oCardP = parseCard(oCard);
+        if (pCard.isJoker && oCardP.isJoker) return true;
+        if (pCard.isJoker || oCardP.isJoker) return false;
+        const pTarget = pCard.suit === targetSuit;
+        const oTarget = oCardP.suit === targetSuit;
+        if (pTarget !== oTarget) return false;
+        return getCardValue(card) === getCardValue(oCard);
+      });
+      if (drawingCard) {
+        return { card: drawingCard, reason: 'draw' as const };
+      }
+      return { card: null, reason: 'none' as const };
     };
 
-    if (power1 === 9) { 
-        const better = hermitSwap(p1Uid, c2); 
-        if (better) { 
-          events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit found a way!` });
-          c1 = better; 
-          events.push({ type: 'CARD_SWAP', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name} swapped for a better card!` });
+    if (power1 === 9) {
+        if (blockedPowers[p1Uid]) {
+          events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit was blocked by Tower.` });
+        } else {
+          const better = hermitSwap(p1Uid, c2);
+          if (better.card) {
+            c1 = better.card;
+            events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit found a ${better.reason === 'win' ? 'winning' : 'drawing'} line.` });
+            events.push({ type: 'CARD_SWAP', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name} swapped to ${c1.replace('-', ' of ')}.` });
+          } else {
+            events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit could not find a winning or drawing card.` });
+          }
         }
     }
-    if (power2 === 9) { 
-        const better = hermitSwap(p2Uid, c1); 
-        if (better) { 
-          events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit found a way!` });
-          c2 = better;
-          events.push({ type: 'CARD_SWAP', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name} swapped for a better card!` });
+    if (power2 === 9) {
+        if (blockedPowers[p2Uid]) {
+          events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit was blocked by Tower.` });
+        } else {
+          const better = hermitSwap(p2Uid, c1);
+          if (better.card) {
+            c2 = better.card;
+            events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit found a ${better.reason === 'win' ? 'winning' : 'drawing'} line.` });
+            events.push({ type: 'CARD_SWAP', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name} swapped to ${c2.replace('-', ' of ')}.` });
+          } else {
+            events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit could not find a winning or drawing card.` });
+          }
         }
     }
 
@@ -1297,7 +1385,6 @@ export class GameService {
     if (power2 === 5) {
       events.push({ type: 'INTEL_REVEAL', uid: p2Uid, message: `${players[p2Uid].name} used The Hierophant to peek into ${players[p1Uid].name}'s hand!` });
     }
-
     let finalMessage = "";
     if (winnerUid === 'draw') {
        if (power1 === 14 || power2 === 14) finalMessage = "Temperance has balanced the scale of fate.";
@@ -1345,8 +1432,22 @@ export class GameService {
     }
     if (power1 === 12) gains[p1Uid].push({ type: 'draw', id: 3 });
     if (power2 === 12) gains[p2Uid].push({ type: 'draw', id: 3 });
+    if (power1 === 2 && winnerUid === p2Uid) gains[p1Uid].push({ type: 'draw', id: 1 });
+    if (power2 === 2 && winnerUid === p1Uid) gains[p2Uid].push({ type: 'draw', id: 1 });
     if (power1 === 19) gains[p1Uid].push({ type: 'card', id: c1 }); // Copy own card
     if (power2 === 19) gains[p2Uid].push({ type: 'card', id: c2 }); // Copy own card
+    if (power1 === 18) {
+      for (let i = 0; i < 2; i++) {
+        const val = VALUES[Math.floor(Math.random() * VALUES.length)];
+        gains[p1Uid].push({ type: 'card', id: `Moons-${val}` });
+      }
+    }
+    if (power2 === 18) {
+      for (let i = 0; i < 2; i++) {
+        const val = VALUES[Math.floor(Math.random() * VALUES.length)];
+        gains[p2Uid].push({ type: 'card', id: `Moons-${val}` });
+      }
+    }
     if (power1 === 21) {
       gains[p1Uid].push({ type: 'draw', id: 'random-power' });
       gains[p1Uid].push({ type: 'draw', id: 'random-card' });
@@ -1410,13 +1511,10 @@ export class GameService {
     const setVisionIntel = (pUid: string, oUid: string) => {
       const pPower = outcome.powerCardIdsPlayed[pUid];
       if (pPower === 5) { // 5: Hierophant
-        const oHand = [...updatedPlayers[oUid].hand];
-        const seenCards = shuffle(oHand).slice(0, Math.ceil(oHand.length / 2));
-        const seenPowers = updatedPlayers[oUid].powerCards;
         updatedPlayers[pUid].secretIntel = {
           type: 'Hierophant',
-          cards: seenCards,
-          powerCards: seenPowers
+          cards: [...updatedPlayers[oUid].hand],
+          powerCards: [...updatedPlayers[oUid].powerCards]
         };
       }
     };
@@ -1451,13 +1549,6 @@ export class GameService {
       if (power === 19) { // Sun: Copy played card (the final resolved card)
         const played = outcome.cardsPlayed[uid];
         updatedPlayers[uid].hand.push(played);
-      }
-      
-      if (power === 18) { // Moon: Give 2 moon cards
-        for (let i = 0; i < 2; i++) {
-          const val = VALUES[Math.floor(Math.random() * VALUES.length)];
-          updatedPlayers[uid].hand.push(`Moons-${val}`);
-        }
       }
       
       if (power === 12) { // Hanged Man: Gain 3
@@ -1544,11 +1635,18 @@ export class GameService {
 
     const targetSuit = availableSuits[Math.floor(Math.random() * availableSuits.length)];
     const nextStatus = (updatedPlayers[p1Uid].hand.length === 0 || updatedPlayers[p2Uid].hand.length === 0) ? 'finished' : 'playing';
+    let winner = roomData.winner;
+    if (nextStatus === 'finished' && !winner) {
+      if (updatedPlayers[p1Uid].hand.length === 0 && updatedPlayers[p2Uid].hand.length > 0) winner = p2Uid;
+      else if (updatedPlayers[p2Uid].hand.length === 0 && updatedPlayers[p1Uid].hand.length > 0) winner = p1Uid;
+      else if (updatedPlayers[p1Uid].hand.length === 0 && updatedPlayers[p2Uid].hand.length === 0 && outcome.winnerUid !== 'draw') winner = outcome.winnerUid;
+    }
 
     return {
       ...roomData,
       players: updatedPlayers,
       status: nextStatus,
+      winner,
       currentTurn: roomData.currentTurn + 1,
       targetSuit,
       availableSuits,
@@ -1556,6 +1654,7 @@ export class GameService {
       deck: newDeck,
       powerDeck,
       pendingPowerDecisions: {},
+      engageMoves: null,
       famineActive,
       updatedAt: Date.now()
     };

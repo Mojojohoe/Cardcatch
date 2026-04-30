@@ -82,6 +82,29 @@ const SUIT_COLORS: Record<string, string> = {
   Joker: 'text-purple-400'
 };
 
+const SuitGlyph: React.FC<{ suit: string; className?: string }> = ({ suit, className = '' }) => {
+  if (suit === 'Moons') {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <path d="M15.8 3.2A9.5 9.5 0 1 0 20.8 18 8.2 8.2 0 1 1 15.8 3.2Z" fill="#ffffff" />
+      </svg>
+    );
+  }
+  if (suit === 'Frogs') {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <circle cx="8" cy="7.5" r="2.5" fill="#84cc16" />
+        <circle cx="16" cy="7.5" r="2.5" fill="#84cc16" />
+        <ellipse cx="12" cy="14.5" rx="7.5" ry="5.5" fill="#65a30d" />
+        <circle cx="8" cy="7.5" r="1" fill="#111827" />
+        <circle cx="16" cy="7.5" r="1" fill="#111827" />
+        <path d="M9 16.2c.9.9 1.8 1.3 3 1.3s2.1-.4 3-1.3" stroke="#111827" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return <span className={className}>{SUIT_ICONS[suit] || '★'}</span>;
+};
+
 const DesperationVignette: React.FC<{ tier: number, totalTiers: number }> = ({ tier, totalTiers }) => {
   if (tier === 0 || totalTiers === 0) return null;
   const intensity = Math.min(tier / totalTiers, 1);
@@ -389,18 +412,18 @@ const CardVisual: React.FC<CardVisualProps> = (props) => {
     >
       <div className={`flex flex-col items-start leading-[0.7] ${SUIT_COLORS[suit]}`}>
         <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        <span className="text-lg sm:text-3xl">{SUIT_ICONS[suit] || '★'}</span>
+        <SuitGlyph suit={suit} className="w-5 h-5 sm:w-8 sm:h-8" />
       </div>
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className={`text-5xl sm:text-8xl opacity-[0.08] ${SUIT_COLORS[suit]}`}>
-          {isJoker ? '🃏' : SUIT_ICONS[suit] || '★'}
-        </span>
+        <div className={`text-5xl sm:text-8xl opacity-[0.08] ${SUIT_COLORS[suit]}`}>
+          {isJoker ? '🃏' : <SuitGlyph suit={suit} className="w-16 h-16 sm:w-24 sm:h-24" />}
+        </div>
       </div>
 
       <div className={`flex flex-col items-start leading-[0.7] self-end rotate-180 ${SUIT_COLORS[suit]}`}>
         <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        <span className="text-lg sm:text-3xl">{SUIT_ICONS[suit] || '★'}</span>
+        <SuitGlyph suit={suit} className="w-5 h-5 sm:w-8 sm:h-8" />
       </div>
     </motion.div>
   );
@@ -579,6 +602,38 @@ const InsightModal: React.FC<{
   onClose: () => void 
 }> = ({ intel, onClose }) => {
   const isPriestess = intel.type === 'Priestess'; // Hypothetical flag or check name
+  const revealPool = useMemo(
+    () => [
+      ...intel.cards.map(card => ({ kind: 'card' as const, value: card })),
+      ...intel.powerCards.map(power => ({ kind: 'power' as const, value: power }))
+    ],
+    [intel.cards, intel.powerCards]
+  );
+  const revealOrder = useMemo(() => {
+    const indices = revealPool.map((_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    return indices;
+  }, [revealPool]);
+  const revealTarget = isPriestess ? revealPool.length : Math.ceil(revealPool.length / 2);
+  const [revealedCount, setRevealedCount] = useState(isPriestess ? revealPool.length : 0);
+
+  useEffect(() => {
+    if (isPriestess) {
+      setRevealedCount(revealPool.length);
+      return;
+    }
+    setRevealedCount(0);
+    let idx = 0;
+    const timer = setInterval(() => {
+      idx += 1;
+      setRevealedCount(idx);
+      if (idx >= revealTarget) clearInterval(timer);
+    }, 180);
+    return () => clearInterval(timer);
+  }, [isPriestess, revealPool.length, revealTarget]);
   
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl">
@@ -595,24 +650,36 @@ const InsightModal: React.FC<{
         <div className="flex flex-col gap-8 w-full items-center">
           <div className="w-full">
             <h3 className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mb-4 text-center border-b border-slate-800 pb-2">
-               {intel.type === 'Priestess' ? "Opponent's Chosen Card" : "Revealed Cards"}
+               {intel.type === 'Priestess' ? "Opponent's Chosen Card" : "Hierophant Reveal Sequence"}
             </h3>
             <div className="flex flex-wrap gap-4 items-center justify-center">
-              {intel.cards.map((c, i) => (
-                <CardVisual key={i} card={c} noAnimate />
+              {revealPool.map((entry, i) => (
+                <div key={`${entry.kind}-${i}`}>
+                  {revealOrder.slice(0, revealedCount).includes(i) ? (
+                    entry.kind === 'card' ? (
+                      <CardVisual card={entry.value as string} noAnimate />
+                    ) : (
+                      <PowerCardVisual cardId={entry.value as number} small />
+                    )
+                  ) : entry.kind === 'card' ? (
+                    <CardVisual card="" revealed={false} disabled noAnimate />
+                  ) : (
+                    <PowerCardVisual cardId={0} small revealed={false} />
+                  )}
+                </div>
               ))}
             </div>
-          </div>
-          {intel.powerCards.length > 0 && (
-            <div className="w-full">
-              <h3 className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mb-4 text-center border-b border-slate-800 pb-2">Held Powers</h3>
-              <div className="flex flex-wrap gap-4 items-center justify-center">
-                {intel.powerCards.map((p, i) => (
-                  <PowerCardVisual key={i} cardId={p} small />
-                ))}
+            {!isPriestess && (
+              <p className="text-center text-[10px] uppercase tracking-widest text-yellow-500/80 mt-3">
+                Revealed {Math.min(revealedCount, revealTarget)} of {revealPool.length} cards and powers
+              </p>
+            )}
+            {intel.type === 'Priestess' && intel.powerCards.length > 0 && (
+              <div className="mt-4 text-center text-[10px] uppercase tracking-widest text-yellow-500/80">
+                Opponent has {intel.powerCards.length} held power card{intel.powerCards.length === 1 ? '' : 's'}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
         <button onClick={onClose} className="bg-yellow-500 text-black px-12 py-4 rounded-full font-black uppercase tracking-widest text-base shadow-[0_0_40px_rgba(234,179,8,0.3)] transition-all hover:scale-110 active:scale-95">
            {intel.type === 'Priestess' ? 'Close Vision' : 'Continue'}
@@ -655,12 +722,22 @@ const AcquiredAssets: React.FC<{
               </div>
             )}
             {gain.type === 'draw' && (
-              <div className="w-12 h-16 sm:w-16 sm:h-24 rounded-lg bg-emerald-900/20 border border-emerald-500/30 flex flex-col items-center justify-center gap-1 backdrop-blur-sm shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400">
+              <div className={`w-12 h-16 sm:w-16 sm:h-24 rounded-lg border flex flex-col items-center justify-center gap-1 backdrop-blur-sm ${
+                typeof gain.id === 'number' && gain.id < 0
+                  ? 'bg-red-900/20 border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+                  : 'bg-emerald-900/20 border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+              }`}>
+                <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center ${
+                  typeof gain.id === 'number' && gain.id < 0
+                    ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                    : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                }`}>
                   {gain.id === 'standard' ? <Plus className="w-3 h-3 sm:w-4 sm:h-4" /> : <span className="text-[10px] sm:text-xs font-black">{gain.id}</span>}
                 </div>
-                <span className="text-[6px] sm:text-[7px] font-black uppercase text-emerald-300 tracking-tighter opacity-70">
-                  {gain.id === 'random-power' ? 'POWER' : (gain.id === 'random-card' ? 'CARD' : 'DRAW')}
+                <span className={`text-[6px] sm:text-[7px] font-black uppercase tracking-tighter opacity-80 ${
+                  typeof gain.id === 'number' && gain.id < 0 ? 'text-red-300' : 'text-emerald-300'
+                }`}>
+                  {gain.id === 'random-power' ? 'POWER' : (gain.id === 'random-card' ? 'CARD' : (typeof gain.id === 'number' && gain.id < 0 ? 'LOST' : 'DRAW'))}
                 </span>
               </div>
             )}
@@ -897,7 +974,7 @@ const ResolutionSequence: React.FC<{
       </div>
 
       <div className="flex-none w-full max-w-xl mt-6 flex flex-col items-center">
-        <div className="h-12 flex flex-col items-center justify-center relative overflow-hidden w-full">
+        <div className="min-h-[64px] flex flex-col items-center justify-center relative overflow-visible w-full">
           <AnimatePresence mode="popLayout">
             {visibleEvents.slice(-2).map((evt, i) => (
               <motion.div 
@@ -1015,7 +1092,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(null);
   const [selectedPowerCard, setSelectedPowerCard] = useState<number | null>(null);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
   const [showRules, setShowRules] = useState(false);
@@ -1078,7 +1155,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       const id = await serviceRef.current.createRoom(playerName, (state) => {
         setRoom(state);
         if (state.status === 'playing' && state.players[myUid]?.confirmed === false) {
-          setSelectedCard(null);
+          setSelectedCardIndex(null);
         }
       });
       setRoomId(id);
@@ -1098,7 +1175,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       await serviceRef.current.joinRoom(roomCode, playerName, (state) => {
         setRoom(state);
         if (state.status === 'playing' && state.players[myUid]?.confirmed === false) {
-          setSelectedCard(null);
+          setSelectedCardIndex(null);
         }
       });
       setRoomId(roomCode);
@@ -1111,13 +1188,15 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   };
 
   const handlePlayCard = async () => {
-    if (!selectedCard || !roomId) return;
+    if (selectedCardIndex === null || !roomId || !room?.players[myUid]) return;
     setLoading(true);
     try {
       if (selectedPowerCard !== null) {
         await serviceRef.current.selectPowerCard(selectedPowerCard);
       }
-      await serviceRef.current.playCard(selectedCard);
+      const selected = room.players[myUid].hand[selectedCardIndex];
+      if (!selected) return;
+      await serviceRef.current.playCard(selected);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -1204,9 +1283,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     }
   };
 
-  const handleSubmitPowerDecision = async (option: string, wheelOffset?: number) => {
+  const handleSubmitPowerDecision = async (option: string, wheelOffset?: number, priestessSwapToCard?: string | null) => {
     try {
-      await serviceRef.current.submitPowerDecision(option, wheelOffset);
+      await serviceRef.current.submitPowerDecision(option, wheelOffset, priestessSwapToCard);
     } catch (err: any) {
       setError(err.message || String(err));
     }
@@ -1414,7 +1493,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     {room.settings.tiers.map((tier, idx) => (
                       <div key={idx} className="flex gap-2">
                         <div className="bg-purple-900/50 border border-purple-800 rounded px-2 py-1 flex items-center justify-center min-w-[60px]">
-                           <span className="text-[8px] font-black text-purple-300">TIER {idx + 1}</span>
+                          <span className="text-[8px] font-black text-purple-300">TIER {idx}</span>
                         </div>
                         <input 
                           type="text"
@@ -1439,7 +1518,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       </div>
                     ))}
                     <button 
-                      onClick={() => handleUpdateSettings({...room.settings, tiers: [...room.settings.tiers, `TIER ${room.settings.tiers.length + 1}`]})}
+                      onClick={() => handleUpdateSettings({...room.settings, tiers: [...room.settings.tiers, `TIER ${room.settings.tiers.length}`]})}
                       className="w-full text-center py-2 border border-dashed border-purple-800 rounded text-[8px] font-black text-purple-400 uppercase hover:bg-purple-900/20"
                     >
                       + Add Protocol Tier
@@ -1521,6 +1600,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       {room.status === 'powering' && myPendingDecision && myPendingDecision.selectedOption === null && (
         <PowerDecisionModal
           decision={myPendingDecision}
+          priestessLockedCard={myPendingDecision.powerCardId === 2 ? (room.engageMoves?.[myUid] ?? me.currentMove ?? null) : null}
+          priestessHand={myPendingDecision.powerCardId === 2 ? me.hand : []}
           onSubmit={handleSubmitPowerDecision}
         />
       )}
@@ -1587,7 +1668,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
           <span className="text-xs font-black italic uppercase leading-none">{me.role}</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-end gap-2 sm:gap-4 flex-wrap">
           <button 
             onClick={() => setIsDevMenuOpen(true)}
             className="p-2 rounded-lg bg-emerald-900/40 border border-emerald-800 text-emerald-600 hover:bg-yellow-400 hover:text-emerald-950 hover:border-yellow-500 transition-all flex items-center gap-2 text-[10px] font-black uppercase group"
@@ -1719,7 +1800,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                          <FortuneWheelVisual
                            spinning
                            offset={(myPendingDecision?.wheelOffset ?? opponentPendingDecision?.wheelOffset ?? 0)}
-                           sizeClass="w-36 h-36"
+                           sizeClass="w-56 h-56 sm:w-72 sm:h-72"
                          />
                        </div>
                      )}
@@ -1898,7 +1979,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   </button>
                 </motion.div>
              )}
-             {selectedCard && !me.confirmed && (
+             {selectedCardIndex !== null && !me.confirmed && (
                <button onClick={handlePlayCard} disabled={loading} className="bg-yellow-400 text-emerald-950 px-6 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-yellow-400/20 active:scale-90 transition-all">Engage</button>
              )}
              {me.confirmed && <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">Target Locked</span>}
@@ -1906,7 +1987,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </div>
         <div className="flex justify-center -space-x-8 sm:-space-x-12 flex-nowrap h-40 items-end">
            {me.hand.map((card, i) => (
-             <CardVisual key={card} card={card} selected={selectedCard === card} disabled={me.confirmed} onClick={() => !me.confirmed && setSelectedCard(card)} role={me.role} delay={i * 0.08} />
+             <CardVisual key={`${card}-${i}`} card={card} selected={selectedCardIndex === i} disabled={me.confirmed} onClick={() => !me.confirmed && setSelectedCardIndex(i)} role={me.role} delay={i * 0.08} />
            ))}
         </div>
       </div>
@@ -2007,7 +2088,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-emerald-950 text-white selection:bg-yellow-400 selection:text-black font-sans overflow-hidden">
       {/* Dev Toggle */}
-      <div className="fixed top-4 right-4 z-[100] flex gap-2">
+      <div className="fixed top-4 left-4 z-[220] flex gap-2">
         <button 
           onClick={() => setIsDual(!isDual)}
           className={`p-2 rounded-lg border transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest

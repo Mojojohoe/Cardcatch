@@ -14,7 +14,7 @@ export interface PowerCard {
 export const MAJOR_ARCANA: PowerCard[] = [
   { id: 0, name: "The Fool", description: "Swaps the opponents and the players suit cards before round resolution.", icon: "Sparkles" },
   { id: 1, name: "The Magician", description: "Cast Spell: steal a Joker or transmute opponent card into a Frog 1.", icon: "Wand2" },
-  { id: 2, name: "The High Priestess", description: "See the opponent's chosen card and optionally swap your own before reveal.", icon: "Eye" },
+  { id: 2, name: "The High Priestess", description: "After both commit: learn whether the opponent used a power this round and optionally swap your played card.", icon: "Eye" },
   { id: 3, name: "The Empress", description: "Gives the player both cards played after the round.", icon: "Crown" },
   { id: 4, name: "The Emperor", description: "Changes your card to the target suit and adds 2 to its value.", icon: "Shield" },
   { id: 5, name: "The Hierophant", description: "Reveals half of the opponent's hand after the round, including power cards.", icon: "BookType" },
@@ -85,6 +85,10 @@ export interface PendingPowerDecision {
   selectedOption: string | null;
   wheelOffset?: number | null;
   wheelResult?: string | null;
+  /** High Priestess: chosen replacement card (`null`/omit = keep locked-in engage card). Resolved at outcome finalize only. */
+  priestessSwapToCard?: string | null;
+  priestessOpponentUsesPower?: boolean;
+  priestessOpponentName?: string;
 }
 
 export type ResolutionEventType = 
@@ -124,6 +128,8 @@ export interface RoomData {
   updatedAt: number;
   hostUid: string;
   famineActive?: boolean;
+  /** Locked-in moves when transitioning to powering (for Priestess swap animation + peel). */
+  engageMoves?: Record<string, string> | null;
   pendingPowerDecisions?: Record<string, PendingPowerDecision | null>;
   lastOutcome?: {
     targetSuit: Suit;
