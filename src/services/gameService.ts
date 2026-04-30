@@ -1,5 +1,5 @@
 import Peer, { DataConnection } from 'peerjs';
-import { RoomData, PlayerData, Suit, SUITS, VALUES, GameSettings, PlayerRole, MAJOR_ARCANA, ResolutionEvent } from '../types';
+import { RoomData, PlayerData, Suit, SUITS, VALUES, GameSettings, PlayerRole, MAJOR_ARCANA, ResolutionEvent, PendingPowerDecision } from '../types';
 
 export const createDeck = (disableJokers: boolean): string[] => {
   const deck: string[] = [];
@@ -52,7 +52,8 @@ type GameEvent =
   | { type: 'RESOLVE_DESPERATION', uid: string }
   | { type: 'SELECT_DRAFT', uid: string, powerCardId: number }
   | { type: 'CHEAT_POWER', uid: string, powerCardId: number }
-  | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null };
+  | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null }
+  | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number };
 
 const STORAGE_KEY = 'preydator_settings';
 
@@ -170,6 +171,8 @@ export class GameService {
       deck: [],
       winner: null,
       hostUid: this.myUid,
+      famineActive: false,
+      pendingPowerDecisions: {},
       powerDeck: [],
       draftSets: [],
       draftTurn: 0,
@@ -270,6 +273,10 @@ export class GameService {
       } else if (event.type === 'PLAY_POWER_CARD') {
         if (remoteUid) {
           this.handlePlayPowerCard(remoteUid, event.powerCardId);
+        }
+      } else if (event.type === 'SUBMIT_POWER_DECISION') {
+        if (remoteUid) {
+          this.handleSubmitPowerDecision(remoteUid, event.option, event.wheelOffset);
         }
       }
     } else {
@@ -431,6 +438,7 @@ export class GameService {
       powerDeck,
       draftSets,
       draftTurn: 0,
+      pendingPowerDecisions: {},
       updatedAt: Date.now()
     };
 
@@ -486,13 +494,26 @@ export class GameService {
           updatedAt: Date.now()
         };
       } else {
-        this.state = {
-          ...this.state,
-          players: updatedPlayers,
-          status: 'results',
-          lastOutcome: this.calculateOutcome(this.state, updatedPlayers),
-          updatedAt: Date.now()
-        };
+        const pendingPowerDecisions = this.createPendingPowerDecisions(updatedPlayers);
+        const hasPendingDecisions = Object.values(pendingPowerDecisions).some(Boolean);
+        if (hasPendingDecisions) {
+          this.state = {
+            ...this.state,
+            players: updatedPlayers,
+            status: 'powering',
+            pendingPowerDecisions,
+            updatedAt: Date.now()
+          };
+        } else {
+          this.state = {
+            ...this.state,
+            players: updatedPlayers,
+            status: 'results',
+            pendingPowerDecisions: {},
+            lastOutcome: this.calculateOutcome(this.state, updatedPlayers),
+            updatedAt: Date.now()
+          };
+        }
       }
     } else {
       this.state = {
@@ -595,6 +616,14 @@ export class GameService {
     }
   }
 
+  async submitPowerDecision(option: string, wheelOffset?: number) {
+    if (this.isHost) {
+      this.handleSubmitPowerDecision(this.myUid, option, wheelOffset);
+    } else {
+      this.sendEvent({ type: 'SUBMIT_POWER_DECISION', uid: this.myUid, option, wheelOffset });
+    }
+  }
+
   private handleSelectDraft(uid: string, powerCardId: number, expectedTurn: number) {
     if (!this.state || this.state.status !== 'drafting') return;
     if (this.state.draftTurn !== expectedTurn) return;
@@ -673,6 +702,117 @@ export class GameService {
   // Exposed for optimistic UI updates on draft select
   public triggerDraftSelect(uid: string, powerCardId: number, turn: number) {
     this.handleSelectDraft(uid, powerCardId, turn);
+  }
+
+  private getWheelOutcome(offset: number): string {
+    const slices = [
+      { label: 'LOSE_ROUND', weight: 3 },
+      { label: 'WIN_ROUND', weight: 3 },
+      { label: 'WIN_2_CARDS', weight: 5 },
+      { label: 'DOUBLE_JOKER', weight: 1 },
+      { label: 'JACKPOT', weight: 2 },
+      { label: 'POWER_CARD', weight: 1 },
+      { label: 'LOSE_2_CARDS', weight: 5 }
+    ];
+    const total = slices.reduce((acc, s) => acc + s.weight, 0);
+    const target = Math.max(0, Math.min(0.999999, offset)) * total;
+    let running = 0;
+    for (const slice of slices) {
+      running += slice.weight;
+      if (target <= running) return slice.label;
+    }
+    return 'LOSE_ROUND';
+  }
+
+  private createPendingPowerDecisions(players: Record<string, PlayerData>): Record<string, PendingPowerDecision | null> {
+    const decisions: Record<string, PendingPowerDecision | null> = {};
+    const uids = Object.keys(players);
+    const p1 = uids[0];
+    const p2 = uids[1];
+    const p1Power = players[p1].currentPowerCard;
+    const p2Power = players[p2].currentPowerCard;
+
+    // Tower always resolves first and may prevent decisions.
+    const blocked: Record<string, boolean> = { [p1]: false, [p2]: false };
+    if (p1Power === 16 && p2Power === 16) {
+      const p1WinsFlip = Math.random() > 0.5;
+      blocked[p1WinsFlip ? p2 : p1] = true;
+    } else if (p1Power === 16 && p2Power !== null) {
+      blocked[p2] = true;
+    } else if (p2Power === 16 && p1Power !== null) {
+      blocked[p1] = true;
+    }
+
+    for (const uid of uids) {
+      const oppUid = uids.find(id => id !== uid)!;
+      const power = players[uid].currentPowerCard;
+      if (blocked[uid] || power === null) {
+        decisions[uid] = null;
+        continue;
+      }
+
+      if (power === 1) {
+        const opponentHasJoker = players[oppUid].hand.some(c => c.startsWith('Joker'));
+        decisions[uid] = {
+          powerCardId: 1,
+          options: opponentHasJoker ? ['STEAL_JOKER', 'FROGIFY'] : ['FROGIFY'],
+          selectedOption: null
+        };
+      } else if (power === 10) {
+        decisions[uid] = {
+          powerCardId: 10,
+          options: ['SPIN_WHEEL'],
+          selectedOption: null
+        };
+      } else if (power === 15) {
+        const opponentUsedPower = players[oppUid].currentPowerCard !== null && !blocked[oppUid];
+        const options = ['DEVIL_KING', 'DEVIL_RANDOMIZE'];
+        if (opponentUsedPower) options.push('DEVIL_BLOCK');
+        decisions[uid] = {
+          powerCardId: 15,
+          options,
+          selectedOption: null
+        };
+      } else {
+        decisions[uid] = null;
+      }
+    }
+
+    return decisions;
+  }
+
+  private handleSubmitPowerDecision(uid: string, option: string, wheelOffset?: number) {
+    if (!this.state || this.state.status !== 'powering') return;
+    const pending = { ...(this.state.pendingPowerDecisions || {}) };
+    const current = pending[uid];
+    if (!current || current.selectedOption !== null) return;
+    if (!current.options.includes(option) && option !== 'SPIN_WHEEL') return;
+
+    current.selectedOption = option;
+    if (current.powerCardId === 10) {
+      const offset = typeof wheelOffset === 'number' ? wheelOffset : Math.random();
+      current.wheelOffset = offset;
+      current.wheelResult = this.getWheelOutcome(offset);
+    }
+    pending[uid] = current;
+
+    const allResolved = Object.values(pending).every(d => !d || d.selectedOption !== null);
+    if (allResolved) {
+      this.state = {
+        ...this.state,
+        pendingPowerDecisions: pending,
+        status: 'results',
+        lastOutcome: this.calculateOutcome(this.state, this.state.players),
+        updatedAt: Date.now()
+      };
+    } else {
+      this.state = {
+        ...this.state,
+        pendingPowerDecisions: pending,
+        updatedAt: Date.now()
+      };
+    }
+    this.broadcastState();
   }
 
   private processSpinDesperation(uid: string, offset: number) {
@@ -782,6 +922,9 @@ export class GameService {
     let c2 = players[p2Uid].currentMove!;
     let power1 = players[p1Uid].currentPowerCard;
     let power2 = players[p2Uid].currentPowerCard;
+    const pendingDecisions = roomData.pendingPowerDecisions || {};
+    const p1Decision = pendingDecisions[p1Uid];
+    const p2Decision = pendingDecisions[p2Uid];
     
     let winnerUid: string | 'draw' = 'draw';
     let coinFlip: string | undefined = undefined;
@@ -792,9 +935,10 @@ export class GameService {
       [p1Uid]: [],
       [p2Uid]: []
     };
+    const blockedPowers: Record<string, boolean> = { [p1Uid]: false, [p2Uid]: false };
 
     // Phase 1: Pre-activation
-    if ((power1 === 15 || power1 === 16) && (power2 === 15 || power2 === 16)) {
+    if ((power1 === 16 && power2 === 16) || ((power1 === 15 || power1 === 16) && (power2 === 15 || power2 === 16))) {
       const p1WinsFlip = Math.random() > 0.5;
       coinFlip = p1WinsFlip ? 'Host' : 'Opponent';
       events.push({ 
@@ -804,43 +948,12 @@ export class GameService {
     }
 
     const resolvePowerPre = (pUid: string, oUid: string, p: number | null, oPower: number | null) => {
-      if (p === 1) { // Magician: Steal Joker
-        const oHand = players[oUid].hand;
-        const jokerStr = oHand.find(c => c.startsWith('Joker'));
-        if (jokerStr) {
-          events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 1, message: `${players[pUid].name}'s Magician steals a Joker from ${players[oUid].name}!` });
-          gains[pUid].push({ type: 'card', id: jokerStr });
-        }
-      }
-      if (p === 15) { // Devil: Intercepts and catches power
-        if (oPower !== null && oPower !== 16 && oPower !== 15) {
-          const powerName = MAJOR_ARCANA[oPower].name;
-          events.push({ 
-            type: 'POWER_TRIGGER', 
-            uid: pUid, 
-            powerCardId: 15, 
-            message: `${players[pUid].name}'s Devil intercepts and consumes ${players[oUid].name}'s ${powerName}!` 
-          });
-          gains[pUid].push({ type: 'power', id: oPower });
-          if (pUid === p1Uid) {
-             power2 = null; // Neutralize opponent
-          } else {
-             power1 = null; // Neutralize opponent
-          }
-        } else if (oPower === 16 || oPower === 15) {
-           events.push({ 
-             type: 'POWER_TRIGGER', 
-             uid: pUid, 
-             powerCardId: 15, 
-             message: `${players[pUid].name}'s Devil tried to catch ${players[oUid].name}'s power but was blocked!` 
-           });
-        }
-      }
       if (p === 16) { // Tower
-        if (oPower !== null && oPower !== 15 && oPower !== 16) {
+        if (oPower !== null && oPower !== 16) {
           events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 16, message: `${players[pUid].name}'s Tower blocks ${players[oUid].name}'s power!` });
-          if (pUid === p1Uid) { power2 = null; }
-          else { power1 = null; }
+          blockedPowers[oUid] = true;
+          if (pUid === p1Uid) power2 = null;
+          else power1 = null;
         }
       }
     };
@@ -852,9 +965,80 @@ export class GameService {
       resolvePowerPre(p1Uid, p2Uid, power1, power2);
       resolvePowerPre(p2Uid, p1Uid, power2, power1);
     }
+    if (power1 === 16 && power2 === 16) {
+      if (coinFlip === 'Host') blockedPowers[p2Uid] = true;
+      else blockedPowers[p1Uid] = true;
+    }
+
+    // Interactive powers (Magician / Devil / Wheel) resolve before standard before-resolution effects.
+    const applyMagicianDecision = (uid: string, oppUid: string, decision?: PendingPowerDecision | null) => {
+      if (!decision || decision.powerCardId !== 1 || blockedPowers[uid]) return;
+      if (decision.selectedOption === 'STEAL_JOKER') {
+        const oHand = players[oppUid].hand;
+        const jokerStr = oHand.find(c => c.startsWith('Joker'));
+        if (jokerStr) {
+          events.push({ type: 'POWER_TRIGGER', uid, powerCardId: 1, message: `${players[uid].name} casts Magician and steals a Joker!` });
+          gains[uid].push({ type: 'card', id: jokerStr });
+        }
+      } else if (decision.selectedOption === 'FROGIFY') {
+        if (uid === p1Uid) c2 = 'Frogs-1';
+        else c1 = 'Frogs-1';
+        events.push({ type: 'TRANSFORM', uid: oppUid, cardId: 'Frogs-1', message: `${players[uid].name} casts Frogs and warps the opposing card!` });
+      }
+    };
+
+    const removeTwoRandomHandCards = (uid: string) => {
+      const hand = players[uid].hand.filter(card => card !== players[uid].currentMove);
+      const removed: string[] = [];
+      for (let i = 0; i < 2 && hand.length > 0; i++) {
+        const idx = Math.floor(Math.random() * hand.length);
+        removed.push(hand.splice(idx, 1)[0]);
+      }
+      return removed;
+    };
+
+    const applyDevilDecision = (uid: string, oppUid: string, decision?: PendingPowerDecision | null) => {
+      if (!decision || decision.powerCardId !== 15 || blockedPowers[uid]) return;
+      const discarded = removeTwoRandomHandCards(uid);
+      if (discarded.length < 2) return;
+      gains[uid].push({ type: 'draw', id: -2 });
+      if (decision.selectedOption === 'DEVIL_KING') {
+        if (uid === p1Uid) {
+          const pc = parseCard(c1);
+          c1 = `${pc.suit}-K`;
+        } else {
+          const pc = parseCard(c2);
+          c2 = `${pc.suit}-K`;
+        }
+        events.push({ type: 'POWER_TRIGGER', uid, powerCardId: 15, message: `${players[uid].name} makes a Devil Deal: their card becomes a King!` });
+      } else if (decision.selectedOption === 'DEVIL_BLOCK') {
+        if (uid === p1Uid) {
+          power2 = null;
+          blockedPowers[p2Uid] = true;
+        } else {
+          power1 = null;
+          blockedPowers[p1Uid] = true;
+        }
+        events.push({ type: 'POWER_TRIGGER', uid, powerCardId: 15, message: `${players[uid].name} makes a Devil Deal and blocks the opposing power!` });
+      } else if (decision.selectedOption === 'DEVIL_RANDOMIZE') {
+        const s1 = SUITS[Math.floor(Math.random() * SUITS.length)];
+        const s2 = SUITS[Math.floor(Math.random() * SUITS.length)];
+        const pc1 = parseCard(c1);
+        const pc2 = parseCard(c2);
+        c1 = `${s1}-${pc1.value}`;
+        c2 = `${s2}-${pc2.value}`;
+        events.push({ type: 'POWER_TRIGGER', uid, powerCardId: 15, message: `${players[uid].name} makes a Devil Deal and randomizes both suits!` });
+      }
+    };
+
+    applyMagicianDecision(p1Uid, p2Uid, p1Decision);
+    applyMagicianDecision(p2Uid, p1Uid, p2Decision);
+    applyDevilDecision(p1Uid, p2Uid, p1Decision);
+    applyDevilDecision(p2Uid, p1Uid, p2Decision);
 
     // Phase 2: Before Resolution
     const applyBefore = (pUid: string, oUid: string, p: number | null) => {
+      if (blockedPowers[pUid]) return;
       let pc1 = parseCard(c1);
       let pc2 = parseCard(c2);
       
@@ -960,9 +1144,11 @@ export class GameService {
           const pr1 = parseCard(cr1);
           const pr2 = parseCard(cr2);
           if (pr1.isJoker && pr2.isJoker) return 'draw';
+          if (pr1.isJoker && !pr2.isJoker) return pr2.suit === targetSuit ? 'p1' : 'p2';
+          if (pr2.isJoker && !pr1.isJoker) return pr1.suit === targetSuit ? 'p2' : 'p1';
           
-          const p1Target = pr1.suit === targetSuit || pr1.isJoker || (targetSuit === 'Stars' && !pr1.isJoker);
-          const p2Target = pr2.suit === targetSuit || pr2.isJoker || (targetSuit === 'Stars' && !pr2.isJoker);
+          const p1Target = pr1.suit === targetSuit || (targetSuit === 'Stars' && !pr1.isJoker);
+          const p2Target = pr2.suit === targetSuit || (targetSuit === 'Stars' && !pr2.isJoker);
           
           if (p1Target && !p2Target) return 'p1';
           if (!p1Target && p2Target) return 'p2';
@@ -998,22 +1184,39 @@ export class GameService {
           winnerUid = res === 'p1' ? p1Uid : (res === 'p2' ? p2Uid : 'draw');
         }
 
-        // Wheel of Fortune
-        if (winnerUid === p2Uid && power1 === 10) {
-           const wheelCard = `${targetSuit}-${VALUES[Math.floor(Math.random() * VALUES.length)]}`;
-           summonedCards['p1_wheel'] = wheelCard;
-           events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 10, message: `${players[p1Uid].name} spins the Wheel of Fortune!` });
-           events.push({ type: 'SUMMON_CARD', uid: p1Uid, cardId: wheelCard, message: `The Wheel gave luck: ${wheelCard.replace('-', ' of ')}!` });
-           const resWheel = evalClash(wheelCard, c2);
-           winnerUid = resWheel === 'p1' ? p1Uid : (resWheel === 'p2' ? p2Uid : 'draw');
-        }
-        if (winnerUid === p1Uid && power2 === 10) {
-           const wheelCard = `${targetSuit}-${VALUES[Math.floor(Math.random() * VALUES.length)]}`;
-           summonedCards['p2_wheel'] = wheelCard;
-           events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 10, message: `${players[p2Uid].name} spins the Wheel of Fortune!` });
-           events.push({ type: 'SUMMON_CARD', uid: p2Uid, cardId: wheelCard, message: `The Wheel gave luck: ${wheelCard.replace('-', ' of ')}!` });
-           const resWheel = evalClash(wheelCard, c1);
-           winnerUid = resWheel === 'p1' ? p2Uid : (resWheel === 'p2' ? p1Uid : 'draw');
+        const applyWheelOutcome = (uid: string, outcomeLabel?: string | null) => {
+          if (!outcomeLabel) return;
+          if (outcomeLabel === 'LOSE_ROUND') {
+            winnerUid = uid === p1Uid ? p2Uid : p1Uid;
+          } else if (outcomeLabel === 'WIN_ROUND') {
+            winnerUid = uid;
+          } else if (outcomeLabel === 'WIN_2_CARDS') {
+            gains[uid].push({ type: 'draw', id: 2 });
+            gains[uid].push({ type: 'draw', id: 2 });
+          } else if (outcomeLabel === 'DOUBLE_JOKER') {
+            c1 = 'Joker-1';
+            c2 = 'Joker-2';
+            winnerUid = 'draw';
+          } else if (outcomeLabel === 'JACKPOT') {
+            if (uid === p1Uid) c1 = 'Coins-10';
+            else c2 = 'Coins-10';
+          } else if (outcomeLabel === 'POWER_CARD') {
+            gains[uid].push({ type: 'draw', id: 'random-power' });
+          } else if (outcomeLabel === 'LOSE_2_CARDS') {
+            gains[uid].push({ type: 'draw', id: -2 });
+          }
+          events.push({ type: 'POWER_TRIGGER', uid, powerCardId: 10, message: `${players[uid].name}'s Wheel of Fortune outcome: ${outcomeLabel.replaceAll('_', ' ')}` });
+        };
+        if (power1 === 10 && !blockedPowers[p1Uid]) applyWheelOutcome(p1Uid, p1Decision?.wheelResult);
+        if (power2 === 10 && !blockedPowers[p2Uid]) applyWheelOutcome(p2Uid, p2Decision?.wheelResult);
+
+        if (power1 === 13 && power2 === 13 && !blockedPowers[p1Uid] && !blockedPowers[p2Uid]) {
+          const hostWins = Math.random() > 0.5;
+          winnerUid = hostWins ? p1Uid : p2Uid;
+          events.push({ type: 'COIN_FLIP', message: `${players[winnerUid].name} wins the Death coin flip.` });
+        } else {
+          if (power1 === 13 && !blockedPowers[p1Uid]) winnerUid = p1Uid;
+          if (power2 === 13 && !blockedPowers[p2Uid]) winnerUid = p2Uid;
         }
 
         if (power1 === 20 || power2 === 20) {
@@ -1177,30 +1380,13 @@ export class GameService {
     setVisionIntel(p2Uid, p1Uid);
 
     const winnerUid = outcome.winnerUid;
+    const temperanceActive = Object.values(outcome.powerCardIdsPlayed).includes(14);
     
     // Special power cards after round
     uids.forEach(uid => {
       const power = outcome.powerCardIdsPlayed[uid];
       const oUid = uids.find(id => id !== uid)!;
-      // We use players[uid] (the input) to get original state before reset if needed
-      const oInitialPower = players[oUid].currentPowerCard;
-
-      // Devil Steal Logic: catches current round's opponent power
-      if (players[uid].currentPowerCard === 15) {
-        if (oInitialPower !== null && oInitialPower !== 16 && oInitialPower !== 15) {
-           updatedPlayers[uid].powerCards.push(oInitialPower);
-        }
-      }
-
-      // Magician: Steal Joker
-      if (power === 1) {
-        const oHand = updatedPlayers[oUid].hand;
-        const jokerIdx = oHand.findIndex(c => c.startsWith('Joker'));
-        if (jokerIdx !== -1) {
-          const stolen = oHand.splice(jokerIdx, 1)[0];
-          updatedPlayers[uid].hand.push(stolen);
-        }
-      }
+      void oUid;
 
       // Empress: Collect Both
       if (power === 3) {
@@ -1240,6 +1426,35 @@ export class GameService {
       }
     });
 
+    // Generic outcome gains application.
+    uids.forEach(uid => {
+      const uidGains = outcome.gains?.[uid] || [];
+      uidGains.forEach(gain => {
+        if (gain.type === 'card' && typeof gain.id === 'string') {
+          updatedPlayers[uid].hand.push(gain.id);
+        } else if (gain.type === 'power' && typeof gain.id === 'number') {
+          updatedPlayers[uid].powerCards.push(gain.id);
+        } else if (gain.type === 'draw') {
+          if (gain.id === 'random-power') {
+            if (powerDeck.length > 0) updatedPlayers[uid].powerCards.push(powerDeck.splice(0, 1)[0]);
+          } else if (gain.id === 'random-card' || gain.id === 'standard') {
+            if (newDeck.length > 0) updatedPlayers[uid].hand.push(newDeck.splice(0, 1)[0]);
+          } else if (typeof gain.id === 'number' && gain.id > 0) {
+            for (let i = 0; i < gain.id; i++) {
+              if (newDeck.length > 0) updatedPlayers[uid].hand.push(newDeck.splice(0, 1)[0]);
+            }
+          } else if (typeof gain.id === 'number' && gain.id < 0) {
+            const removeCount = Math.abs(gain.id);
+            for (let i = 0; i < removeCount; i++) {
+              if (updatedPlayers[uid].hand.length === 0) break;
+              const randomIndex = Math.floor(Math.random() * updatedPlayers[uid].hand.length);
+              updatedPlayers[uid].hand.splice(randomIndex, 1);
+            }
+          }
+        }
+      });
+    });
+
     const availableSuits = [...(roomData.availableSuits || SUITS)];
     uids.forEach(uid => {
       const power = outcome.powerCardIdsPlayed[uid];
@@ -1261,9 +1476,26 @@ export class GameService {
       newDeck.push(...shuffledDeck);
     }
 
-    // WIN REWARD: Winner draws 1 new card from deck.
-    if (winnerUid !== 'draw' && winnerUid && newDeck.length > 0) {
-       updatedPlayers[winnerUid].hand.push(newDeck.splice(0, 1)[0]);
+    if (temperanceActive) {
+      // Temperance returns played suit cards (power cards remain consumed).
+      uids.forEach(uid => {
+        const cardToReturn = outcome.initialCardsPlayed?.[uid] || outcome.cardsPlayed[uid];
+        if (cardToReturn) updatedPlayers[uid].hand.push(cardToReturn);
+      });
+    }
+
+    let famineActive = roomData.famineActive || false;
+    if (!famineActive && newDeck.length === 0) {
+      famineActive = true;
+      const diff = updatedPlayers[p1Uid].hand.length - updatedPlayers[p2Uid].hand.length;
+      if (diff !== 0) {
+        const targetUid = diff < 0 ? p1Uid : p2Uid;
+        const needed = Math.abs(diff);
+        for (let i = 0; i < needed; i++) {
+          const val = VALUES[Math.floor(Math.random() * VALUES.length)];
+          updatedPlayers[targetUid].hand.push(`Bones-${val}`);
+        }
+      }
     }
 
     const targetSuit = availableSuits[Math.floor(Math.random() * availableSuits.length)];
@@ -1279,6 +1511,8 @@ export class GameService {
       wheelOffset: Math.random(),
       deck: newDeck,
       powerDeck,
+      pendingPowerDecisions: {},
+      famineActive,
       updatedAt: Date.now()
     };
   }

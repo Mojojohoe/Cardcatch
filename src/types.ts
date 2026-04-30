@@ -1,5 +1,5 @@
 export const SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades'] as const;
-export type Suit = (typeof SUITS)[number] | 'Stars' | 'Moons';
+export type Suit = (typeof SUITS)[number] | 'Stars' | 'Moons' | 'Frogs' | 'Coins' | 'Bones';
 
 export const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const;
 export type Value = (typeof VALUES)[number];
@@ -13,7 +13,7 @@ export interface PowerCard {
 
 export const MAJOR_ARCANA: PowerCard[] = [
   { id: 0, name: "The Fool", description: "Swaps the opponents and the players suit cards before round resolution.", icon: "Sparkles" },
-  { id: 1, name: "The Magician", description: "If the opponent has at least one joker in their hand, steals one and gives it to the player next round.", icon: "Wand2" },
+  { id: 1, name: "The Magician", description: "Cast Spell: steal a Joker or transmute opponent card into a Frog 1.", icon: "Wand2" },
   { id: 2, name: "The High Priestess", description: "See the opponent's chosen card and optionally swap your own before reveal.", icon: "Eye" },
   { id: 3, name: "The Empress", description: "Gives the player both cards played after the round.", icon: "Crown" },
   { id: 4, name: "The Emperor", description: "Changes your card to the target suit and adds 2 to its value.", icon: "Shield" },
@@ -22,12 +22,12 @@ export const MAJOR_ARCANA: PowerCard[] = [
   { id: 7, name: "The Chariot", description: "If the player loses the round, their suit card is returned to their hand with +1 value.", icon: "FastForward" },
   { id: 8, name: "Strength", description: "Increases the played card value by 4.", icon: "BicepsFlexed" },
   { id: 9, name: "The Hermit", description: "Automatically swaps the player's card to one that beats or draws against the opponent.", icon: "Lamp" },
-  { id: 10, name: "The Wheel of Fortune", description: "If the round would be lost, spins a wheel for a new card of the target suit (2-Ace).", icon: "RefreshCw" },
+  { id: 10, name: "The Wheel of Fortune", description: "Always spins a chaos wheel and applies one of seven weighted outcomes.", icon: "RefreshCw" },
   { id: 11, name: "Justice", description: "Generates a random card of target suit; opponent must beat BOTH the player and this card to win.", icon: "Scale" },
   { id: 12, name: "The Hanged Man", description: "Player forfeits the round, but gains 3 cards.", icon: "Anchor" },
-  { id: 13, name: "Death", description: "Returns opponent's card to hand and forces them to choose from four 6s of each suit.", icon: "Skull" },
+  { id: 13, name: "Death", description: "Wins the round outright unless blocked by The Tower.", icon: "Skull" },
   { id: 14, name: "Temperance", description: "The round is drawn. Players get suit cards back, power cards are consumed.", icon: "Waves" },
-  { id: 15, name: "The Devil", description: "Steals the opponents power card before it activates if they used one.", icon: "Flame" },
+  { id: 15, name: "The Devil", description: "Devil Deal: discard 2 random hand cards to apply one tactical effect.", icon: "Flame" },
   { id: 16, name: "The Tower", description: "Stops the effects of an opponent's power card.", icon: "ZapOff" },
   { id: 17, name: "The Star", description: "Adds 'Stars' suit to the target wheel. Star suit transforms all played cards to Stars.", icon: "Star" },
   { id: 18, name: "The Moon", description: "Adds 'Moons' suit to target wheel and deck. Also gives the player 2 random moon cards next round.", icon: "Moon" },
@@ -78,6 +78,14 @@ export interface PlayerData {
   } | null;
 }
 
+export interface PendingPowerDecision {
+  powerCardId: number;
+  options: string[];
+  selectedOption: string | null;
+  wheelOffset?: number | null;
+  wheelResult?: string | null;
+}
+
 export type ResolutionEventType = 
   | 'POWER_TRIGGER' 
   | 'CARD_SWAP' 
@@ -99,7 +107,7 @@ export interface ResolutionEvent {
 
 export interface RoomData {
   code: string;
-  status: 'waiting' | 'drafting' | 'playing' | 'results' | 'finished';
+  status: 'waiting' | 'drafting' | 'playing' | 'powering' | 'results' | 'finished';
   players: Record<string, PlayerData>;
   settings: GameSettings;
   currentTurn: number;
@@ -114,6 +122,8 @@ export interface RoomData {
   createdAt: number;
   updatedAt: number;
   hostUid: string;
+  famineActive?: boolean;
+  pendingPowerDecisions?: Record<string, PendingPowerDecision | null>;
   lastOutcome?: {
     targetSuit: Suit;
     winnerUid: string | 'draw';

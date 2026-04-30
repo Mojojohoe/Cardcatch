@@ -61,6 +61,9 @@ const SUIT_ICONS: Record<string, string> = {
   Spades: '♠',
   Stars: '★',
   Moons: '🌙',
+  Frogs: '🐸',
+  Coins: '🪙',
+  Bones: '🦴',
   Joker: '🃏'
 };
 
@@ -71,6 +74,9 @@ const SUIT_COLORS: Record<string, string> = {
   Spades: 'text-blue-400',
   Stars: 'text-yellow-400',
   Moons: 'text-white',
+  Frogs: 'text-lime-400',
+  Coins: 'text-amber-400',
+  Bones: 'text-stone-300',
   Joker: 'text-purple-400'
 };
 
@@ -614,6 +620,67 @@ const InsightModal: React.FC<{
   );
 };
 
+const PowerDecisionModal: React.FC<{
+  decision: { powerCardId: number; options: string[]; wheelResult?: string | null };
+  onSubmit: (option: string, wheelOffset?: number) => void;
+}> = ({ decision, onSubmit }) => {
+  const [wheelSpinning, setWheelSpinning] = useState(false);
+  const [wheelOffset, setWheelOffset] = useState(0);
+  const [revealed] = useState<string | null>(decision.wheelResult || null);
+  const isWheel = decision.powerCardId === 10;
+
+  const spinWheel = () => {
+    const nextOffset = Math.random();
+    setWheelOffset(nextOffset);
+    setWheelSpinning(true);
+    setTimeout(() => {
+      setWheelSpinning(false);
+      onSubmit('SPIN_WHEEL', nextOffset);
+    }, 2500);
+  };
+
+  return (
+    <div className="absolute inset-0 z-[260] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4">
+      <div className="w-full max-w-xl rounded-2xl border border-yellow-500/40 bg-slate-950 p-6 space-y-4">
+        <h3 className="text-xl font-black uppercase text-yellow-400">
+          {decision.powerCardId === 1 ? 'Cast Spell' : decision.powerCardId === 15 ? 'Devil Deal' : 'Wheel Of Fortune'}
+        </h3>
+        {isWheel ? (
+          <div className="space-y-4">
+            <motion.div
+              animate={{ rotate: wheelSpinning ? 360 * 8 + wheelOffset * 360 : wheelOffset * 360 }}
+              transition={{ duration: wheelSpinning ? 2.5 : 0.2, ease: [0.12, 0, 0, 1] }}
+              className="mx-auto w-44 h-44 rounded-full border-4 border-amber-500 flex items-center justify-center text-amber-300 font-black"
+            >
+              WHEEL
+            </motion.div>
+            <button
+              onClick={spinWheel}
+              disabled={wheelSpinning}
+              className="w-full py-3 rounded-xl bg-amber-500 text-black font-black uppercase disabled:opacity-50"
+            >
+              {wheelSpinning ? 'Spinning...' : 'Spin'}
+            </button>
+            {revealed && <p className="text-center text-amber-300 font-bold">{revealed.replaceAll('_', ' ')}</p>}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {decision.options.map(option => (
+              <button
+                key={option}
+                onClick={() => onSubmit(option)}
+                className="w-full py-3 rounded-xl bg-emerald-800/60 hover:bg-emerald-700 text-white font-black uppercase"
+              >
+                {option.replaceAll('_', ' ')}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const AcquiredAssets: React.FC<{
   gains: { type: 'card' | 'power' | 'draw', id: string | number }[];
   side: 'left' | 'right';
@@ -667,6 +734,12 @@ const DevPowerMenu: React.FC<{
   onSelect: (id: number) => void;
   onClose: () => void;
 }> = ({ onSelect, onClose }) => {
+  const icons: Record<string, any> = {
+    Sparkles, Wand2, Eye, Crown, Shield, BookOpen, Heart, RefreshCw, Scale,
+    Anchor, Skull, Waves, Flame, ZapOff, Star, Moon, Sun, Globe,
+    BookType, FastForward, BicepsFlexed, Lamp, Gavel
+  };
+
   return (
     <div className="absolute inset-x-4 top-16 bottom-20 z-[250] bg-black/90 backdrop-blur-xl p-4 overflow-y-auto rounded-3xl border-2 border-yellow-400 shadow-[0_0_100px_rgba(250,204,21,0.2)]">
       <div className="flex justify-between items-center mb-6 sticky top-0 bg-black/90 pb-4 z-10 border-b border-white/10">
@@ -686,14 +759,7 @@ const DevPowerMenu: React.FC<{
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-8">
         {MAJOR_ARCANA.map((card, i) => {
-          const IconComp = useMemo(() => {
-            const icons: Record<string, any> = {
-              Sparkles, Wand2, Eye, Crown, Shield, BookOpen, Heart, RefreshCw, Scale, 
-              Anchor, Skull, Waves, Flame, ZapOff, Star, Moon, Sun, Globe,
-              BookType, FastForward, BicepsFlexed, Lamp, Gavel
-            };
-            return icons[card.icon] || Sparkles;
-          }, [card.icon]);
+          const IconComp = icons[card.icon] || Sparkles;
 
           return (
             <button 
@@ -1179,9 +1245,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     setTimeout(() => setShowCopySuccess(false), 2000);
   };
 
-  const isHost = roomId && room && Object.keys(room.players)[0] === myUid;
+  const isHost = roomId && room && room.hostUid === myUid;
 
-  const handleUpdateSettings = (settings: any) => {
+  const handleUpdateSettings = (settings: GameSettings) => {
     serviceRef.current.syncSettings(settings);
   };
 
@@ -1189,11 +1255,19 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     setShowDesperationWheel(true);
   };
 
-  const handleSpinDesperation = async (offset: number) => {
+  const handleSpinDesperation = async (_offset: number) => {
     try {
       await serviceRef.current.spinDesperation();
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const handleSubmitPowerDecision = async (option: string, wheelOffset?: number) => {
+    try {
+      await serviceRef.current.submitPowerDecision(option, wheelOffset);
+    } catch (err: any) {
+      setError(err.message || String(err));
     }
   };
 
@@ -1491,10 +1565,23 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
+  const myPendingDecision = room.pendingPowerDecisions?.[myUid] || null;
 
   return (
     <div className="h-full bg-emerald-950/40 relative flex flex-col p-4 overflow-hidden border-x border-emerald-900/50">
+      {room.famineActive && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[240] bg-stone-900/90 border border-stone-500 px-4 py-1 rounded-full">
+          <span className="text-[10px] font-black uppercase tracking-widest text-stone-200">FAMINE: BALANCING HANDS WITH BONES</span>
+        </div>
+      )}
       <DesperationVignette tier={me.desperationTier} totalTiers={room.settings.tiers.length} />
+
+      {room.status === 'powering' && myPendingDecision && myPendingDecision.selectedOption === null && (
+        <PowerDecisionModal
+          decision={myPendingDecision}
+          onSubmit={handleSubmitPowerDecision}
+        />
+      )}
       
       {isDevMenuOpen && (
         <DevPowerMenu 
@@ -1647,7 +1734,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           </div>
 
-          {room.status === 'playing' ? (
+          {room.status === 'playing' || room.status === 'powering' ? (
             <div className="flex flex-col items-center transition-all duration-500">
                {opponent?.desperationTier > 0 && (
                  <div className="absolute top-0 flex flex-col items-center gap-1 bg-purple-950/40 border border-purple-800/50 px-4 py-1.5 rounded-full mb-4">
@@ -1657,7 +1744,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                )}
 
                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-400 mb-6 h-4 text-center">
-                 {isWheelSpinning ? 'RE-ALIGNING ENGAGEMENT PROTOCOLS...' : 'TARGET IDENTIFIED'}
+                 {room.status === 'powering' ? 'RESOLVING ARCANA DECISIONS...' : (isWheelSpinning ? 'RE-ALIGNING ENGAGEMENT PROTOCOLS...' : 'TARGET IDENTIFIED')}
                </span>
                
                <AnimatePresence mode="wait">
