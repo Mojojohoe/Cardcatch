@@ -25,16 +25,42 @@ import {
   UtensilsCrossed,
   Layers,
   ChevronRight,
-  RotateCcw
+  Sparkles,
+  Wand2,
+  Eye,
+  Crown,
+  BookType,
+  BookOpen,
+  Heart,
+  FastForward,
+  BicepsFlexed,
+  Lamp,
+  Scale,
+  Anchor,
+  Waves,
+  Flame,
+  ZapOff,
+  Star,
+  Moon,
+  Sun,
+  Gavel,
+  Globe,
+  Settings,
+  X,
+  Play,
+  RotateCcw,
+  Plus,
 } from 'lucide-react';
 import { GameService, parseCard, DESPERATION_SLICES } from './services/gameService';
-import { RoomData, PlayerData, Suit, CARD_UNICODE, SUITS, PlayerRole, Difficulty, GameSettings } from './types';
+import { RoomData, PlayerData, Suit, CARD_UNICODE, SUITS, PlayerRole, Difficulty, GameSettings, MAJOR_ARCANA, PowerCard } from './types';
 
 const SUIT_ICONS: Record<string, string> = {
   Hearts: '♥',
   Diamonds: '♦',
   Clubs: '♣',
   Spades: '♠',
+  Stars: '★',
+  Moons: '🌙',
   Joker: '🃏'
 };
 
@@ -43,6 +69,8 @@ const SUIT_COLORS: Record<string, string> = {
   Diamonds: 'text-red-400',
   Clubs: 'text-emerald-400',
   Spades: 'text-blue-400',
+  Stars: 'text-yellow-400',
+  Moons: 'text-white',
   Joker: 'text-purple-400'
 };
 
@@ -180,10 +208,10 @@ const DesperationWheel: React.FC<{
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
         style={{ transform: `rotate(${midAngle - 90}deg)` }}
       >
-        <div className="absolute right-[5%] w-[42%] flex items-center justify-center text-center">
+        <div className="absolute right-[4%] w-[28%] flex items-center justify-center text-center">
           <span 
             className={`
-              text-white font-black uppercase tracking-widest leading-tight
+              text-white font-black uppercase tracking-widest leading-none whitespace-nowrap
               ${slice.label === 'GAME OVER' ? 'text-[11px] sm:text-[15px] text-red-500' : 'text-[8px] sm:text-[11px] opacity-70'}
             `}
             style={{ textShadow: "0 2px 10px rgba(0,0,0,0.9)" }}
@@ -298,6 +326,7 @@ const WolfIcon = () => (
 const CardVisual: React.FC<CardVisualProps> = (props) => {
   const { card, selected, onClick, disabled, revealed = true, role, delay = 0, noAnimate = false } = props;
   const { suit, value, isJoker } = useMemo(() => (revealed ? parseCard(card) : { suit: '', value: '', isJoker: false }), [card, revealed]);
+  const isMoonSuit = suit === 'Moons';
   
   const entrance = noAnimate ? {} : {
     initial: { x: 300, y: -100, opacity: 0, rotate: 45, scale: 0.5 },
@@ -344,25 +373,118 @@ const CardVisual: React.FC<CardVisualProps> = (props) => {
       whileTap={!disabled ? { scale: 0.95 } : {}}
       onClick={onClick}
       className={`
-        w-12 h-18 sm:w-24 sm:h-36 bg-white border-2 rounded-lg shadow-xl flex flex-col justify-between p-2 cursor-pointer relative overflow-hidden transition-all
+        w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg shadow-xl flex flex-col justify-between p-2 cursor-pointer relative overflow-hidden transition-all
+        ${isMoonSuit ? 'bg-black' : 'bg-white'}
         ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : 'border-gray-200'}
         ${disabled ? 'opacity-60 grayscale cursor-not-allowed' : ''}
       `}
     >
       <div className={`flex flex-col items-start leading-[0.7] ${SUIT_COLORS[suit]}`}>
         <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        <span className="text-lg sm:text-3xl">{SUIT_ICONS[suit]}</span>
+        <span className="text-lg sm:text-3xl">{SUIT_ICONS[suit] || '★'}</span>
       </div>
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <span className={`text-5xl sm:text-8xl opacity-[0.08] ${SUIT_COLORS[suit]}`}>
-          {isJoker ? '🃏' : SUIT_ICONS[suit]}
+          {isJoker ? '🃏' : SUIT_ICONS[suit] || '★'}
         </span>
       </div>
 
       <div className={`flex flex-col items-start leading-[0.7] self-end rotate-180 ${SUIT_COLORS[suit]}`}>
         <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        <span className="text-lg sm:text-3xl">{SUIT_ICONS[suit]}</span>
+        <span className="text-lg sm:text-3xl">{SUIT_ICONS[suit] || '★'}</span>
+      </div>
+    </motion.div>
+  );
+};
+
+const PowerCardVisual: React.FC<{ 
+  cardId: number, 
+  revealed?: boolean, 
+  onClick?: () => void, 
+  selected?: boolean,
+  disabled?: boolean,
+  small?: boolean 
+}> = ({ cardId, revealed = true, onClick, selected, disabled, small = false }) => {
+  const card = MAJOR_ARCANA[cardId];
+  
+  const IconComponent = useMemo(() => {
+    const iconName = card.icon;
+    const icons: Record<string, any> = {
+      Sparkles, Wand2, Eye, Crown, Shield, BookOpen, Heart, RefreshCw, Scale, 
+      Anchor, Skull, Waves, Flame, ZapOff, Star, Moon, Sun, Globe,
+      BookType, FastForward, BicepsFlexed, Lamp, Gavel
+    };
+    return icons[iconName] || Sparkles;
+  }, [card.icon]);
+
+  if (!revealed) {
+    return (
+      <motion.div 
+        whileHover={!disabled ? { scale: 1.1, rotateY: 10 } : {}}
+        onClick={onClick}
+        className={`
+          ${small ? 'w-14 h-22' : 'w-32 h-52 sm:w-40 sm:h-64'} 
+          bg-slate-300 border-2 border-slate-400 rounded-lg shadow-lg flex items-center justify-center relative overflow-hidden
+          bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px]
+          perspective-1000
+          ${selected ? 'ring-4 ring-yellow-400' : ''}
+          ${disabled ? 'opacity-50 grayscale' : 'cursor-pointer'}
+        `}
+      >
+        <div className="absolute inset-0 bg-linear-to-br from-slate-400/20 to-transparent" />
+        <div className="text-slate-500 font-black text-2xl sm:text-4xl">🃳</div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div 
+      layout
+      whileHover={!disabled ? { 
+        scale: small ? 2.4 : 1.1, 
+        zIndex: 200,
+        transition: { type: 'spring', stiffness: 300, damping: 25 }
+      } : {}}
+      onClick={onClick}
+      className={`
+        ${small ? 'w-18 h-28 text-[9px]' : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px]'}
+        group relative bg-slate-50 border-4 border-slate-800 rounded-2xl shadow-2xl p-3 flex flex-col items-center text-center justify-between overflow-hidden
+        ${selected ? 'ring-4 ring-yellow-400 border-yellow-500' : ''}
+        ${disabled ? 'opacity-50 grayscale' : 'cursor-pointer'}
+        transition-shadow origin-left
+      `}
+    >
+      <div className="absolute top-0 left-0 w-full h-full bg-linear-to-b from-white/20 to-slate-900/5 pointer-events-none" />
+      
+      <div className="flex flex-col items-center gap-0.5 z-10 w-full mb-1">
+         <span className={`font-black border-b-2 border-slate-800 w-full pb-1 px-1 uppercase tracking-tighter leading-[0.9] text-slate-800 ${small ? 'text-[8px]' : 'text-[18px] sm:text-[32px]'}`}>
+            {card.name}
+         </span>
+         <span className="font-mono text-slate-400 font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70 mt-1">Major Arcana</span>
+      </div>
+
+      <div className={`z-10 bg-slate-900 ${small ? 'p-1.5' : 'p-5 sm:p-7'} rounded-full border-2 border-slate-800 shadow-xl group-hover:scale-105 transition-transform my-2`}>
+        <IconComponent className="text-yellow-400" size={small ? 16 : 40} />
+      </div>
+
+      <div className={`text-slate-700 font-bold leading-tight z-10 w-full px-2 mt-auto ${small ? 'hidden' : 'block'}`}>
+        <p className={`italic text-slate-500 font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em]`}>{card.description}</p>
+      </div>
+
+      <div className={`mt-auto pt-3 font-black text-slate-400 uppercase tracking-[0.3em] ${small ? 'hidden' : 'block text-[8px] sm:text-[10px]'}`}>
+         {cardId} / 21
+      </div>
+
+      {/* Enlarged Overlay for Hover Reading */}
+      <div className="absolute inset-0 bg-slate-900/98 text-white p-2 sm:p-4 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+        <IconComponent className="text-yellow-400 mb-2" size={small ? 16 : 28} />
+        <span className={`text-yellow-400 font-black mb-1 uppercase tracking-tighter border-b border-yellow-400/50 w-full pb-0.5 ${small ? 'text-[7px]' : 'text-xs sm:text-base'}`}>
+          {card.name}
+        </span>
+        <p className={`leading-tight font-medium italic ${small ? 'text-[5px]' : 'text-[9px] sm:text-[11px]'}`}>
+          {card.description}
+        </p>
       </div>
     </motion.div>
   );
@@ -372,62 +494,503 @@ interface TargetSuitWheelProps {
   suit: Suit | null;
   isSpinning: boolean;
   offset?: number;
+  availableSuits?: Suit[];
 }
 
-const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({ suit, isSpinning, offset = 0.5 }) => {
-  // Ordered Suits: Diamond -> Spade -> Heart -> Club
-  const OrderedSuits: Suit[] = ['Diamonds', 'Spades', 'Hearts', 'Clubs'];
-  
+const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({ suit, isSpinning, offset = 0.5, availableSuits = SUITS as any }) => {
   const rotation = useMemo(() => {
-    const suitIndex = OrderedSuits.indexOf(suit || 'Hearts');
-    // baseRotation -45 puts the center of the first quarter at top.
-    // We add room.wheelOffset * 80 - 40 to stay within the 90deg slice with 5deg padding.
-    const sliceOffset = (offset * 80) - 40;
-    const baseRotation = -45; 
-    const suitOffset = suitIndex * 90;
+    const suitIndex = availableSuits.indexOf(suit || availableSuits[0]);
+    const sliceAngle = 360 / availableSuits.length;
+    const baseRotation = -(sliceAngle / 2); 
+    const suitOffset = suitIndex * sliceAngle;
     const extraSpins = 360 * 8; 
+    const sliceOffset = (offset * (sliceAngle - 10)) - (sliceAngle / 2 - 5);
     return baseRotation - suitOffset - extraSpins + sliceOffset;
-  }, [suit, offset]);
+  }, [suit, offset, availableSuits]);
 
   return (
     <div className="relative w-48 h-48 flex items-center justify-center">
-      {/* Selector pointer */}
-      <div className="absolute -top-6 z-10 text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
-        <div className="w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[12px] border-t-yellow-400" />
+      <div className="absolute -top-6 z-40 text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.6)]">
+        <div className="w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[14px] border-t-yellow-500" />
       </div>
 
       <motion.div
-        animate={isSpinning ? { rotate: rotation } : { rotate: rotation }}
+        animate={{ rotate: rotation }}
         transition={isSpinning ? { duration: 5, ease: [0.22, 1, 0.36, 1] } : { duration: 0 }}
-        className="w-full h-full rounded-full border-8 border-emerald-950 overflow-hidden bg-emerald-950 relative shadow-[0_0_60px_rgba(0,0,0,0.8)]"
+        className="w-full h-full rounded-full border-8 border-emerald-950 overflow-hidden bg-emerald-950 relative shadow-[0_0_60px_rgba(0,0,0,0.9)]"
       >
-        {OrderedSuits.map((s, i) => (
-          <div
-            key={s}
-            className="absolute top-0 left-0 w-full h-full"
-            style={{ 
-              transform: `rotate(${i * 90}deg)`,
-              backgroundColor: (s === 'Diamonds' || s === 'Hearts') ? '#000000' : '#FFFFFF',
-              clipPath: 'polygon(50% 50%, 100% 50%, 100% 0, 50% 0)',
-              borderRight: '1px solid rgba(128, 128, 128, 0.2)'
-            }}
-          >
-            <div 
-              className={`absolute top-[15%] left-[75%] -translate-x-1/2 flex flex-col items-center gap-1 ${SUIT_COLORS[s]}`}
-              style={{ transform: `rotate(${-i * 90}deg)` }}
-            >
-              <span className="text-3xl filter drop-shadow-lg">{SUIT_ICONS[s]}</span>
-            </div>
-          </div>
-        ))}
-        {/* Hub */}
-        <div className="absolute inset-0 m-auto w-12 h-12 bg-emerald-900 rounded-full border-4 border-emerald-800 flex items-center justify-center z-20">
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          {availableSuits.map((s, i) => {
+            const angle = 360 / availableSuits.length;
+            const startAngle = i * angle;
+            const endAngle = (i + 1) * angle;
+            const centerAngle = startAngle + angle / 2;
+            
+            const x1 = 50 + 50 * Math.cos((startAngle - 90) * Math.PI / 180);
+            const y1 = 50 + 50 * Math.sin((startAngle - 90) * Math.PI / 180);
+            const x2 = 50 + 50 * Math.cos((endAngle - 90) * Math.PI / 180);
+            const y2 = 50 + 50 * Math.sin((endAngle - 90) * Math.PI / 180);
+            
+            const largeArcFlag = angle > 180 ? 1 : 0;
+            const path = `M 50 50 L ${x1} ${y1} A 50 50 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+            const fillColor = s === 'Moons' ? '#000000' : (s === 'Stars' ? '#1e1b4b' : (s === 'Diamonds' || s === 'Hearts' ? '#0f172a' : '#f8fafc'));
+            const iconColor = s === 'Moons' ? 'fill-white' : (s === 'Stars' ? 'fill-yellow-400' : (s === 'Diamonds' || s === 'Hearts' ? 'fill-red-500' : 'fill-slate-900'));
+
+            return (
+              <g key={s}>
+                <path d={path} fill={fillColor} stroke="#1e293b" strokeWidth="0.5" />
+                <g transform={`rotate(${centerAngle} 50 50)`}>
+                  <text 
+                    x="50" 
+                    y="20" 
+                    textAnchor="middle" 
+                    dominantBaseline="middle"
+                    className={`text-[12px] font-black select-none ${iconColor}`}
+                    style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.3))' }}
+                  >
+                    {SUIT_ICONS[s]}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </svg>
+
+        <div className="absolute inset-0 m-auto w-12 h-12 bg-emerald-900 rounded-full border-4 border-emerald-800 flex items-center justify-center z-20 shadow-inner">
           <Skull className="w-5 h-5 text-emerald-400" />
         </div>
       </motion.div>
 
-      {/* Glass overlay */}
-      <div className="absolute inset-0 rounded-full bg-linear-to-tr from-white/5 to-transparent pointer-events-none z-30" />
+      <div className="absolute inset-0 rounded-full bg-linear-to-tr from-white/10 to-transparent pointer-events-none z-30" />
+    </div>
+  );
+};
+
+const InsightModal: React.FC<{ 
+  intel: { type: string, cards: string[], powerCards: number[] }, 
+  onClose: () => void 
+}> = ({ intel, onClose }) => {
+  const isPriestess = intel.type === 'Priestess'; // Hypothetical flag or check name
+  
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl">
+      <div className="w-full max-w-4xl bg-gradient-to-br from-slate-900 to-black p-8 rounded-3xl border-4 border-yellow-500/30 shadow-2xl flex flex-col items-center gap-8 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-yellow-500/50 shadow-[0_0_20px_yellow]" />
+        <div className="text-center space-y-2">
+          <h2 className="text-4xl sm:text-7xl font-black text-yellow-400 uppercase tracking-tight italic">
+            {intel.type === 'Priestess' ? 'High Priestess Vision' : 'Hierophant Insight'}
+          </h2>
+          <p className="text-slate-400 font-black uppercase tracking-[0.3em] text-xs">
+            {intel.type === 'Priestess' ? "You see their choice... Swap your card if you dare." : "The vision allows you to see half of their future..."}
+          </p>
+        </div>
+        <div className="flex flex-col gap-8 w-full items-center">
+          <div className="w-full">
+            <h3 className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mb-4 text-center border-b border-slate-800 pb-2">
+               {intel.type === 'Priestess' ? "Opponent's Chosen Card" : "Revealed Cards"}
+            </h3>
+            <div className="flex flex-wrap gap-4 items-center justify-center">
+              {intel.cards.map((c, i) => (
+                <CardVisual key={i} card={c} noAnimate />
+              ))}
+            </div>
+          </div>
+          {intel.powerCards.length > 0 && (
+            <div className="w-full">
+              <h3 className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mb-4 text-center border-b border-slate-800 pb-2">Held Powers</h3>
+              <div className="flex flex-wrap gap-4 items-center justify-center">
+                {intel.powerCards.map((p, i) => (
+                  <PowerCardVisual key={i} cardId={p} small />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <button onClick={onClose} className="bg-yellow-500 text-black px-12 py-4 rounded-full font-black uppercase tracking-widest text-base shadow-[0_0_40px_rgba(234,179,8,0.3)] transition-all hover:scale-110 active:scale-95">
+           {intel.type === 'Priestess' ? 'Close Vision' : 'Continue'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const AcquiredAssets: React.FC<{
+  gains: { type: 'card' | 'power' | 'draw', id: string | number }[];
+  side: 'left' | 'right';
+  label: string;
+}> = ({ gains, side, label }) => {
+  if (!gains || gains.length === 0) return null;
+
+  return (
+    <div className={`absolute top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50 ${side === 'left' ? 'left-6 sm:left-16' : 'right-6 sm:right-16'}`}>
+      <div className={`flex flex-col mb-4 ${side === 'left' ? 'items-start' : 'items-end'}`}>
+        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">{label}</span>
+        <span className="text-[8px] font-black uppercase tracking-widest text-emerald-900 border-t border-emerald-900/30 pt-1">Acquired</span>
+      </div>
+      <div className={`flex flex-col gap-4 ${side === 'left' ? 'items-start' : 'items-end'}`}>
+        {gains.map((gain, i) => (
+          <motion.div
+            key={i}
+            initial={{ x: side === 'left' ? -20 : 20, opacity: 0, scale: 0.8 }}
+            animate={{ x: 0, opacity: 1, scale: 1 }}
+            transition={{ delay: 0.8 + i * 0.15, type: 'spring', damping: 15 }}
+            className="relative"
+          >
+            {gain.type === 'card' && (
+              <div className="scale-[0.4] sm:scale-[0.6] origin-center">
+                <CardVisual card={gain.id as string} revealed />
+              </div>
+            )}
+            {gain.type === 'power' && (
+              <div className="scale-65 sm:scale-90 origin-center">
+                <PowerCardVisual cardId={gain.id as number} small />
+              </div>
+            )}
+            {gain.type === 'draw' && (
+              <div className="w-12 h-16 sm:w-16 sm:h-24 rounded-lg bg-emerald-900/20 border border-emerald-500/30 flex flex-col items-center justify-center gap-1 backdrop-blur-sm shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400">
+                  {gain.id === 'standard' ? <Plus className="w-3 h-3 sm:w-4 sm:h-4" /> : <span className="text-[10px] sm:text-xs font-black">{gain.id}</span>}
+                </div>
+                <span className="text-[6px] sm:text-[7px] font-black uppercase text-emerald-300 tracking-tighter opacity-70">
+                  {gain.id === 'random-power' ? 'POWER' : (gain.id === 'random-card' ? 'CARD' : 'DRAW')}
+                </span>
+              </div>
+            )}
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const DevPowerMenu: React.FC<{
+  onSelect: (id: number) => void;
+  onClose: () => void;
+}> = ({ onSelect, onClose }) => {
+  return (
+    <div className="absolute inset-x-4 top-16 bottom-20 z-[250] bg-black/90 backdrop-blur-xl p-4 overflow-y-auto rounded-3xl border-2 border-yellow-400 shadow-[0_0_100px_rgba(250,204,21,0.2)]">
+      <div className="flex justify-between items-center mb-6 sticky top-0 bg-black/90 pb-4 z-10 border-b border-white/10">
+        <div className="flex flex-col">
+          <h3 className="text-yellow-400 font-black uppercase text-sm tracking-[0.2em] flex items-center gap-2">
+            <Sparkles className="w-4 h-4" /> Architect Mode
+          </h3>
+          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Force inject Major Arcana resonance</span>
+        </div>
+        <button 
+          onClick={onClose} 
+          className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-8">
+        {MAJOR_ARCANA.map((card, i) => {
+          const IconComp = useMemo(() => {
+            const icons: Record<string, any> = {
+              Sparkles, Wand2, Eye, Crown, Shield, BookOpen, Heart, RefreshCw, Scale, 
+              Anchor, Skull, Waves, Flame, ZapOff, Star, Moon, Sun, Globe,
+              BookType, FastForward, BicepsFlexed, Lamp, Gavel
+            };
+            return icons[card.icon] || Sparkles;
+          }, [card.icon]);
+
+          return (
+            <button 
+              key={i} 
+              onClick={() => { onSelect(i); onClose(); }}
+              className="flex items-center gap-4 p-3 rounded-2xl bg-slate-900/50 border border-slate-800 hover:border-yellow-400/50 hover:bg-slate-800 transition-all text-left group"
+            >
+              <div className="bg-slate-800 p-2 rounded-lg group-hover:bg-yellow-400 group-hover:text-black transition-colors">
+                <IconComp className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-slate-500 font-mono">#{i}</span>
+                  <span className="text-[11px] font-black text-white uppercase truncate">{card.name}</span>
+                </div>
+                <p className="text-[9px] text-slate-400 leading-tight line-clamp-1 italic">{card.description}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const ResolutionSequence: React.FC<{ 
+  room: RoomData, 
+  myUid: string, 
+  onComplete: () => void 
+}> = ({ room, myUid, onComplete }) => {
+  const outcome = room.lastOutcome!;
+  const [eventIndex, setEventIndex] = useState(-1);
+  const [currentCards, setCurrentCards] = useState(() => ({ ...(outcome as any).initialCardsPlayed || outcome.cardsPlayed }));
+  const [currentTarget, setCurrentTarget] = useState(room.targetSuit);
+  const [summoned, setSummoned] = useState<Record<string, string>>({});
+  const [devilStolen, setDevilStolen] = useState<Record<string, number>>({});
+  const [visibleEvents, setVisibleEvents] = useState<{ id: number, message: string }[]>([]);
+  const [isDone, setIsDone] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const processNext = async () => {
+      await new Promise(r => setTimeout(r, 800));
+      if (!active) return;
+      
+      const events = outcome.events || [];
+      for (let i = 0; i < events.length; i++) {
+        const event = events[i];
+        setEventIndex(i);
+        setVisibleEvents(prev => [...prev, { id: Date.now() + i, message: event.message }]);
+        
+        switch (event.type) {
+          case 'CARD_SWAP':
+            if (event.uid && event.cardId) {
+               setCurrentCards(prev => ({ ...prev, [event.uid!]: event.cardId! }));
+            } else if (!event.uid) {
+               setCurrentCards(prev => {
+                 const uids = Object.keys(prev);
+                 if (uids.length < 2) return prev;
+                 return { [uids[0]]: prev[uids[1]], [uids[1]]: prev[uids[0]] };
+               });
+            }
+            break;
+          case 'TARGET_CHANGE':
+            if (event.suit) setCurrentTarget(event.suit);
+            break;
+          case 'CARD_EMPOWER':
+            if (event.uid && event.cardId) {
+               setCurrentCards(prev => ({ ...prev, [event.uid!]: event.cardId! }));
+            }
+            break;
+          case 'SUMMON_CARD':
+            if (event.uid && event.cardId) {
+               setSummoned(prev => ({ ...prev, [event.uid!]: event.cardId! }));
+            }
+            break;
+          case 'POWER_TRIGGER':
+            if (event.uid) {
+               // Devil specific UI feedback
+               if (event.powerCardId === 15) {
+                 const oUid = Object.keys(room.players).find(id => id !== event.uid)!;
+                 const oPower = outcome.powerCardIdsPlayed[oUid];
+                 if (oPower !== null && oPower !== 15 && oPower !== 16) {
+                    setDevilStolen(prev => ({ ...prev, [event.uid!]: oPower }));
+                 }
+               }
+               const finalCard = outcome.cardsPlayed[event.uid];
+               if (finalCard && finalCard !== currentCards[event.uid]) {
+                  setCurrentCards(prev => ({ ...prev, [event.uid!]: finalCard }));
+               }
+            }
+            break;
+        }
+        await new Promise(r => setTimeout(r, 1200));
+        if (!active) return;
+      }
+      
+      setCurrentCards(prev => {
+        const next = { ...outcome.cardsPlayed };
+        if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+        return next;
+      });
+      
+      setEventIndex(events.length);
+      setIsDone(true);
+      // Increased delay to 3.5s to let the final state sink in
+      await new Promise(r => setTimeout(r, 3500));
+      if (!active) return;
+      onComplete();
+    };
+    processNext();
+    return () => { active = false; };
+  }, [outcome.events, outcome.cardsPlayed]);
+
+  const hostUid = room.hostUid;
+  const guestUid = Object.keys(room.players).find(id => id !== hostUid)!;
+
+  return (
+    <div className="flex flex-col items-center w-full h-full max-h-screen p-4 sm:p-6 justify-center">
+      <div className="flex-none mb-4">
+        <motion.div 
+          initial={{ y: -10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="flex flex-col items-center"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Active</span>
+            <div className={`w-10 h-10 flex items-center justify-center rounded-full bg-slate-900 border border-slate-700 shadow-2xl transition-all duration-500 ${SUIT_COLORS[currentTarget || 'Hearts']}`}>
+               <span className="text-xl leading-none">{SUIT_ICONS[currentTarget || 'Hearts']}</span>
+            </div>
+            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Field</span>
+          </div>
+        </motion.div>
+      </div>
+
+      <div className="flex-none w-full max-w-4xl flex items-center justify-center gap-4 sm:gap-12">
+        {[hostUid, guestUid].map((uid, idx) => (
+          <div key={uid} className="flex flex-col items-center gap-3 relative scale-90 sm:scale-100">
+            <motion.div 
+              initial={{ x: idx === 0 ? -20 : 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              className={`px-2 py-0.5 rounded border border-slate-800 bg-slate-950/80 backdrop-blur-sm ${room.players[uid].role === 'Predator' ? 'text-red-500 border-red-900/30' : (room.players[uid].role === 'Preydator' ? 'text-purple-500 border-purple-900/30' : 'text-blue-400 border-blue-900/30')}`}
+            >
+               <span className="text-[8px] font-black uppercase tracking-widest leading-none block">{room.players[uid].name}</span>
+            </motion.div>
+
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <motion.div 
+                  key={currentCards[uid]} 
+                  initial={{ scale: 0.9, opacity: 0 }} 
+                  animate={{ scale: 1, opacity: 1 }}
+                  layout
+                  className="relative z-10"
+                >
+                  <CardVisual card={currentCards[uid]} revealed />
+                  <div className="absolute -top-2 -right-2 z-20">
+                    {outcome.powerCardIdsPlayed[uid] !== null && (
+                      <div className="relative">
+                        <div className={`p-1 rounded-full bg-black border border-slate-700 shadow-xl overflow-hidden scale-65 origin-top-right ${outcome.powerCardIdsPlayed[uid] === 15 ? 'ring-2 ring-red-500 animate-pulse' : ''}`}>
+                          <PowerCardVisual cardId={outcome.powerCardIdsPlayed[uid]!} small />
+                        </div>
+                        <AnimatePresence>
+                          {devilStolen[uid] !== undefined && (
+                            <motion.div 
+                              initial={{ scale: 0, x: -5, opacity: 0 }}
+                              animate={{ scale: 0.5, x: -15, opacity: 1 }}
+                              className="absolute top-0 right-0 p-1 rounded-full bg-slate-900 border border-red-500 shadow-2xl overflow-hidden"
+                            >
+                              <PowerCardVisual cardId={devilStolen[uid]} small />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+
+                <AnimatePresence>
+                  {summoned[uid] && (
+                    <motion.div 
+                      initial={{ scale: 0, opacity: 0, x: -10 }} 
+                      animate={{ scale: 0.7, opacity: 1, x: 0 }}
+                      className="origin-left"
+                    >
+                      <CardVisual card={summoned[uid]} revealed />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex-none w-full max-w-xl mt-6 flex flex-col items-center">
+        <div className="h-12 flex flex-col items-center justify-center relative overflow-hidden w-full">
+          <AnimatePresence mode="popLayout">
+            {visibleEvents.slice(-2).map((evt, i) => (
+              <motion.div 
+                key={evt.id} 
+                initial={{ opacity: 0, y: 15 }} 
+                animate={{ opacity: i === 1 ? 1 : 0.4, y: i === 1 ? 0 : -15, scale: i === 1 ? 1 : 0.9 }} 
+                exit={{ opacity: 0, y: -30 }}
+                className={`text-center font-black uppercase tracking-widest italic text-[10px] sm:text-sm ${i === 1 ? 'text-yellow-400' : 'text-slate-500'}`}
+              >
+                {evt.message}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        <div className="mt-4 flex flex-col items-center justify-center min-h-[60px]">
+          <AnimatePresence>
+            {isDone && (
+              <motion.div 
+                initial={{ scale: 0.8, opacity: 0, filter: "blur(8px)" }} 
+                animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }} 
+                className="flex flex-col items-center"
+              >
+                <span className={`text-3xl sm:text-5xl font-black uppercase tracking-tighter italic drop-shadow-2xl ${
+                  outcome.winnerUid === 'draw' ? 'text-purple-500' : 
+                  (room.players[outcome.winnerUid].role === 'Preydator' ? 'text-purple-500' :
+                   (room.players[outcome.winnerUid].role === 'Predator' ? 'text-red-500' : 'text-blue-400'))
+                }`}>
+                  {outcome.winnerUid === 'draw' ? 'STALEMATE' : `${room.players[outcome.winnerUid].name} WINS`}
+                </span>
+                <p className="text-white/60 text-[9px] font-bold uppercase tracking-[0.2em] mt-2">{outcome.message}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DraftingPhase: React.FC<{ 
+  draftSets: number[][], 
+  currentSetIdx: number, 
+  onSelect: (powerId: number) => void,
+  myPowerCards: number[] 
+}> = ({ draftSets, currentSetIdx, onSelect, myPowerCards }) => {
+  const currentSet = draftSets[currentSetIdx] || [];
+  const hasSelectedThisTurn = myPowerCards.length > currentSetIdx;
+
+  return (
+    <div className="absolute inset-0 z-[150] flex flex-col items-center justify-center p-4 bg-emerald-950/95 backdrop-blur-3xl overflow-y-auto">
+      <div className="w-full max-w-6xl flex flex-col items-center gap-8 py-10">
+        <div className="text-center space-y-2">
+          <motion.h2 
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="text-4xl sm:text-7xl font-black text-white italic uppercase tracking-tighter"
+          >
+            Draft Your Power
+          </motion.h2>
+          <div className="flex items-center justify-center gap-4">
+             <div className="h-px w-20 bg-emerald-800" />
+             <p className="text-sm text-emerald-400 font-black uppercase tracking-[0.4em]">Arcana Phase {currentSetIdx + 1} / 3</p>
+             <div className="h-px w-20 bg-emerald-800" />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-4 sm:gap-14 items-center justify-center w-full">
+          {currentSet.map(id => (
+            <PowerCardVisual 
+              key={id} 
+              cardId={id} 
+              onClick={() => !hasSelectedThisTurn && onSelect(id)}
+              disabled={hasSelectedThisTurn}
+            />
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-col items-center gap-6">
+          {hasSelectedThisTurn ? (
+            <div className="bg-emerald-900 px-10 py-4 rounded-full border-2 border-emerald-700 shadow-[0_0_30px_rgba(16,185,129,0.1)] flex items-center gap-3 animate-pulse">
+              <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
+              <span className="text-white font-black uppercase text-xs tracking-widest">Waiting for Opponent...</span>
+            </div>
+          ) : (
+            <p className="text-yellow-400/80 font-bold uppercase text-[10px] sm:text-xs tracking-widest italic text-center max-w-xs">
+              Mortal, choose one of the three manifestations. Its power is yours for a single usage.
+            </p>
+          )}
+
+          <div className="flex gap-2">
+             {Array.from({ length: 3 }).map((_, i) => (
+               <div 
+                 key={i} 
+                 className={`w-3 h-3 rounded-full border-2 ${i < myPowerCards.length ? 'bg-yellow-400 border-yellow-400' : 'border-emerald-800'}`} 
+               />
+             ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -446,21 +1009,53 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [selectedPowerCard, setSelectedPowerCard] = useState<number | null>(null);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showDesperationWheel, setShowDesperationWheel] = useState(false);
   const [isWheelSpinning, setIsWheelSpinning] = useState(false);
+  const [isDevMenuOpen, setIsDevMenuOpen] = useState(false);
+  const [showResolutionSequence, setShowResolutionSequence] = useState(false);
+  const [seenIntel, setSeenIntel] = useState<PlayerData['secretIntel']>(null);
   const lastTurnRef = useRef(0);
   const myUid = serviceRef.current.getUid();
 
   useEffect(() => {
-    if (room?.currentTurn && room.status === 'playing') {
+    const handleHashChange = () => {
+      if (roomId) return; // Don't react to hash changes if already in a game
+      const hash = window.location.hash.substring(1);
+      if (hash && hash.length === 7) {
+        setRoomCode(hash.toUpperCase());
+      }
+    };
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [roomId]);
+
+  const [lastSeenIntelTurn, setLastSeenIntelTurn] = useState(-1);
+
+  useEffect(() => {
+    if (room?.status === 'playing' && lastTurnRef.current !== room.currentTurn) {
       setIsWheelSpinning(true);
       const timer = setTimeout(() => setIsWheelSpinning(false), 5000);
       lastTurnRef.current = room.currentTurn;
       return () => clearTimeout(timer);
     }
   }, [room?.currentTurn, room?.status]);
+
+  const [lastResolvedTurn, setLastResolvedTurn] = useState(-1);
+
+  useEffect(() => {
+    if (room?.status === 'results' && room.currentTurn > lastResolvedTurn) {
+        setShowResolutionSequence(true);
+        setLastResolvedTurn(room.currentTurn);
+    }
+    if (room?.status === 'playing' && room.players[myUid]?.secretIntel && lastSeenIntelTurn !== room.currentTurn) {
+       setSeenIntel(room.players[myUid].secretIntel);
+       setLastSeenIntelTurn(room.currentTurn);
+    }
+  }, [room?.status, room?.players[myUid]?.secretIntel, room?.currentTurn, lastResolvedTurn]);
 
   useEffect(() => {
     return () => {
@@ -480,6 +1075,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
         }
       });
       setRoomId(id);
+      window.location.hash = id;
     } catch (err: any) {
       setError(`Failed to create: ${err.message || err}`);
     } finally {
@@ -499,6 +1095,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
         }
       });
       setRoomId(roomCode);
+      window.location.hash = roomCode;
     } catch (err: any) {
       setError(`Failed to join: ${err.message || err}`);
     } finally {
@@ -510,11 +1107,36 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     if (!selectedCard || !roomId) return;
     setLoading(true);
     try {
+      if (selectedPowerCard !== null) {
+        await serviceRef.current.selectPowerCard(selectedPowerCard);
+      }
       await serviceRef.current.playCard(selectedCard);
     } catch (err: any) {
       setError(err.message);
     } finally {
+      setSelectedPowerCard(null);
       setLoading(false);
+    }
+  };
+
+  const handleDraftSelect = async (powerId: number) => {
+    setLoading(true);
+    try {
+      await serviceRef.current.selectDraftPowerCard(powerId);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTogglePowerCard = (powerId: number) => {
+    if (selectedPowerCard === powerId) {
+      setSelectedPowerCard(null);
+      serviceRef.current.selectPowerCard(null);
+    } else {
+      setSelectedPowerCard(powerId);
+      serviceRef.current.selectPowerCard(powerId);
     }
   };
 
@@ -531,13 +1153,13 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
   const copyUnicodeSummary = () => {
     if (!room?.lastOutcome) return;
-    const { cardsPlayed, winnerUid, message } = room.lastOutcome;
+    const { cardsPlayed, winnerUid, message, powerCardsPlayed } = room.lastOutcome;
     const uids = Object.keys(cardsPlayed);
     
     const formatCard = (cardId: string) => {
       const { suit, value, isJoker } = parseCard(cardId);
       const color = (suit === 'Hearts' || suit === 'Diamonds') ? 'red' : 'black';
-      const unicode = CARD_UNICODE[cardId] || (isJoker ? '🃏' : SUIT_ICONS[suit]);
+      const unicode = CARD_UNICODE[cardId] || (isJoker ? '🃏' : SUIT_ICONS[suit] || '🃳');
       const fullName = isJoker ? 'The Joker' : `${value} of ${suit}`;
       return `[color=${color}]${unicode}[/color][sub](${fullName})[/sub]`;
     };
@@ -549,7 +1171,7 @@ ${message}
 Winner: ${winnerUid === 'draw' ? 'DRAW' : room.players[winnerUid].name}
 
 Moves:
-${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).join('\n')}
+${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${powerCardsPlayed?.[uid] ? `(Power: ${powerCardsPlayed[uid]})` : ''}`).join('\n')}
 ------------------------------------
     `.trim();
     navigator.clipboard.writeText(summary);
@@ -874,6 +1496,22 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
     <div className="h-full bg-emerald-950/40 relative flex flex-col p-4 overflow-hidden border-x border-emerald-900/50">
       <DesperationVignette tier={me.desperationTier} totalTiers={room.settings.tiers.length} />
       
+      {isDevMenuOpen && (
+        <DevPowerMenu 
+          onSelect={(id) => serviceRef.current.cheatPowerCard(id)} 
+          onClose={() => setIsDevMenuOpen(false)} 
+        />
+      )}
+
+      {room.status === 'drafting' && room.draftSets && (
+        <DraftingPhase 
+          draftSets={room.draftSets} 
+          currentSetIdx={room.draftTurn} 
+          onSelect={handleDraftSelect}
+          myPowerCards={me.powerCards}
+        />
+      )}
+
       {(showDesperationWheel || me.desperationSpinning || me.desperationResult) && !room.winner && (
         <DesperationWheel 
           onSpin={handleSpinDesperation}
@@ -883,7 +1521,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
           result={me.desperationResult}
           offset={me.desperationOffset}
           tiers={room.settings.tiers}
-          currentTier={me.desperationTier + 1}
+          currentTier={me.desperationResult ? me.desperationTier : me.desperationTier + 1}
           isSpectator={false}
         />
       )}
@@ -898,7 +1536,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
           result={opponent.desperationResult}
           offset={opponent.desperationOffset}
           tiers={room.settings.tiers}
-          currentTier={opponent.desperationTier}
+          currentTier={opponent.desperationResult ? opponent.desperationTier : opponent.desperationTier + 1}
           isSpectator={true}
         />
       )}
@@ -922,10 +1560,16 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
         </div>
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => setShowRules(true)}
-            className="text-emerald-500 hover:text-white flex items-center gap-1 text-[8px] font-black uppercase tracking-widest border border-emerald-800 px-2 py-1 rounded"
+            onClick={() => setIsDevMenuOpen(true)}
+            className="p-2 rounded-lg bg-emerald-900/40 border border-emerald-800 text-emerald-600 hover:bg-yellow-400 hover:text-emerald-950 hover:border-yellow-500 transition-all flex items-center gap-2 text-[10px] font-black uppercase group"
           >
-            <Info className="w-2 h-2" /> Rules
+            <Sparkles className="w-3 h-3 group-hover:rotate-12" /> Dev
+          </button>
+          <button 
+            onClick={() => setShowRules(true)}
+            className="bg-yellow-400/20 text-yellow-400 hover:bg-yellow-400 hover:text-emerald-950 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-yellow-400/40 px-4 py-2 rounded-lg transition-all"
+          >
+            <Info className="w-4 h-4" /> Rules
           </button>
           <div className="flex items-center gap-2">
             {opponent?.confirmed && <Check className="w-3 h-3 text-yellow-400 animate-bounce" />}
@@ -934,19 +1578,47 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
         </div>
       </div>
 
+      {seenIntel && (
+        <InsightModal 
+          intel={seenIntel} 
+          onClose={() => setSeenIntel(null)} 
+        />
+      )}
+
       {/* Opponent Hand Backs */}
       {opponent && (
-        <div className="flex justify-center -space-x-8 sm:-space-x-12 mb-4 opacity-80 scale-90 sm:scale-100 flex-nowrap h-28 items-center px-4">
-          {Array.from({ length: opponent.hand.length }).map((_, i) => (
-            <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
-          ))}
+        <div className="relative mb-4">
+          <div className="flex justify-center -space-x-8 sm:-space-x-12 opacity-80 scale-90 sm:scale-100 flex-nowrap h-28 items-center px-4">
+            {Array.from({ length: opponent.hand.length }).map((_, i) => (
+              <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
+            ))}
+          </div>
+          {/* Opponent Power Cards */}
+          <div className="absolute right-0 top-0 flex flex-col gap-1 pr-2 opacity-60">
+            {Array.from({ length: opponent.powerCards.length }).map((_, i) => (
+               <PowerCardVisual key={`opp-p-${i}`} cardId={0} revealed={false} small />
+            ))}
+          </div>
         </div>
       )}
 
       {/* Board Mini */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 relative">
+          {/* Own Power Cards Stack */}
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 pl-2 z-40">
+             {me.powerCards.map((pId, i) => (
+               <PowerCardVisual 
+                 key={`${pId}-${i}`} 
+                 cardId={pId} 
+                 small 
+                 selected={selectedPowerCard === pId}
+                 onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
+                 disabled={me.confirmed}
+               />
+             ))}
+          </div>
 
-         {/* Central Deck */}
+          {/* Central Deck */}
          <div className="absolute right-12 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-center">
             <div className="relative group">
               {/* Stack of Cards */}
@@ -973,7 +1645,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
                 <div className="text-[8px] font-bold uppercase text-emerald-800 tracking-widest">REMAINING</div>
               </div>
             </div>
-         </div>
+          </div>
 
           {room.status === 'playing' ? (
             <div className="flex flex-col items-center transition-all duration-500">
@@ -996,7 +1668,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
                      animate={{ opacity: 1, scale: 1 }}
                      exit={{ opacity: 0, scale: 1.2 }}
                    >
-                     <TargetSuitWheel suit={room.targetSuit} isSpinning={isWheelSpinning} offset={room.wheelOffset} />
+                     <TargetSuitWheel suit={room.status === 'results' ? (room.lastOutcome?.targetSuit || room.targetSuit) : room.targetSuit} isSpinning={isWheelSpinning} offset={room.wheelOffset} availableSuits={room.availableSuits} />
                    </motion.div>
                  ) : (
                    <motion.div
@@ -1011,8 +1683,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
                        flex flex-col items-center justify-center border-4 border-yellow-200 relative overflow-hidden
                      `}>
                         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px]" />
-                        <span className={`text-7xl sm:text-9xl drop-shadow-2xl ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''}`}>
-                          {room.targetSuit ? SUIT_ICONS[room.targetSuit] : '?'}
+                        <span className={`text-7xl sm:text-9xl drop-shadow-2xl ${(room.status === 'results' ? (room.lastOutcome?.targetSuit || room.targetSuit) : room.targetSuit) ? SUIT_COLORS[(room.status === 'results' ? (room.lastOutcome?.targetSuit || room.targetSuit) : room.targetSuit)!] : ''}`}>
+                          {(room.status === 'results' ? (room.lastOutcome?.targetSuit || room.targetSuit) : room.targetSuit) ? SUIT_ICONS[(room.status === 'results' ? (room.lastOutcome?.targetSuit || room.targetSuit) : room.targetSuit)!] : '?'}
                         </span>
                      </div>
                      <span className={`text-xs font-black uppercase tracking-widest ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''}`}>
@@ -1022,80 +1694,113 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])}`).
                  )}
                </AnimatePresence>
             </div>
-          ) : room.status === 'results' && room.lastOutcome ? (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 bg-black/95 z-[100] flex flex-col items-center justify-center p-8 text-center"
-            >
-              <div className="mb-4">
-                {room.lastOutcome.winnerUid !== 'draw' ? (
-                  <div className="flex flex-col items-center">
-                    <span className={`text-4xl sm:text-6xl font-black uppercase tracking-tighter mb-2 ${
-                      room.players[room.lastOutcome.winnerUid].role === 'Predator' ? 'text-red-500' :
-                      room.players[room.lastOutcome.winnerUid].role === 'Prey' ? 'text-blue-400' :
-                      'text-purple-500'
-                    }`}>
-                      {room.players[room.lastOutcome.winnerUid].name} WINS
-                    </span>
-                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">CLASH RESOLUTION COMPLETE</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center">
-                    <span className="text-4xl sm:text-6xl font-black uppercase tracking-tighter mb-2 text-emerald-500">STALEMATE</span>
-                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">NO ASSETS RECOVERED</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-12 sm:gap-20 mb-12">
-                {Object.entries(room.lastOutcome.cardsPlayed).map(([uid, card]) => (
-                  <div key={uid} className="flex flex-col items-center gap-4">
-                    <span className={`text-[10px] font-black uppercase ${uid === myUid ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                      {room.players[uid].name}
-                    </span>
-                    <div className="relative">
-                      <CardVisual card={card} noAnimate />
-                      {room.lastOutcome?.winnerUid === uid && (
-                        <motion.div 
-                          initial={{ scale: 0.8, opacity: 0 }}
-                          animate={{ scale: 1.2, opacity: 1 }}
-                          className="absolute -top-4 -right-4 bg-yellow-400 text-emerald-950 p-1.5 rounded-full shadow-lg z-10"
-                        >
-                          <Trophy className="w-4 h-4" />
-                        </motion.div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <span className="text-sm font-bold text-white/80 max-w-xs mb-10">{room.lastOutcome.message}</span>
-              
-              <button 
-                onClick={handleNextRound}
-                disabled={me.readyForNextRound}
-                className={`flex items-center gap-3 px-12 py-4 rounded-full font-black uppercase tracking-widest text-sm transition-all ${
-                  me.readyForNextRound 
-                    ? 'bg-emerald-900/30 text-emerald-700 border border-emerald-800' 
-                    : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400 shadow-[0_0_40px_rgba(16,185,129,0.3)]'
-                }`}
-              >
-                {me.readyForNextRound ? (
-                  <>
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                    Waiting for Response
-                  </>
-                ) : (
-                  <>
-                    <ChevronRight className="w-5 h-5" />
-                    Engage Next Round
-                  </>
-                )}
-              </button>
-            </motion.div>
           ) : null}
       </div>
+
+      {room.status === 'results' && room.lastOutcome && (
+        <motion.div 
+          key="results-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/98 z-[300] flex flex-col items-center justify-start overflow-hidden"
+        >
+          <AnimatePresence mode="wait">
+            {showResolutionSequence ? (
+              <motion.div
+                key="sequence"
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0, scale: 1.05 }}
+                transition={{ duration: 0.8 }}
+                className="w-full h-full"
+              >
+                <ResolutionSequence 
+                  room={room} 
+                  myUid={myUid} 
+                  onComplete={() => setShowResolutionSequence(false)} 
+                />
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="static-results"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center gap-4 sm:gap-6 py-12 px-4 w-full h-full justify-center max-w-4xl mx-auto overflow-y-auto relative"
+              >
+                {/* Captured Assets Section */}
+                {room.lastOutcome.gains && (
+                  <>
+                    <AcquiredAssets gains={room.lastOutcome.gains[room.hostUid] || []} side="left" label={room.players[room.hostUid].name} />
+                    <AcquiredAssets 
+                      gains={room.lastOutcome.gains[Object.keys(room.players).find(id => id !== room.hostUid)!] || []} 
+                      side="right" 
+                      label={room.players[Object.keys(room.players).find(id => id !== room.hostUid)!].name} 
+                    />
+                  </>
+                )}
+
+                <div className="flex flex-col items-center mb-2">
+                  <span className="text-[8px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em] mb-1">Round Result</span>
+                  <h2 className={`text-4xl sm:text-7xl font-black uppercase italic tracking-tighter text-center leading-none ${
+                    room.lastOutcome.winnerUid === 'draw' ? 'text-purple-500' : 
+                    (room.players[room.lastOutcome.winnerUid].role === 'Preydator' ? 'text-purple-500' :
+                     (room.players[room.lastOutcome.winnerUid].role === 'Predator' ? 'text-red-500' : 'text-blue-400'))
+                  }`}>
+                    {room.lastOutcome.winnerUid === 'draw' ? 'STALEMATE' : `${room.players[room.lastOutcome.winnerUid].name} WINS`}
+                  </h2>
+                </div>
+
+                <div className="flex items-center justify-center gap-6 sm:gap-16 w-full py-4">
+                  {[room.hostUid, Object.keys(room.players).find(id => id !== room.hostUid)!].map(uid => (
+                    <div key={uid} className="flex flex-col items-center gap-3 relative scale-90 sm:scale-100">
+                      <div className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-slate-900 border border-slate-700 mb-1 ${room.players[uid].role === 'Predator' ? 'text-red-400' : (room.players[uid].role === 'Preydator' ? 'text-purple-400' : 'text-blue-400')}`}>
+                        {room.players[uid].name}
+                      </div>
+                      <CardVisual card={room.lastOutcome!.cardsPlayed[uid]} revealed />
+                      <div className="flex gap-1 h-6">
+                         {room.lastOutcome?.powerCardIdsPlayed[uid] !== null && (
+                           <div className="scale-75 origin-top">
+                             <PowerCardVisual cardId={room.lastOutcome!.powerCardIdsPlayed[uid]!} small />
+                           </div>
+                         )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col items-center gap-6 w-full max-w-md">
+                   <div className="h-px w-full bg-linear-to-r from-transparent via-slate-800 to-transparent" />
+                   
+                   <p className="text-white text-base sm:text-xl font-black italic text-center tracking-tight leading-snug">
+                     {room.lastOutcome.message}
+                   </p>
+
+                   {/* Event Log Display */}
+                   <div className="w-full flex flex-col gap-1.5 p-4 rounded-2xl bg-black/40 border border-white/5 max-h-[150px] overflow-y-auto custom-scrollbar">
+                     {room.lastOutcome.events.map((evt: any, i: number) => (
+                       <div key={i} className="flex gap-2 text-[9px] uppercase tracking-wider font-bold">
+                         <span className="text-slate-600 font-mono">{(i+1).toString().padStart(2, '0')}</span>
+                         <span className={evt.type === 'POWER_TRIGGER' ? 'text-yellow-400' : 'text-slate-400'}>
+                           {evt.message}
+                         </span>
+                       </div>
+                     ))}
+                   </div>
+                   
+                   <button 
+                    onClick={handleNextRound}
+                    disabled={loading || me.readyForNextRound}
+                    className="group relative bg-yellow-400 text-black px-16 sm:px-24 py-4 sm:py-5 rounded-full font-black uppercase text-sm sm:text-base shadow-[0_0_50px_rgba(250,204,21,0.2)] hover:shadow-[0_0_80px_rgba(250,204,21,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer mt-2"
+                   >
+                     <span className="relative z-10">{me.readyForNextRound ? 'WAITING FOR OTHER...' : 'READY FOR NEXT ROUND'}</span>
+                     <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity rounded-full" />
+                   </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
 
       {/* Hand Small */}
       <div className="mt-auto px-4 pb-4">

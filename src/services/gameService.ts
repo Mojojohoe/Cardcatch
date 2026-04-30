@@ -1,5 +1,5 @@
 import Peer, { DataConnection } from 'peerjs';
-import { RoomData, PlayerData, Suit, SUITS, VALUES, GameSettings, PlayerRole } from '../types';
+import { RoomData, PlayerData, Suit, SUITS, VALUES, GameSettings, PlayerRole, MAJOR_ARCANA, ResolutionEvent } from '../types';
 
 export const createDeck = (disableJokers: boolean): string[] => {
   const deck: string[] = [];
@@ -25,7 +25,7 @@ export const shuffle = <T>(array: T[]): T[] => {
 };
 
 export const getCardValue = (cardStr: string): number => {
-  if (cardStr.startsWith('Joker')) return 0;
+  if (cardStr.startsWith('Joker')) return 20; // Beat Ace (14)
   const value = cardStr.split('-')[1];
   if (value === 'A') return 14;
   if (value === 'K') return 13;
@@ -49,7 +49,10 @@ type GameEvent =
   | { type: 'PROCEED_NEXT', uid: string }
   | { type: 'UPDATE_SETTINGS', settings: GameSettings }
   | { type: 'SPIN_DESPERATION', uid: string, offset: number }
-  | { type: 'RESOLVE_DESPERATION', uid: string };
+  | { type: 'RESOLVE_DESPERATION', uid: string }
+  | { type: 'SELECT_DRAFT', uid: string, powerCardId: number }
+  | { type: 'CHEAT_POWER', uid: string, powerCardId: number }
+  | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null };
 
 const STORAGE_KEY = 'preydator_settings';
 
@@ -149,7 +152,9 @@ export class GameService {
           name: playerName,
           role: 'Predator',
           hand: [],
+          powerCards: [],
           currentMove: null,
+          currentPowerCard: null,
           confirmed: false,
           readyForNextRound: false,
           desperationTier: 0,
@@ -160,9 +165,14 @@ export class GameService {
       },
       currentTurn: 1,
       targetSuit: SUITS[Math.floor(Math.random() * SUITS.length)],
+      availableSuits: [...SUITS],
       wheelOffset: Math.random(),
       deck: [],
       winner: null,
+      hostUid: this.myUid,
+      powerDeck: [],
+      draftSets: [],
+      draftTurn: 0,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -179,25 +189,40 @@ export class GameService {
   }
 
   async joinRoom(roomId: string, playerName: string, onStateChange: (state: RoomData) => void): Promise<void> {
+    this.onStateChange = onStateChange;
     this.isHost = false;
     await this.init(onStateChange);
     
     return new Promise((resolve, reject) => {
       if (!this.peer) return reject('Peer not initialized');
       
+      const timeout = setTimeout(() => {
+        this.connection?.close();
+        reject('Connection timeout');
+      }, 10000);
+      
       const conn = this.peer.connect(roomId);
       this.connection = conn;
       
       conn.on('open', () => {
+        clearTimeout(timeout);
         this.setupConnection(conn);
         this.sendEvent({ type: 'PLAYER_JOIN', name: playerName, uid: this.myUid });
         resolve();
       });
 
-      conn.on('error', (err) => reject(err));
+      conn.on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
       
-      // Timeout if cannot connect
-      setTimeout(() => reject('Connection timeout'), 10000);
+      // Handle the case where the peer exists but connection fails
+      this.peer!.on('error', (err) => {
+        if (err.type === 'peer-unavailable' || err.type === 'unavailable-id') {
+          clearTimeout(timeout);
+          reject(err);
+        }
+      });
     });
   }
 
@@ -215,18 +240,37 @@ export class GameService {
 
   private handleEvent(event: GameEvent) {
     if (this.isHost) {
+      const remoteUid = this.getRemotePlayerUid();
       if (event.type === 'PLAYER_JOIN') {
         this.handlePlayerJoin(event.name, event.uid);
       } else if (event.type === 'PLAY_CARD') {
-        this.processMove(event.uid, event.cardId);
+        if (remoteUid) {
+          this.processMove(remoteUid, event.cardId);
+        }
       } else if (event.type === 'PROCEED_NEXT') {
-        this.handleProceedNext(event.uid);
+        if (remoteUid) {
+          this.handleProceedNext(remoteUid);
+        }
       } else if (event.type === 'UPDATE_SETTINGS') {
         this.updateSettings(event.settings);
       } else if (event.type === 'SPIN_DESPERATION') {
-        this.processSpinDesperation(event.uid, event.offset);
+        if (remoteUid) {
+          this.processSpinDesperation(remoteUid, Math.random());
+        }
       } else if (event.type === 'RESOLVE_DESPERATION') {
-        this.handleResolveDesperation(event.uid);
+        if (remoteUid) {
+          this.handleResolveDesperation(remoteUid);
+        }
+      } else if (event.type === 'SELECT_DRAFT') {
+        if (remoteUid) {
+          this.handleSelectDraft(remoteUid, event.powerCardId, this.state?.draftTurn || 0);
+        }
+      } else if (event.type === 'CHEAT_POWER') {
+        // Ignore guest cheat requests. Cheat mode is host-local only.
+      } else if (event.type === 'PLAY_POWER_CARD') {
+        if (remoteUid) {
+          this.handlePlayPowerCard(remoteUid, event.powerCardId);
+        }
       }
     } else {
       if (event.type === 'STATE_UPDATE') {
@@ -236,8 +280,37 @@ export class GameService {
     }
   }
 
+  private getRemotePlayerUid(): string | null {
+    if (!this.state) return null;
+    return Object.keys(this.state.players).find(uid => uid !== this.myUid) || null;
+  }
+
   private handlePlayerJoin(name: string, uid: string) {
-    if (!this.state || this.state.status !== 'waiting') return;
+    if (!this.state) return;
+    
+    // Reconnection logic: find by name
+    const existingPlayerUid = Object.keys(this.state.players).find(id => this.state!.players[id].name === name);
+    
+    if (existingPlayerUid && this.state.status !== 'waiting') {
+      const player = this.state.players[existingPlayerUid];
+      const updatedPlayers = { ...this.state.players };
+      
+      // If the UID is different (new session), update it
+      if (existingPlayerUid !== uid) {
+        delete updatedPlayers[existingPlayerUid];
+        updatedPlayers[uid] = { ...player, uid };
+      }
+      
+      this.state = { 
+        ...this.state, 
+        players: updatedPlayers, 
+        updatedAt: Date.now() 
+      };
+      this.broadcastState();
+      return;
+    }
+
+    if (this.state.status !== 'waiting' || Object.keys(this.state.players).length >= 2) return;
     
     const settings = this.state.settings;
     const deck = createDeck(settings.disableJokers);
@@ -276,7 +349,9 @@ export class GameService {
           name,
           role: 'Prey', // Initial placeholder
           hand: [],
+          powerCards: [],
           currentMove: null,
+          currentPowerCard: null,
           confirmed: false,
           readyForNextRound: false,
           desperationTier: 0,
@@ -328,6 +403,14 @@ export class GameService {
     const hostHand = deck.splice(0, hostHandSize);
     const guestHand = deck.splice(0, guestHandSize);
 
+    const powerDeck = shuffle(Array.from({ length: 22 }, (_, i) => i));
+    const draftSets: number[][] = [];
+    if (!settings.disablePowerCards) {
+      for (let i = 0; i < 3; i++) {
+        draftSets.push(powerDeck.splice(0, 3));
+      }
+    }
+
     this.state = {
       ...this.state,
       players: {
@@ -343,8 +426,11 @@ export class GameService {
           hand: guestHand,
         }
       },
-      status: 'playing',
+      status: settings.disablePowerCards ? 'playing' : 'drafting',
       deck,
+      powerDeck,
+      draftSets,
+      draftTurn: 0,
       updatedAt: Date.now()
     };
 
@@ -355,6 +441,9 @@ export class GameService {
     if (!this.state || !this.state.players[uid]) return;
 
     const player = this.state.players[uid];
+    if (player.confirmed) return;
+    if (!player.hand.includes(cardId)) return;
+
     const updatedPlayers = { ...this.state.players };
     updatedPlayers[uid] = {
       ...player,
@@ -365,13 +454,46 @@ export class GameService {
     const allConfirmed = Object.values(updatedPlayers).every((p: PlayerData) => p.confirmed);
 
     if (allConfirmed) {
-      this.state = {
-        ...this.state,
-        players: updatedPlayers,
-        status: 'results',
-        lastOutcome: this.calculateOutcome(this.state, updatedPlayers),
-        updatedAt: Date.now()
-      };
+      const p1Uid = this.myUid;
+      const p2Uid = Object.keys(updatedPlayers).find(id => id !== p1Uid)!;
+      
+      const hp1 = updatedPlayers[p1Uid].currentPowerCard === 2 && !updatedPlayers[p1Uid].priestessVisionUsed;
+      const hp2 = updatedPlayers[p2Uid].currentPowerCard === 2 && !updatedPlayers[p2Uid].priestessVisionUsed;
+
+      if (hp1 || hp2) {
+        if (hp1) {
+          updatedPlayers[p1Uid].secretIntel = {
+            type: 'Priestess',
+            cards: [updatedPlayers[p2Uid].currentMove!],
+            powerCards: updatedPlayers[p2Uid].powerCards
+          };
+          updatedPlayers[p1Uid].confirmed = false;
+          updatedPlayers[p1Uid].priestessVisionUsed = true;
+        }
+        if (hp2) {
+          updatedPlayers[p2Uid].secretIntel = {
+            type: 'Priestess',
+            cards: [updatedPlayers[p1Uid].currentMove!],
+            powerCards: updatedPlayers[p1Uid].powerCards
+          };
+          updatedPlayers[p2Uid].confirmed = false;
+          updatedPlayers[p2Uid].priestessVisionUsed = true;
+        }
+
+        this.state = {
+          ...this.state,
+          players: updatedPlayers,
+          updatedAt: Date.now()
+        };
+      } else {
+        this.state = {
+          ...this.state,
+          players: updatedPlayers,
+          status: 'results',
+          lastOutcome: this.calculateOutcome(this.state, updatedPlayers),
+          updatedAt: Date.now()
+        };
+      }
     } else {
       this.state = {
         ...this.state,
@@ -447,6 +569,110 @@ export class GameService {
     } else {
       this.sendEvent({ type: 'RESOLVE_DESPERATION', uid: this.myUid });
     }
+  }
+
+  async selectDraftPowerCard(powerCardId: number) {
+    if (this.isHost) {
+      this.handleSelectDraft(this.myUid, powerCardId, this.state?.draftTurn || 0);
+    } else {
+      this.sendEvent({ type: 'SELECT_DRAFT', uid: this.myUid, powerCardId });
+    }
+  }
+
+  async selectPowerCard(powerCardId: number | null) {
+    if (this.isHost) {
+      this.handlePlayPowerCard(this.myUid, powerCardId);
+    } else {
+      this.sendEvent({ type: 'PLAY_POWER_CARD', uid: this.myUid, powerCardId });
+    }
+  }
+
+  async cheatPowerCard(powerCardId: number) {
+    if (this.isHost) {
+      this.handleCheatPower(this.myUid, powerCardId);
+    } else {
+      this.sendEvent({ type: 'CHEAT_POWER', uid: this.myUid, powerCardId });
+    }
+  }
+
+  private handleSelectDraft(uid: string, powerCardId: number, expectedTurn: number) {
+    if (!this.state || this.state.status !== 'drafting') return;
+    if (this.state.draftTurn !== expectedTurn) return;
+    
+    const player = this.state.players[uid];
+    const currentSet = this.state.draftSets[this.state.draftTurn || 0] || [];
+    if (!currentSet.includes(powerCardId)) return;
+    if (player.powerCards.length > (this.state.draftTurn || 0)) return; // Already selected for this turn
+
+    const updatedPlayers = { ...this.state.players };
+    updatedPlayers[uid] = {
+      ...player,
+      powerCards: [...player.powerCards, powerCardId]
+    };
+
+    const allSelected = Object.values(updatedPlayers).every(p => p.powerCards.length > this.state.draftTurn!);
+    
+    if (allSelected) {
+      if (this.state.draftTurn === 2) {
+        this.state = {
+          ...this.state,
+          players: updatedPlayers,
+          status: 'playing',
+          updatedAt: Date.now()
+        };
+      } else {
+        this.state = {
+          ...this.state,
+          players: updatedPlayers,
+          draftTurn: (this.state.draftTurn || 0) + 1,
+          updatedAt: Date.now()
+        };
+      }
+    } else {
+      this.state = {
+        ...this.state,
+        players: updatedPlayers,
+        updatedAt: Date.now()
+      };
+    }
+    this.broadcastState();
+  }
+
+  private handlePlayPowerCard(uid: string, powerCardId: number | null) {
+    if (!this.state || !this.state.players[uid]) return;
+    if (powerCardId !== null && !this.state.players[uid].powerCards.includes(powerCardId)) return;
+    const updatedPlayers = { ...this.state.players };
+    updatedPlayers[uid] = {
+      ...updatedPlayers[uid],
+      currentPowerCard: powerCardId
+    };
+    this.state = {
+      ...this.state,
+      players: updatedPlayers,
+      updatedAt: Date.now()
+    };
+    this.broadcastState();
+  }
+
+  private handleCheatPower(uid: string, powerCardId: number) {
+    if (!this.state || !this.state.players[uid]) return;
+    if (uid !== this.myUid) return;
+    const updatedPlayers = { ...this.state.players };
+    updatedPlayers[uid] = {
+      ...updatedPlayers[uid],
+      currentPowerCard: powerCardId
+    };
+    this.state = {
+      ...this.state,
+      players: updatedPlayers,
+      updatedAt: Date.now()
+    };
+    this.broadcastState();
+  }
+
+  // Exposed for optimistic UI updates on draft select
+  public triggerDraftSelect(uid: string, powerCardId: number, turn: number) {
+    this.handleSelectDraft(uid, powerCardId, turn);
   }
 
   private processSpinDesperation(uid: string, offset: number) {
@@ -547,108 +773,512 @@ export class GameService {
 
   private calculateOutcome(roomData: RoomData, players: Record<string, PlayerData>) {
     const uids = Object.keys(players);
-    const p1Uid = uids[0];
-    const p2Uid = uids[1];
-    const c1 = players[p1Uid].currentMove!;
-    const c2 = players[p2Uid].currentMove!;
-    const targetSuit = roomData.targetSuit!;
+    const p1Uid = this.myUid;
+    const p2Uid = uids.find(id => id !== p1Uid)!;
 
-    const pc1 = parseCard(c1);
-    const pc2 = parseCard(c2);
-
+    let targetSuit = roomData.targetSuit!;
+    const initialCardsPlayed = { [p1Uid]: players[p1Uid].currentMove!, [p2Uid]: players[p2Uid].currentMove! };
+    let c1 = players[p1Uid].currentMove!;
+    let c2 = players[p2Uid].currentMove!;
+    let power1 = players[p1Uid].currentPowerCard;
+    let power2 = players[p2Uid].currentPowerCard;
+    
     let winnerUid: string | 'draw' = 'draw';
-    let message = '';
+    let coinFlip: string | undefined = undefined;
+    const events: ResolutionEvent[] = [];
+    const summonedCards: Record<string, string> = {};
 
-    if (pc1.isJoker && pc2.isJoker) {
-      winnerUid = 'draw';
-      message = 'Two Jokers! Mutual destruction.';
-    } else if (pc1.isJoker) {
-      if (pc2.suit === targetSuit) {
-        winnerUid = p1Uid;
-        message = 'The Joker trumps the Target Suit!';
-      } else {
-        winnerUid = p2Uid;
-        message = 'The Joker was caught without the Target Suit!';
-      }
-    } else if (pc2.isJoker) {
-      if (pc1.suit === targetSuit) {
-        winnerUid = p2Uid;
-        message = 'The Joker trumps the Target Suit!';
-      } else {
-        winnerUid = p1Uid;
-        message = 'The Joker was caught without the Target Suit!';
-      }
-    } else {
-      const hasS1 = pc1.suit === targetSuit;
-      const hasS2 = pc2.suit === targetSuit;
+    const gains: Record<string, { type: 'card' | 'power' | 'draw', id: string | number }[]> = {
+      [p1Uid]: [],
+      [p2Uid]: []
+    };
 
-      if (hasS1 && !hasS2) {
-        winnerUid = p1Uid;
-        message = 'The Target Suit reigns supreme!';
-      } else if (!hasS1 && hasS2) {
-        winnerUid = p2Uid;
-        message = 'The Target Suit reigns supreme!';
-      } else {
-        const v1 = getCardValue(c1);
-        const v2 = getCardValue(c2);
-        if (v1 > v2) {
-          winnerUid = p1Uid;
-          message = 'Superior value wins the clash!';
-        } else if (v2 > v1) {
-          winnerUid = p2Uid;
-          message = 'Superior value wins the clash!';
-        } else {
-          winnerUid = 'draw';
-          message = 'A perfect stalemate!';
+    // Phase 1: Pre-activation
+    if ((power1 === 15 || power1 === 16) && (power2 === 15 || power2 === 16)) {
+      const p1WinsFlip = Math.random() > 0.5;
+      coinFlip = p1WinsFlip ? 'Host' : 'Opponent';
+      events.push({ 
+        type: 'COIN_FLIP', 
+        message: `${coinFlip === 'Host' ? players[p1Uid].name : players[p2Uid].name} wins priority flip!` 
+      });
+    }
+
+    const resolvePowerPre = (pUid: string, oUid: string, p: number | null, oPower: number | null) => {
+      if (p === 1) { // Magician: Steal Joker
+        const oHand = players[oUid].hand;
+        const jokerStr = oHand.find(c => c.startsWith('Joker'));
+        if (jokerStr) {
+          events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 1, message: `${players[pUid].name}'s Magician steals a Joker from ${players[oUid].name}!` });
+          gains[pUid].push({ type: 'card', id: jokerStr });
         }
+      }
+      if (p === 15) { // Devil: Intercepts and catches power
+        if (oPower !== null && oPower !== 16 && oPower !== 15) {
+          const powerName = MAJOR_ARCANA[oPower].name;
+          events.push({ 
+            type: 'POWER_TRIGGER', 
+            uid: pUid, 
+            powerCardId: 15, 
+            message: `${players[pUid].name}'s Devil intercepts and consumes ${players[oUid].name}'s ${powerName}!` 
+          });
+          gains[pUid].push({ type: 'power', id: oPower });
+          if (pUid === p1Uid) {
+             power2 = null; // Neutralize opponent
+          } else {
+             power1 = null; // Neutralize opponent
+          }
+        } else if (oPower === 16 || oPower === 15) {
+           events.push({ 
+             type: 'POWER_TRIGGER', 
+             uid: pUid, 
+             powerCardId: 15, 
+             message: `${players[pUid].name}'s Devil tried to catch ${players[oUid].name}'s power but was blocked!` 
+           });
+        }
+      }
+      if (p === 16) { // Tower
+        if (oPower !== null && oPower !== 15 && oPower !== 16) {
+          events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 16, message: `${players[pUid].name}'s Tower blocks ${players[oUid].name}'s power!` });
+          if (pUid === p1Uid) { power2 = null; }
+          else { power1 = null; }
+        }
+      }
+    };
+
+    if (coinFlip === 'Opponent') {
+      resolvePowerPre(p2Uid, p1Uid, power2, power1);
+      resolvePowerPre(p1Uid, p2Uid, power1, power2);
+    } else {
+      resolvePowerPre(p1Uid, p2Uid, power1, power2);
+      resolvePowerPre(p2Uid, p1Uid, power2, power1);
+    }
+
+    // Phase 2: Before Resolution
+    const applyBefore = (pUid: string, oUid: string, p: number | null) => {
+      let pc1 = parseCard(c1);
+      let pc2 = parseCard(c2);
+      
+      if (p === 17) { // Star
+        events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 17, message: `${players[pUid].name}'s Star transforms the field!` });
+        targetSuit = 'Stars';
+        events.push({ type: 'TARGET_CHANGE', suit: 'Stars', message: `Target suit is now Stars!` });
+      }
+
+      if (p === 0) { // Fool
+        events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 0, message: `${players[pUid].name}'s Fool swaps the cards!` });
+        const temp = c1; c1 = c2; c2 = temp;
+        events.push({ type: 'CARD_SWAP', message: `Cards have been swapped!` });
+      }
+      if (p === 6) { // Lovers
+        events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 6, message: `${players[pUid].name}'s Lovers change target suit to Hearts!` });
+        targetSuit = 'Hearts';
+        events.push({ type: 'TARGET_CHANGE', suit: 'Hearts', message: `Target suit is now Hearts!` });
+      }
+      if (p === 4) { // Emperor
+        events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 4, message: `${players[pUid].name}'s Emperor empowers the card!` });
+        if (pUid === p1Uid) {
+          c1 = `${targetSuit}-${VALUES[Math.min(VALUES.indexOf(pc1.value as any) + 2, VALUES.length - 1)]}`;
+          events.push({ type: 'CARD_EMPOWER', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name}'s card upgraded to target suit!` });
+        } else {
+          c2 = `${targetSuit}-${VALUES[Math.min(VALUES.indexOf(pc2.value as any) + 2, VALUES.length - 1)]}`;
+          events.push({ type: 'CARD_EMPOWER', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name}'s card upgraded to target suit!` });
+        }
+      }
+      if (p === 8) { // Strength
+        events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 8, message: `${players[pUid].name}'s Strength boosts the card!` });
+        if (pUid === p1Uid) {
+          const pc = parseCard(c1);
+          c1 = pc.isJoker ? c1 : `${pc.suit}-${VALUES[Math.min(VALUES.indexOf(pc.value as any) + 4, VALUES.length - 1)]}`;
+          events.push({ type: 'CARD_EMPOWER', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name}'s card value increased!` });
+        } else {
+          const pc = parseCard(c2);
+          c2 = pc.isJoker ? c2 : `${pc.suit}-${VALUES[Math.min(VALUES.indexOf(pc.value as any) + 4, VALUES.length - 1)]}`;
+          events.push({ type: 'CARD_EMPOWER', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name}'s card value increased!` });
+        }
+      }
+      if (p === 11) { // Justice
+        events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 11, message: `${players[pUid].name}'s Justice summons an ally!` });
+        const summoned = `${targetSuit}-${VALUES[Math.floor(Math.random() * VALUES.length)]}`;
+        summonedCards[pUid] = summoned;
+        events.push({ type: 'SUMMON_CARD', uid: pUid, cardId: summoned, message: `Justice summoned ${summoned.replace('-', ' of ')}!` });
+      }
+    };
+
+    applyBefore(p1Uid, p2Uid, power1);
+    applyBefore(p2Uid, p1Uid, power2);
+
+    // TRANSFORMATION: If target suit is Stars, all normal cards transform to Stars
+    if (targetSuit === 'Stars') {
+      const pc1 = parseCard(c1);
+      const pc2 = parseCard(c2);
+      if (!pc1.isJoker && pc1.suit !== 'Stars') {
+        c1 = `Stars-${pc1.value}`;
+        events.push({ type: 'TRANSFORM', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name}'s card became a Star!` });
+      }
+      if (!pc2.isJoker && pc2.suit !== 'Stars') {
+        c2 = `Stars-${pc2.value}`;
+        events.push({ type: 'TRANSFORM', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name}'s card became a Star!` });
       }
     }
 
+    const hermitSwap = (pUid: string, oCard: string) => {
+      const p = players[pUid];
+      return p.hand.find(card => {
+        const pCard = parseCard(card);
+        const oCardP = parseCard(oCard);
+        if (pCard.isJoker) return true;
+        if (oCardP.isJoker) return false;
+        if (pCard.suit === targetSuit && oCardP.suit !== targetSuit) return true;
+        if (pCard.suit !== targetSuit && oCardP.suit === targetSuit) return false;
+        return getCardValue(card) > getCardValue(oCard);
+      });
+    };
+
+    if (power1 === 9) { 
+        const better = hermitSwap(p1Uid, c2); 
+        if (better) { 
+          events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit found a way!` });
+          c1 = better; 
+          events.push({ type: 'CARD_SWAP', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name} swapped for a better card!` });
+        }
+    }
+    if (power2 === 9) { 
+        const better = hermitSwap(p2Uid, c1); 
+        if (better) { 
+          events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit found a way!` });
+          c2 = better;
+          events.push({ type: 'CARD_SWAP', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name} swapped for a better card!` });
+        }
+    }
+
+    // Phase 3: Resolution
+    if (power1 === 14 || power2 === 14) {
+        winnerUid = 'draw';
+        events.push({ type: 'POWER_TRIGGER', message: 'Temperance forced transparency and balance.' });
+    } else {
+        const evalClash = (cr1: string, cr2: string) => {
+          const pr1 = parseCard(cr1);
+          const pr2 = parseCard(cr2);
+          if (pr1.isJoker && pr2.isJoker) return 'draw';
+          
+          const p1Target = pr1.suit === targetSuit || pr1.isJoker || (targetSuit === 'Stars' && !pr1.isJoker);
+          const p2Target = pr2.suit === targetSuit || pr2.isJoker || (targetSuit === 'Stars' && !pr2.isJoker);
+          
+          if (p1Target && !p2Target) return 'p1';
+          if (!p1Target && p2Target) return 'p2';
+          
+          const v1 = getCardValue(cr1);
+          const v2 = getCardValue(cr2);
+          if (v1 > v2) return 'p1';
+          if (v2 > v1) return 'p2';
+          return 'draw';
+        };
+
+        const res = evalClash(c1, c2);
+        const s1 = summonedCards[p1Uid];
+        const s2 = summonedCards[p2Uid];
+
+        if (s1 && s2) {
+          const r1 = evalClash(s1, s2);
+          const rMain = res;
+          if (rMain === 'p1' || r1 === 'p1') winnerUid = p1Uid;
+          else if (rMain === 'p2' || r1 === 'p2') winnerUid = p2Uid;
+          else winnerUid = 'draw';
+        } else if (s1) {
+          const resSummon = evalClash(s1, c2);
+          if (res === 'p1' || resSummon === 'p1') winnerUid = p1Uid;
+          else if (res === 'p2' && resSummon === 'p2') winnerUid = p2Uid;
+          else winnerUid = 'draw';
+        } else if (s2) {
+          const resSummon = evalClash(s2, c1);
+          if (res === 'p2' || resSummon === 'p2') winnerUid = p2Uid;
+          else if (res === 'p1' && resSummon === 'p1') winnerUid = p1Uid;
+          else winnerUid = 'draw';
+        } else {
+          winnerUid = res === 'p1' ? p1Uid : (res === 'p2' ? p2Uid : 'draw');
+        }
+
+        // Wheel of Fortune
+        if (winnerUid === p2Uid && power1 === 10) {
+           const wheelCard = `${targetSuit}-${VALUES[Math.floor(Math.random() * VALUES.length)]}`;
+           summonedCards['p1_wheel'] = wheelCard;
+           events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 10, message: `${players[p1Uid].name} spins the Wheel of Fortune!` });
+           events.push({ type: 'SUMMON_CARD', uid: p1Uid, cardId: wheelCard, message: `The Wheel gave luck: ${wheelCard.replace('-', ' of ')}!` });
+           const resWheel = evalClash(wheelCard, c2);
+           winnerUid = resWheel === 'p1' ? p1Uid : (resWheel === 'p2' ? p2Uid : 'draw');
+        }
+        if (winnerUid === p1Uid && power2 === 10) {
+           const wheelCard = `${targetSuit}-${VALUES[Math.floor(Math.random() * VALUES.length)]}`;
+           summonedCards['p2_wheel'] = wheelCard;
+           events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 10, message: `${players[p2Uid].name} spins the Wheel of Fortune!` });
+           events.push({ type: 'SUMMON_CARD', uid: p2Uid, cardId: wheelCard, message: `The Wheel gave luck: ${wheelCard.replace('-', ' of ')}!` });
+           const resWheel = evalClash(wheelCard, c1);
+           winnerUid = resWheel === 'p1' ? p2Uid : (resWheel === 'p2' ? p1Uid : 'draw');
+        }
+
+        if (power1 === 20 || power2 === 20) {
+          if (!(power1 === 20 && power2 === 20)) {
+            events.push({ type: 'POWER_TRIGGER', message: `Judgement has inverted the fate!` });
+            if (winnerUid === p1Uid) winnerUid = p2Uid;
+            else if (winnerUid === p2Uid) winnerUid = p1Uid;
+          }
+        }
+
+        if (power1 === 7 && winnerUid === p2Uid) {
+          const played = c1;
+          const pc = parseCard(played);
+          const newVal = VALUES[Math.min(VALUES.indexOf(pc.value as any) + 1, VALUES.length - 1)];
+          gains[p1Uid].push({ type: 'card', id: `${pc.suit}-${newVal}` });
+          events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 7, message: `${players[p1Uid].name}'s Chariot saves the card!` });
+        }
+        if (power2 === 7 && winnerUid === p1Uid) {
+          const played = c2;
+          const pc = parseCard(played);
+          const newVal = VALUES[Math.min(VALUES.indexOf(pc.value as any) + 1, VALUES.length - 1)];
+          gains[p2Uid].push({ type: 'card', id: `${pc.suit}-${newVal}` });
+          events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 7, message: `${players[p2Uid].name}'s Chariot saves the card!` });
+        }
+
+        if (power1 === 12) { winnerUid = p2Uid; events.push({ type: 'POWER_TRIGGER', powerCardId: 12, message: `${players[p1Uid].name} forfeits via The Hanged Man.` }); }
+        if (power2 === 12) { winnerUid = p1Uid; events.push({ type: 'POWER_TRIGGER', powerCardId: 12, message: `${players[p2Uid].name} forfeits via The Hanged Man.` }); }
+    }
+
+    // Hierophant 5
+    if (power1 === 5) {
+      events.push({ type: 'INTEL_REVEAL', uid: p1Uid, message: `${players[p1Uid].name} used The Hierophant to peek into ${players[p2Uid].name}'s hand!` });
+    }
+    if (power2 === 5) {
+      events.push({ type: 'INTEL_REVEAL', uid: p2Uid, message: `${players[p2Uid].name} used The Hierophant to peek into ${players[p1Uid].name}'s hand!` });
+    }
+
+    let finalMessage = "";
+    if (winnerUid === 'draw') {
+       if (power1 === 14 || power2 === 14) finalMessage = "Temperance has balanced the scale of fate.";
+       else finalMessage = "A perfect deadlock. Zero sum.";
+    } else {
+       const wName = players[winnerUid].name;
+       const p1 = parseCard(c1);
+       const p2 = parseCard(c2);
+       const wCard = winnerUid === p1Uid ? p1 : p2;
+       const lCard = winnerUid === p1Uid ? p2 : p1;
+       const wVal = getCardValue(winnerUid === p1Uid ? c1 : c2);
+       const lVal = getCardValue(winnerUid === p1Uid ? c2 : c1);
+
+       if (power1 === 12 || power2 === 12) finalMessage = `${wName} takes the round by sacrifice!`;
+       else if (power1 === 20 || power2 === 20) finalMessage = `Judgement declares ${wName} the survivor!`;
+       else if (wCard.isJoker && !lCard.isJoker) {
+         if (lCard.suit === targetSuit) finalMessage = `${wName}'s Joker was caught by the Target Suit!`;
+         else finalMessage = `${wName}'s Joker overrides the field!`;
+       }
+       else if (wCard.suit === targetSuit && lCard.suit !== targetSuit) {
+         finalMessage = `Target Suit advantage: ${wName} wins!`;
+       }
+       else if (wVal > lVal) {
+         finalMessage = `${wName} wins with higher power (${wVal} vs ${lVal}).`;
+       }
+       else {
+         finalMessage = `${wName} wins the round!`;
+       }
+    }
+
+    // Phase 4: Post-Resolution Gains Determination
+    if (winnerUid !== 'draw' && winnerUid) {
+      gains[winnerUid].push({ type: 'draw', id: 'standard' });
+    }
+
+    if (power1 === 3) {
+      events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 3, message: `${players[p1Uid].name}'s Empress collects both suit cards!` });
+      gains[p1Uid].push({ type: 'card', id: c1 });
+      gains[p1Uid].push({ type: 'card', id: c2 });
+    }
+    if (power2 === 3) {
+      events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 3, message: `${players[p2Uid].name}'s Empress collects both suit cards!` });
+      gains[p2Uid].push({ type: 'card', id: c1 });
+      gains[p2Uid].push({ type: 'card', id: c2 });
+    }
+    if (power1 === 12) gains[p1Uid].push({ type: 'draw', id: 3 });
+    if (power2 === 12) gains[p2Uid].push({ type: 'draw', id: 3 });
+    if (power1 === 19) gains[p1Uid].push({ type: 'card', id: c1 }); // Copy own card
+    if (power2 === 19) gains[p2Uid].push({ type: 'card', id: c2 }); // Copy own card
+    if (power1 === 21) {
+      gains[p1Uid].push({ type: 'draw', id: 'random-power' });
+      gains[p1Uid].push({ type: 'draw', id: 'random-card' });
+    }
+    if (power2 === 21) {
+      gains[p2Uid].push({ type: 'draw', id: 'random-power' });
+      gains[p2Uid].push({ type: 'draw', id: 'random-card' });
+    }
+
     return {
+      targetSuit,
       winnerUid,
-      message,
-      cardsPlayed: {
-        [p1Uid]: c1,
-        [p2Uid]: c2
-      }
+      message: finalMessage,
+      cardsPlayed: { [p1Uid]: c1, [p2Uid]: c2 },
+      initialCardsPlayed,
+      powerCardsPlayed: { 
+        [p1Uid]: power1 !== null ? MAJOR_ARCANA[power1].name : 'None', 
+        [p2Uid]: power2 !== null ? MAJOR_ARCANA[power2].name : 'None' 
+      },
+      powerCardIdsPlayed: { [p1Uid]: power1, [p2Uid]: power2 },
+      coinFlip,
+      events,
+      summonedCards,
+      gains
     };
   }
 
   private applyRoundResults(roomData: RoomData, players: Record<string, PlayerData>): RoomData {
     const outcome = roomData.lastOutcome!;
     const uids = Object.keys(players);
-    const newDeck = [...roomData.deck];
     const updatedPlayers = { ...players };
-
+    const p1Uid = this.myUid;
+    const p2Uid = uids.find(id => id !== p1Uid)!;
+    const newDeck = [...roomData.deck];
+    const powerDeck = [...roomData.powerDeck];
+    
+    // Reset status and cards
     uids.forEach(uid => {
-      const move = updatedPlayers[uid].currentMove;
-      updatedPlayers[uid].hand = updatedPlayers[uid].hand.filter(c => c !== move);
-      updatedPlayers[uid].currentMove = null;
-      updatedPlayers[uid].confirmed = false;
-      updatedPlayers[uid].readyForNextRound = false;
+      const p = updatedPlayers[uid];
+      const initialCard = outcome.initialCardsPlayed?.[uid] || outcome.cardsPlayed[uid];
+      const cardIdx = p.hand.indexOf(initialCard);
+      if (cardIdx !== -1) {
+        p.hand.splice(cardIdx, 1);
+      }
+      
+      const usedPower = outcome.powerCardIdsPlayed[uid];
+      if (usedPower !== null) {
+        const pIdx = p.powerCards.indexOf(usedPower);
+        if (pIdx !== -1) p.powerCards.splice(pIdx, 1);
+      }
+
+      p.currentMove = null;
+      p.currentPowerCard = null;
+      p.confirmed = false;
+      p.readyForNextRound = false;
+      p.priestessVisionUsed = false;
+      p.secretIntel = null;
     });
 
-    if (outcome.winnerUid !== 'draw' && newDeck.length > 0) {
-      const reward = newDeck.splice(0, 1)[0];
-      updatedPlayers[outcome.winnerUid].hand.push(reward);
-    }
+    // Vision power (Hierophant)
+    const setVisionIntel = (pUid: string, oUid: string) => {
+      const pPower = outcome.powerCardIdsPlayed[pUid];
+      if (pPower === 5) { // 5: Hierophant
+        const oHand = [...updatedPlayers[oUid].hand];
+        const seenCards = shuffle(oHand).slice(0, Math.ceil(oHand.length / 2));
+        const seenPowers = updatedPlayers[oUid].powerCards;
+        updatedPlayers[pUid].secretIntel = {
+          type: 'Hierophant',
+          cards: seenCards,
+          powerCards: seenPowers
+        };
+      }
+    };
+    setVisionIntel(p1Uid, p2Uid);
+    setVisionIntel(p2Uid, p1Uid);
 
-    let gameWinner: string | null = null;
+    const winnerUid = outcome.winnerUid;
+    
+    // Special power cards after round
     uids.forEach(uid => {
-      if (updatedPlayers[uid].hand.length === 0) {
-        gameWinner = uids.find(id => id !== uid)!;
+      const power = outcome.powerCardIdsPlayed[uid];
+      const oUid = uids.find(id => id !== uid)!;
+      // We use players[uid] (the input) to get original state before reset if needed
+      const oInitialPower = players[oUid].currentPowerCard;
+
+      // Devil Steal Logic: catches current round's opponent power
+      if (players[uid].currentPowerCard === 15) {
+        if (oInitialPower !== null && oInitialPower !== 16 && oInitialPower !== 15) {
+           updatedPlayers[uid].powerCards.push(oInitialPower);
+        }
+      }
+
+      // Magician: Steal Joker
+      if (power === 1) {
+        const oHand = updatedPlayers[oUid].hand;
+        const jokerIdx = oHand.findIndex(c => c.startsWith('Joker'));
+        if (jokerIdx !== -1) {
+          const stolen = oHand.splice(jokerIdx, 1)[0];
+          updatedPlayers[uid].hand.push(stolen);
+        }
+      }
+
+      // Empress: Collect Both
+      if (power === 3) {
+        // We use outcome.cardsPlayed (transformed cards) or initial? 
+        // User said "The opponents suit card, and the players suit card"
+        // Usually means the cards as they were played.
+        updatedPlayers[uid].hand.push(outcome.cardsPlayed[p1Uid]);
+        updatedPlayers[uid].hand.push(outcome.cardsPlayed[p2Uid]);
+      }
+
+      if (power === 7 && winnerUid === oUid) { // Chariot: Keep and upgrade
+         const played = outcome.cardsPlayed[uid];
+         const pc = parseCard(played);
+         const newVal = VALUES[Math.min(VALUES.indexOf(pc.value as any) + 1, VALUES.length - 1)];
+         updatedPlayers[uid].hand.push(`${pc.suit}-${newVal}`);
+      }
+      
+      if (power === 19) { // Sun: Copy played card (the final resolved card)
+        const played = outcome.cardsPlayed[uid];
+        updatedPlayers[uid].hand.push(played);
+      }
+      
+      if (power === 18) { // Moon: Give 2 moon cards
+        for (let i = 0; i < 2; i++) {
+          const val = VALUES[Math.floor(Math.random() * VALUES.length)];
+          updatedPlayers[uid].hand.push(`Moons-${val}`);
+        }
+      }
+      
+      if (power === 12) { // Hanged Man: Gain 3
+        updatedPlayers[uid].hand.push(...newDeck.splice(0, 3));
+      }
+      
+      if (power === 21) { // World: Power + Suit
+         if (powerDeck.length > 0) updatedPlayers[uid].powerCards.push(powerDeck.splice(0, 1)[0]);
+         if (newDeck.length > 0) updatedPlayers[uid].hand.push(newDeck.splice(0, 1)[0]);
       }
     });
 
+    const availableSuits = [...(roomData.availableSuits || SUITS)];
+    uids.forEach(uid => {
+      const power = outcome.powerCardIdsPlayed[uid];
+      if (power === 17 && !availableSuits.includes('Stars')) {
+        availableSuits.push('Stars');
+      }
+      if (power === 18 && !availableSuits.includes('Moons')) {
+        availableSuits.push('Moons');
+        // Add all moon cards to deck for future draws
+        const moonCards = VALUES.map(v => `Moons-${v}`);
+        newDeck.push(...moonCards);
+      }
+    });
+
+    if (newDeck.length > roomData.deck.length) {
+      // If we added cards, reshuffle
+      const shuffledDeck = shuffle(newDeck);
+      newDeck.length = 0;
+      newDeck.push(...shuffledDeck);
+    }
+
+    // WIN REWARD: Winner draws 1 new card from deck.
+    if (winnerUid !== 'draw' && winnerUid && newDeck.length > 0) {
+       updatedPlayers[winnerUid].hand.push(newDeck.splice(0, 1)[0]);
+    }
+
+    const targetSuit = availableSuits[Math.floor(Math.random() * availableSuits.length)];
+    const nextStatus = (updatedPlayers[p1Uid].hand.length === 0 || updatedPlayers[p2Uid].hand.length === 0) ? 'finished' : 'playing';
+
     return {
       ...roomData,
-      status: gameWinner ? 'finished' : 'playing',
       players: updatedPlayers,
-      deck: newDeck,
+      status: nextStatus,
       currentTurn: roomData.currentTurn + 1,
-      targetSuit: SUITS[Math.floor(Math.random() * SUITS.length)],
+      targetSuit,
+      availableSuits,
       wheelOffset: Math.random(),
-      winner: gameWinner,
+      deck: newDeck,
+      powerDeck,
       updatedAt: Date.now()
     };
   }
