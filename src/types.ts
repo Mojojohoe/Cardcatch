@@ -81,6 +81,7 @@ export interface PlayerData {
 export interface PendingPowerDecision {
   powerCardId: number;
   options: string[];
+  disabledReasons?: Record<string, string>;
   selectedOption: string | null;
   wheelOffset?: number | null;
   wheelResult?: string | null;

@@ -105,6 +105,7 @@ export class GameService {
   private state: RoomData | null = null;
   private onStateChange: ((state: RoomData) => void) | null = null;
   private myUid: string = '';
+  private powerResolutionTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.myUid = Math.random().toString(36).substring(2, 9);
@@ -269,7 +270,9 @@ export class GameService {
           this.handleSelectDraft(remoteUid, event.powerCardId, this.state?.draftTurn || 0);
         }
       } else if (event.type === 'CHEAT_POWER') {
-        // Ignore guest cheat requests. Cheat mode is host-local only.
+        if (remoteUid) {
+          this.handleCheatPower(remoteUid, event.powerCardId);
+        }
       } else if (event.type === 'PLAY_POWER_CARD') {
         if (remoteUid) {
           this.handlePlayPowerCard(remoteUid, event.powerCardId);
@@ -538,6 +541,10 @@ export class GameService {
     const allReady = Object.values(updatedPlayers).every((p: PlayerData) => p.readyForNextRound);
     
     if (allReady) {
+      if (this.powerResolutionTimer) {
+        clearTimeout(this.powerResolutionTimer);
+        this.powerResolutionTimer = null;
+      }
       this.state = this.applyRoundResults(this.state, updatedPlayers);
     } else {
       this.state = {
@@ -685,7 +692,6 @@ export class GameService {
 
   private handleCheatPower(uid: string, powerCardId: number) {
     if (!this.state || !this.state.players[uid]) return;
-    if (uid !== this.myUid) return;
     const updatedPlayers = { ...this.state.players };
     updatedPlayers[uid] = {
       ...updatedPlayers[uid],
@@ -755,7 +761,11 @@ export class GameService {
         const opponentHasJoker = players[oppUid].hand.some(c => c.startsWith('Joker'));
         decisions[uid] = {
           powerCardId: 1,
-          options: opponentHasJoker ? ['STEAL_JOKER', 'FROGIFY'] : ['FROGIFY'],
+          options: ['STEAL_JOKER', 'FROGIFY'],
+          disabledReasons: {
+            STEAL_JOKER: opponentHasJoker ? '' : 'Opponent has no Joker to steal.',
+            FROGIFY: ''
+          },
           selectedOption: null
         };
       } else if (power === 10) {
@@ -766,11 +776,20 @@ export class GameService {
         };
       } else if (power === 15) {
         const opponentUsedPower = players[oppUid].currentPowerCard !== null && !blocked[oppUid];
-        const options = ['DEVIL_KING', 'DEVIL_RANDOMIZE'];
-        if (opponentUsedPower) options.push('DEVIL_BLOCK');
+        const spareCards = players[uid].hand.filter(card => card !== players[uid].currentMove).length;
+        const canPay = spareCards >= 2;
+        if (!canPay) {
+          decisions[uid] = null;
+          continue;
+        }
         decisions[uid] = {
           powerCardId: 15,
-          options,
+          options: ['DEVIL_KING', 'DEVIL_BLOCK', 'DEVIL_RANDOMIZE'],
+          disabledReasons: {
+            DEVIL_KING: canPay ? '' : 'Need 2 spare cards to make a deal.',
+            DEVIL_BLOCK: !canPay ? 'Need 2 spare cards to make a deal.' : (opponentUsedPower ? '' : 'Opponent did not use a power this round.'),
+            DEVIL_RANDOMIZE: canPay ? '' : 'Need 2 spare cards to make a deal.'
+          },
           selectedOption: null
         };
       } else {
@@ -787,6 +806,7 @@ export class GameService {
     const current = pending[uid];
     if (!current || current.selectedOption !== null) return;
     if (!current.options.includes(option) && option !== 'SPIN_WHEEL') return;
+    if (current.disabledReasons?.[option]) return;
 
     current.selectedOption = option;
     if (current.powerCardId === 10) {
@@ -797,22 +817,46 @@ export class GameService {
     pending[uid] = current;
 
     const allResolved = Object.values(pending).every(d => !d || d.selectedOption !== null);
-    if (allResolved) {
+    if (!allResolved) {
       this.state = {
         ...this.state,
         pendingPowerDecisions: pending,
+        updatedAt: Date.now()
+      };
+      this.broadcastState();
+      return;
+    }
+
+    const hasWheel = Object.values(pending).some(d => d?.powerCardId === 10 && d.selectedOption === 'SPIN_WHEEL');
+    this.state = {
+      ...this.state,
+      pendingPowerDecisions: pending,
+      updatedAt: Date.now()
+    };
+    this.broadcastState();
+
+    if (this.powerResolutionTimer) {
+      clearTimeout(this.powerResolutionTimer);
+      this.powerResolutionTimer = null;
+    }
+
+    const finalize = () => {
+      if (!this.state || this.state.status !== 'powering') return;
+      this.state = {
+        ...this.state,
         status: 'results',
         lastOutcome: this.calculateOutcome(this.state, this.state.players),
         updatedAt: Date.now()
       };
+      this.broadcastState();
+      this.powerResolutionTimer = null;
+    };
+
+    if (hasWheel) {
+      this.powerResolutionTimer = setTimeout(finalize, 2600);
     } else {
-      this.state = {
-        ...this.state,
-        pendingPowerDecisions: pending,
-        updatedAt: Date.now()
-      };
+      finalize();
     }
-    this.broadcastState();
   }
 
   private processSpinDesperation(uid: string, offset: number) {
@@ -1025,8 +1069,8 @@ export class GameService {
         const s2 = SUITS[Math.floor(Math.random() * SUITS.length)];
         const pc1 = parseCard(c1);
         const pc2 = parseCard(c2);
-        c1 = `${s1}-${pc1.value}`;
-        c2 = `${s2}-${pc2.value}`;
+        c1 = pc1.isJoker ? c1 : `${s1}-${pc1.value}`;
+        c2 = pc2.isJoker ? c2 : `${s2}-${pc2.value}`;
         events.push({ type: 'POWER_TRIGGER', uid, powerCardId: 15, message: `${players[uid].name} makes a Devil Deal and randomizes both suits!` });
       }
     };
@@ -1518,6 +1562,10 @@ export class GameService {
   }
 
   destroy() {
+    if (this.powerResolutionTimer) {
+      clearTimeout(this.powerResolutionTimer);
+      this.powerResolutionTimer = null;
+    }
     if (this.connection) this.connection.close();
     if (this.peer) this.peer.destroy();
   }
