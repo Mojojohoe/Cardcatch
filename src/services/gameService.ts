@@ -53,27 +53,49 @@ type GameEvent =
   | { type: 'SELECT_DRAFT', uid: string, powerCardId: number }
   | { type: 'CHEAT_POWER', uid: string, powerCardId: number }
   | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null }
-  | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number; priestessSwapToCard?: string | null };
+  | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number; priestessSwapToCard?: string | null }
+  | { type: 'SET_LOBBY_READY', uid: string, ready: boolean };
 
 const STORAGE_KEY = 'preydator_settings';
+
+const normalizeGameSettings = (raw: Partial<GameSettings> | GameSettings): GameSettings => {
+  const hostRole = raw.hostRole ?? 'Predator';
+  const preydOk =
+    hostRole === 'Preydator' &&
+    (raw.preydatorDesperationSeats === 'host' ||
+      raw.preydatorDesperationSeats === 'guest' ||
+      raw.preydatorDesperationSeats === 'both');
+  return {
+    hostRole,
+    difficulty: (raw.difficulty ?? 'Normal') as GameSettings['difficulty'],
+    disableJokers: Boolean(raw.disableJokers),
+    disablePowerCards: Boolean(raw.disablePowerCards),
+    enableDesperation: Boolean(raw.enableDesperation),
+    desperationStarterTierEnabled: raw.desperationStarterTierEnabled !== false,
+    preydatorDesperationSeats: preydOk ? raw.preydatorDesperationSeats! : 'guest',
+    tiers: raw.tiers && raw.tiers.length > 0 ? raw.tiers : ['TIER 0']
+  };
+};
 
 const loadSettings = (): GameSettings => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      return normalizeGameSettings(parsed);
     } catch (e) {
       console.error('Failed to load settings', e);
     }
   }
-  return {
+  return normalizeGameSettings({
     hostRole: 'Predator',
     difficulty: 'Normal',
     disableJokers: false,
     disablePowerCards: false,
     enableDesperation: false,
+    desperationStarterTierEnabled: true,
     tiers: ['TIER 0']
-  };
+  });
 };
 
 const saveSettings = (settings: GameSettings) => {
@@ -98,6 +120,20 @@ export const DESPERATION_SLICES = [
   { label: 'Gain 6 Cards', weight: 4 },
 ];
 
+/** Whether `uid` may start a desperation spin under current role + Preydator seat rules. */
+export function desperationSpinAllowed(room: RoomData, uid: string, player: PlayerData): boolean {
+  const s = room.settings;
+  if (!s.enableDesperation) return false;
+  if (s.hostRole === 'Preydator') {
+    const mode = s.preydatorDesperationSeats ?? 'guest';
+    if (mode === 'both') return true;
+    if (mode === 'host') return uid === room.hostUid;
+    return uid !== room.hostUid;
+  }
+  if (player.role === 'Predator') return false;
+  return player.role === 'Prey';
+}
+
 export class GameService {
   private peer: Peer | null = null;
   private connection: DataConnection | null = null;
@@ -106,6 +142,7 @@ export class GameService {
   private onStateChange: ((state: RoomData) => void) | null = null;
   private myUid: string = '';
   private powerResolutionTimer: ReturnType<typeof setTimeout> | null = null;
+  private powerShowdownClearTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.myUid = Math.random().toString(36).substring(2, 9);
@@ -172,6 +209,8 @@ export class GameService {
       deck: [],
       winner: null,
       hostUid: this.myUid,
+      lobbySettingsRevision: 0,
+      guestLobbyNotice: null,
       famineActive: false,
       pendingPowerDecisions: {},
       powerDeck: [],
@@ -187,8 +226,25 @@ export class GameService {
 
   async updateSettings(settings: GameSettings) {
     if (!this.isHost || !this.state) return;
-    this.state = { ...this.state, settings };
-    saveSettings(settings);
+    const normalized = normalizeGameSettings(settings);
+    const guestUid = Object.keys(this.state.players).find(uid => uid !== this.myUid);
+    const updatedPlayers = { ...this.state.players };
+    let lobbySettingsRevision = this.state.lobbySettingsRevision ?? 0;
+    let guestLobbyNotice: string | null = this.state.guestLobbyNotice ?? null;
+    if (guestUid && this.state.status === 'waiting') {
+      lobbySettingsRevision += 1;
+      guestLobbyNotice = 'Game settings were updated.';
+      updatedPlayers[guestUid] = { ...updatedPlayers[guestUid], lobbyGuestReady: false };
+    }
+    this.state = {
+      ...this.state,
+      settings: normalized,
+      players: updatedPlayers,
+      lobbySettingsRevision,
+      guestLobbyNotice,
+      updatedAt: Date.now()
+    };
+    saveSettings(normalized);
     this.broadcastState();
   }
 
@@ -256,7 +312,11 @@ export class GameService {
           this.handleProceedNext(remoteUid);
         }
       } else if (event.type === 'UPDATE_SETTINGS') {
+        if (remoteUid) return;
         this.updateSettings(event.settings);
+      } else if (event.type === 'SET_LOBBY_READY') {
+        if (!remoteUid || event.uid !== remoteUid) return;
+        this.handleSetLobbyReady(event.uid, event.ready);
       } else if (event.type === 'SPIN_DESPERATION') {
         if (remoteUid) {
           this.processSpinDesperation(remoteUid, Math.random());
@@ -364,6 +424,7 @@ export class GameService {
           currentPowerCard: null,
           confirmed: false,
           readyForNextRound: false,
+          lobbyGuestReady: false,
           desperationTier: 0,
           desperationResult: null,
           desperationSpinning: false,
@@ -376,18 +437,36 @@ export class GameService {
     this.broadcastState();
   }
 
+  private handleSetLobbyReady(uid: string, ready: boolean) {
+    if (!this.state || this.state.status !== 'waiting') return;
+    if (uid === this.state.hostUid) return;
+    const guest = this.state.players[uid];
+    if (!guest) return;
+
+    this.state = {
+      ...this.state,
+      players: {
+        ...this.state.players,
+        [uid]: { ...guest, lobbyGuestReady: ready }
+      },
+      guestLobbyNotice: ready ? null : this.state.guestLobbyNotice,
+      updatedAt: Date.now()
+    };
+    this.broadcastState();
+  }
+
   async startGame() {
     if (!this.isHost || !this.state) return;
     const players = Object.keys(this.state.players);
     if (players.length < 2) return;
+    const guestUid = players.find(uid => uid !== this.myUid);
+    if (!guestUid || !this.state.players[guestUid].lobbyGuestReady) return;
 
     const settings = this.state.settings;
     const deck = createDeck(settings.disableJokers);
     
     let hostRole = settings.hostRole;
     let guestRole: PlayerRole;
-    
-    const guestUid = players.find(uid => uid !== this.myUid)!;
 
     if (hostRole === 'Preydator') {
       hostRole = 'Predator';
@@ -420,6 +499,8 @@ export class GameService {
         draftSets.push(powerDeck.splice(0, 3));
       }
     }
+    const draftPowerAppearances = settings.disablePowerCards ? [] : Array.from(new Set(draftSets.flat()));
+    const desperationOpenTier = settings.enableDesperation && settings.desperationStarterTierEnabled ? 1 : 0;
 
     this.state = {
       ...this.state,
@@ -429,20 +510,24 @@ export class GameService {
           ...this.state.players[this.myUid],
           role: settings.hostRole === 'Preydator' ? 'Preydator' : hostRole,
           hand: hostHand,
-          desperationTier: settings.enableDesperation && (settings.hostRole !== 'Predator') ? 1 : 0
+          desperationTier:
+            settings.enableDesperation && (settings.hostRole !== 'Predator') ? desperationOpenTier : 0
         },
         [guestUid]: {
           ...this.state.players[guestUid],
           role: settings.hostRole === 'Preydator' ? 'Preydator' : guestRole,
           hand: guestHand,
-          desperationTier: settings.enableDesperation && guestRole !== 'Predator' ? 1 : 0
+          desperationTier:
+            settings.enableDesperation && guestRole !== 'Predator' ? desperationOpenTier : 0
         }
       },
       status: settings.disablePowerCards ? 'playing' : 'drafting',
       deck,
       powerDeck,
       draftSets,
+      draftPowerAppearances,
       draftTurn: 0,
+      guestLobbyNotice: null,
       pendingPowerDecisions: {},
       updatedAt: Date.now()
     };
@@ -467,7 +552,10 @@ export class GameService {
     const allConfirmed = Object.values(updatedPlayers).every((p: PlayerData) => p.confirmed);
 
     if (allConfirmed) {
-      const pendingPowerDecisions = this.createPendingPowerDecisions(updatedPlayers);
+      const pendingPowerDecisions = this.createPendingPowerDecisions(
+        updatedPlayers,
+        this.state.draftPowerAppearances ?? []
+      );
       const hasPendingDecisions = Object.values(pendingPowerDecisions).some(Boolean);
       if (hasPendingDecisions) {
         const uidsLocked = Object.keys(updatedPlayers);
@@ -475,14 +563,27 @@ export class GameService {
           [uidsLocked[0]]: updatedPlayers[uidsLocked[0]].currentMove!,
           [uidsLocked[1]]: updatedPlayers[uidsLocked[1]].currentMove!
         };
+        if (this.powerShowdownClearTimer) {
+          clearTimeout(this.powerShowdownClearTimer);
+          this.powerShowdownClearTimer = null;
+        }
         this.state = {
           ...this.state,
           players: updatedPlayers,
           status: 'powering',
           engageMoves,
+          awaitingPowerShowdown: true,
           pendingPowerDecisions,
           updatedAt: Date.now()
         };
+        if (this.isHost) {
+          this.powerShowdownClearTimer = setTimeout(() => {
+            if (!this.state || this.state.status !== 'powering') return;
+            this.state = { ...this.state, awaitingPowerShowdown: false, updatedAt: Date.now() };
+            this.broadcastState();
+            this.powerShowdownClearTimer = null;
+          }, 2100);
+        }
       } else {
         this.state = {
           ...this.state,
@@ -541,11 +642,14 @@ export class GameService {
   }
 
   async syncSettings(settings: GameSettings) {
-    if (this.isHost) {
-      this.updateSettings(settings);
-    } else {
-      this.sendEvent({ type: 'UPDATE_SETTINGS', settings });
-    }
+    if (!this.isHost || !this.state) return;
+    this.updateSettings(settings);
+  }
+
+  async setLobbyReady(ready: boolean) {
+    if (!this.state || this.state.status !== 'waiting') return;
+    if (this.isHost) return;
+    this.sendEvent({ type: 'SET_LOBBY_READY', uid: this.myUid, ready });
   }
 
   async proceedToNextRound() {
@@ -705,7 +809,10 @@ export class GameService {
     return 'LOSE_ROUND';
   }
 
-  private createPendingPowerDecisions(players: Record<string, PlayerData>): Record<string, PendingPowerDecision | null> {
+  private createPendingPowerDecisions(
+    players: Record<string, PlayerData>,
+    draftAppearances: number[]
+  ): Record<string, PendingPowerDecision | null> {
     const decisions: Record<string, PendingPowerDecision | null> = {};
     const uids = Object.keys(players);
     const p1 = uids[0];
@@ -751,13 +858,47 @@ export class GameService {
         };
       } else if (power === 2) {
         const oppUsesPower = players[oppUid].currentPowerCard !== null;
+        const realPowerId = players[oppUid].currentPowerCard;
+        let priestessPowerCandidates: number[] | null = null;
+        let priestessPeekStashPowerId: number | null | undefined = undefined;
+        let priestessPeekStashEmpty = false;
+        if (oppUsesPower && realPowerId !== null) {
+          const draftPool = [...new Set(draftAppearances)];
+          const pool = [...new Set([...draftPool, realPowerId])];
+          const others = pool.filter(id => id !== realPowerId);
+          let d1: number;
+          let d2: number;
+          if (others.length >= 2) {
+            const shuffled = shuffle([...others]);
+            d1 = shuffled[0];
+            d2 = shuffled[1];
+          } else if (others.length === 1) {
+            d1 = others[0];
+            d2 = others[0];
+          } else {
+            d1 = realPowerId;
+            d2 = realPowerId;
+          }
+          priestessPowerCandidates = shuffle([realPowerId, d1, d2]);
+        } else {
+          const stashPool = [...new Set(players[oppUid].powerCards)].filter(pid => pid !== players[oppUid].currentPowerCard);
+          if (stashPool.length > 0) {
+            priestessPeekStashPowerId = stashPool[Math.floor(Math.random() * stashPool.length)];
+          } else {
+            priestessPeekStashPowerId = null;
+            priestessPeekStashEmpty = true;
+          }
+        }
         decisions[uid] = {
           powerCardId: 2,
           options: ['PRIESTESS_RESOLVE'],
           selectedOption: null,
           priestessOpponentUsesPower: oppUsesPower,
           priestessOpponentName: players[oppUid].name,
-          priestessSwapToCard: null
+          priestessSwapToCard: null,
+          priestessPowerCandidates,
+          priestessPeekStashPowerId: priestessPeekStashPowerId ?? null,
+          priestessPeekStashEmpty
         };
       } else if (power === 15) {
         const opponentUsedPower = players[oppUid].currentPowerCard !== null && !blocked[oppUid];
@@ -862,6 +1003,7 @@ export class GameService {
     if (!this.state || !this.state.players[uid]) return;
     
     const player = this.state.players[uid];
+    if (!desperationSpinAllowed(this.state, uid, player)) return;
     
     // Pick the result based on offset
     // Offset 0-1 matches 0-100% of the wheel
@@ -898,6 +1040,7 @@ export class GameService {
     if (!this.state || !this.state.players[uid]) return;
     
     const player = this.state.players[uid];
+    if (!desperationSpinAllowed(this.state, uid, player)) return;
     const result = player.desperationResult;
     const updatedPlayers = { ...this.state.players };
     const newDeck = [...this.state.deck];
@@ -1041,27 +1184,50 @@ export class GameService {
       }
       const oppName = decision?.priestessOpponentName || 'Opponent';
       const oppUsed = Boolean(decision?.priestessOpponentUsesPower);
+
+      if (!oppUsed) {
+        if (decision?.priestessPeekStashEmpty) {
+          priestessFront.push({
+            type: 'POWER_TRIGGER',
+            uid,
+            powerCardId: 2,
+            message: `${players[uid].name} reads High Priestess: ${oppName} committed no Major and is carrying no spare Major Arcana.`
+          });
+        } else if (typeof decision?.priestessPeekStashPowerId === 'number') {
+          const peek = MAJOR_ARCANA[decision.priestessPeekStashPowerId];
+          priestessFront.push({
+            type: 'POWER_TRIGGER',
+            uid,
+            powerCardId: 2,
+            message: `${players[uid].name} reads High Priestess: ${peek.name} (${oppName}'s bag, not counting this trick's play).`
+          });
+        }
+        return;
+      }
+
       priestessFront.push({
         type: 'POWER_TRIGGER',
         uid,
         powerCardId: 2,
-        message: oppUsed
-          ? `${players[uid].name} consults the High Priestess · ${oppName} is playing a Major Arcana this round.`
-          : `${players[uid].name} consults the High Priestess · ${oppName} is not playing a Major Arcana this round.`
+        message: `${players[uid].name} reads the High Priestess: ${oppName} is committing a Major Arcana${
+          decision?.priestessPowerCandidates?.length === 3
+            ? ' — three plausible majors from tonight’s draft are shown on-screen.'
+            : ' this trick.'
+        }`
       });
       if (finalCard !== locked) {
         priestessFront.push({
           type: 'CARD_SWAP',
           uid,
           cardId: finalCard,
-          message: `${players[uid].name} changes their committed card via the Priestess.`
+          message: `${players[uid].name} swaps their played suit card before the flop.`
         });
       } else {
         priestessFront.push({
           type: 'POWER_TRIGGER',
           uid,
           powerCardId: 2,
-          message: `${players[uid].name} holds course with ${locked.replace('-', ' of ')}.`
+          message: `${players[uid].name} keeps ${locked.replace('-', ' of ')} in play.`
         });
       }
 
@@ -1073,8 +1239,8 @@ export class GameService {
     applyPriestessConsult(p2Uid, p2Decision, false);
     events.splice(0, 0, ...priestessFront);
 
-    // Interactive powers (Magician / Devil / Wheel) resolve before standard before-resolution effects.
-    const applyMagicianDecision = (uid: string, oppUid: string, decision?: PendingPowerDecision | null) => {
+    // Magician steal runs early; Fool / field powers run before Frogify so swaps apply first.
+    const applyMagicianSteal = (uid: string, oppUid: string, decision?: PendingPowerDecision | null) => {
       if (!decision || decision.powerCardId !== 1 || blockedPowers[uid]) return;
       if (decision.selectedOption === 'STEAL_JOKER') {
         const oHand = players[oppUid].hand;
@@ -1083,7 +1249,12 @@ export class GameService {
           events.push({ type: 'POWER_TRIGGER', uid, powerCardId: 1, message: `${players[uid].name} casts Magician and steals a Joker!` });
           gains[uid].push({ type: 'card', id: jokerStr });
         }
-      } else if (decision.selectedOption === 'FROGIFY') {
+      }
+    };
+
+    const applyMagicianFrog = (uid: string, oppUid: string, decision?: PendingPowerDecision | null) => {
+      if (!decision || decision.powerCardId !== 1 || blockedPowers[uid]) return;
+      if (decision.selectedOption === 'FROGIFY') {
         if (uid === p1Uid) c2 = 'Frogs-1';
         else c1 = 'Frogs-1';
         events.push({ type: 'TRANSFORM', uid: oppUid, cardId: 'Frogs-1', message: `${players[uid].name} casts Frogs and warps the opposing card!` });
@@ -1134,8 +1305,8 @@ export class GameService {
       }
     };
 
-    applyMagicianDecision(p1Uid, p2Uid, p1Decision);
-    applyMagicianDecision(p2Uid, p1Uid, p2Decision);
+    applyMagicianSteal(p1Uid, p2Uid, p1Decision);
+    applyMagicianSteal(p2Uid, p1Uid, p2Decision);
     applyDevilDecision(p1Uid, p2Uid, p1Decision);
     applyDevilDecision(p2Uid, p1Uid, p2Decision);
 
@@ -1193,6 +1364,9 @@ export class GameService {
 
     applyBefore(p1Uid, p2Uid, power1);
     applyBefore(p2Uid, p1Uid, power2);
+
+    applyMagicianFrog(p1Uid, p2Uid, p1Decision);
+    applyMagicianFrog(p2Uid, p1Uid, p2Decision);
 
     // TRANSFORMATION: If target suit is Stars, all normal cards transform to Stars
     if (targetSuit === 'Stars') {
@@ -1316,12 +1490,59 @@ export class GameService {
           winnerUid = res === 'p1' ? p1Uid : (res === 'p2' ? p2Uid : 'draw');
         }
 
-        const applyWheelOutcome = (uid: string, outcomeLabel?: string | null) => {
-          if (!outcomeLabel) return;
+        let wheelDjLock = false;
+
+        type WheelEvt = { uid: string; res: string };
+        const wheels: WheelEvt[] = [];
+        if (power1 === 10 && !blockedPowers[p1Uid] && p1Decision?.wheelResult) wheels.push({ uid: p1Uid, res: p1Decision.wheelResult });
+        if (power2 === 10 && !blockedPowers[p2Uid] && p2Decision?.wheelResult) wheels.push({ uid: p2Uid, res: p2Decision.wheelResult });
+
+        if (wheels.length === 2) {
+          let p1First: boolean;
+          if (coinFlip === 'Host') {
+            p1First = true;
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${players[p1Uid].name}'s Wheel resolves first (twin Wheels — initiative already ${coinFlip}).`
+            });
+          } else if (coinFlip === 'Opponent') {
+            p1First = false;
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${players[p2Uid].name}'s Wheel resolves first (twin Wheels — initiative already ${coinFlip}).`
+            });
+          } else {
+            p1First = Math.random() > 0.5;
+            coinFlip = p1First ? 'Host' : 'Opponent';
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${p1First ? players[p1Uid].name : players[p2Uid].name} wins Wheel order (${p1First ? players[p1Uid].name : players[p2Uid].name}'s Wheel resolves first, then ${p1First ? players[p2Uid].name : players[p1Uid].name}).`
+            });
+          }
+
+          wheels.sort((a, b) => {
+            const aP1 = a.uid === p1Uid;
+            const bP1 = b.uid === p1Uid;
+            if (aP1 === bP1) return 0;
+            if (p1First) return aP1 ? -1 : 1;
+            return bP1 ? -1 : 1;
+          });
+        }
+
+        const applyWheelStep = (uid: string, outcomeLabel: string) => {
+          if (wheelDjLock && (outcomeLabel === 'LOSE_ROUND' || outcomeLabel === 'WIN_ROUND')) {
+            events.push({
+              type: 'POWER_TRIGGER',
+              uid,
+              powerCardId: 10,
+              message: `${players[uid].name}'s Wheel (${outcomeLabel.replaceAll('_', ' ')}) is swallowed by twin Jokers on the table.`
+            });
+            return;
+          }
           if (outcomeLabel === 'LOSE_ROUND') {
             winnerUid = uid === p1Uid ? p2Uid : p1Uid;
           } else if (outcomeLabel === 'WIN_ROUND') {
-            winnerUid = uid;
+            if (!wheelDjLock) winnerUid = uid;
           } else if (outcomeLabel === 'WIN_2_CARDS') {
             gains[uid].push({ type: 'draw', id: 2 });
             gains[uid].push({ type: 'draw', id: 2 });
@@ -1329,6 +1550,7 @@ export class GameService {
             c1 = 'Joker-1';
             c2 = 'Joker-2';
             winnerUid = 'draw';
+            wheelDjLock = true;
           } else if (outcomeLabel === 'JACKPOT') {
             if (uid === p1Uid) c1 = 'Coins-10';
             else c2 = 'Coins-10';
@@ -1337,15 +1559,40 @@ export class GameService {
           } else if (outcomeLabel === 'LOSE_2_CARDS') {
             gains[uid].push({ type: 'draw', id: -2 });
           }
-          events.push({ type: 'POWER_TRIGGER', uid, powerCardId: 10, message: `${players[uid].name}'s Wheel of Fortune outcome: ${outcomeLabel.replaceAll('_', ' ')}` });
+          events.push({
+            type: 'POWER_TRIGGER',
+            uid,
+            powerCardId: 10,
+            message: `${players[uid].name}'s Wheel of Fortune outcome: ${outcomeLabel.replaceAll('_', ' ')}`
+          });
         };
-        if (power1 === 10 && !blockedPowers[p1Uid]) applyWheelOutcome(p1Uid, p1Decision?.wheelResult);
-        if (power2 === 10 && !blockedPowers[p2Uid]) applyWheelOutcome(p2Uid, p2Decision?.wheelResult);
+
+        for (const w of wheels) {
+          applyWheelStep(w.uid, w.res);
+        }
 
         if (power1 === 13 && power2 === 13 && !blockedPowers[p1Uid] && !blockedPowers[p2Uid]) {
-          const hostWins = Math.random() > 0.5;
-          winnerUid = hostWins ? p1Uid : p2Uid;
-          events.push({ type: 'COIN_FLIP', message: `${players[winnerUid].name} wins the Death coin flip.` });
+          if (coinFlip === 'Host') {
+            winnerUid = p1Uid;
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${players[p1Uid].name} wins the duel of Death (initiative ${coinFlip}).`
+            });
+          } else if (coinFlip === 'Opponent') {
+            winnerUid = p2Uid;
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${players[p2Uid].name} wins the duel of Death (initiative ${coinFlip}).`
+            });
+          } else {
+            const hostWins = Math.random() > 0.5;
+            coinFlip = hostWins ? 'Host' : 'Opponent';
+            winnerUid = hostWins ? p1Uid : p2Uid;
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${players[winnerUid].name} wins the duel of Death (fresh flip — ${coinFlip}).`
+            });
+          }
         } else {
           if (power1 === 13 && !blockedPowers[p1Uid]) winnerUid = p1Uid;
           if (power2 === 13 && !blockedPowers[p2Uid]) winnerUid = p2Uid;
@@ -1450,11 +1697,11 @@ export class GameService {
     }
     if (power1 === 21) {
       gains[p1Uid].push({ type: 'draw', id: 'random-power' });
-      gains[p1Uid].push({ type: 'draw', id: 'random-card' });
+      gains[p1Uid].push({ type: 'draw', id: 'new-card' });
     }
     if (power2 === 21) {
       gains[p2Uid].push({ type: 'draw', id: 'random-power' });
-      gains[p2Uid].push({ type: 'draw', id: 'random-card' });
+      gains[p2Uid].push({ type: 'draw', id: 'new-card' });
     }
 
     return {
@@ -1555,10 +1802,6 @@ export class GameService {
         updatedPlayers[uid].hand.push(...newDeck.splice(0, 3));
       }
       
-      if (power === 21) { // World: Power + Suit
-         if (powerDeck.length > 0) updatedPlayers[uid].powerCards.push(powerDeck.splice(0, 1)[0]);
-         if (newDeck.length > 0) updatedPlayers[uid].hand.push(newDeck.splice(0, 1)[0]);
-      }
     });
 
     // Generic outcome gains application.
@@ -1572,8 +1815,12 @@ export class GameService {
         } else if (gain.type === 'draw') {
           if (gain.id === 'random-power') {
             if (powerDeck.length > 0) updatedPlayers[uid].powerCards.push(powerDeck.splice(0, 1)[0]);
-          } else if (gain.id === 'random-card' || gain.id === 'standard') {
+          } else if (gain.id === 'standard') {
             if (newDeck.length > 0) updatedPlayers[uid].hand.push(newDeck.splice(0, 1)[0]);
+          } else if (gain.id === 'new-card') {
+            const s = SUITS[Math.floor(Math.random() * SUITS.length)];
+            const v = VALUES[Math.floor(Math.random() * VALUES.length)];
+            updatedPlayers[uid].hand.push(`${s}-${v}`);
           } else if (typeof gain.id === 'number' && gain.id > 0) {
             for (let i = 0; i < gain.id; i++) {
               if (newDeck.length > 0) updatedPlayers[uid].hand.push(newDeck.splice(0, 1)[0]);
@@ -1655,12 +1902,17 @@ export class GameService {
       powerDeck,
       pendingPowerDecisions: {},
       engageMoves: null,
+      awaitingPowerShowdown: false,
       famineActive,
       updatedAt: Date.now()
     };
   }
 
   destroy() {
+    if (this.powerShowdownClearTimer) {
+      clearTimeout(this.powerShowdownClearTimer);
+      this.powerShowdownClearTimer = null;
+    }
     if (this.powerResolutionTimer) {
       clearTimeout(this.powerResolutionTimer);
       this.powerResolutionTimer = null;

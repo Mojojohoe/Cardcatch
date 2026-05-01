@@ -31,19 +31,7 @@ import {
 } from 'lucide-react';
 import { DESPERATION_SLICES, parseCard } from '../services/gameService';
 import { MAJOR_ARCANA, PlayerRole, Suit, SUITS } from '../types';
-
-const SUIT_ICONS: Record<string, string> = {
-  Hearts: '♥',
-  Diamonds: '♦',
-  Clubs: '♣',
-  Spades: '♠',
-  Stars: '★',
-  Moons: '🌙',
-  Frogs: '🐸',
-  Coins: '🪙',
-  Bones: '🦴',
-  Joker: '🃏'
-};
+import { SuitGlyph, SuitWheelMarkerG } from './SuitGlyphs';
 
 const SUIT_COLORS: Record<string, string> = {
   Hearts: 'text-red-500',
@@ -106,7 +94,7 @@ export const DesperationWheel: React.FC<{
     <div className={`absolute inset-0 z-[200] flex flex-col items-center justify-center p-4 overflow-hidden rounded-3xl transition-all duration-1000 ${isSpectator ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/95 backdrop-blur-2xl'}`}>
       {!isSpectator && (
         <div className="absolute top-8 left-8 space-y-4 hidden sm:block">
-          <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest border-l-4 border-purple-400 pl-3">Desperation Protocol</h3>
+          <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest border-l-4 border-purple-400 pl-3">Desperation</h3>
           <div className="space-y-4">
             {tiers.map((tier, i) => (
               <div key={i} className="flex items-center gap-3">
@@ -204,12 +192,14 @@ export const CardVisual: React.FC<CardVisualProps> = ({ card, selected, onClick,
       className={`w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg shadow-xl flex flex-col justify-between p-2 cursor-pointer relative overflow-hidden transition-all ${isMoonSuit ? 'bg-black' : 'bg-white'} ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : 'border-gray-200'} ${disabled ? 'opacity-60 grayscale cursor-not-allowed' : ''}`}>
       <div className={`flex flex-col items-start leading-[0.7] ${SUIT_COLORS[suit]}`}>
         <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        <span className="text-lg sm:text-3xl">{SUIT_ICONS[suit] || '★'}</span>
+        {isJoker ? <span className="text-lg sm:text-3xl">🃏</span> : <SuitGlyph suit={suit} className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10" />}
       </div>
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className={`text-5xl sm:text-8xl opacity-[0.08] ${SUIT_COLORS[suit]}`}>{isJoker ? '🃏' : SUIT_ICONS[suit] || '★'}</span></div>
+      <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${SUIT_COLORS[suit]} opacity-[0.12]`}>
+        {isJoker ? <span className="text-5xl sm:text-8xl">🃏</span> : <SuitGlyph suit={suit} className="text-5xl sm:text-8xl w-[2.8rem] h-[2.8rem] sm:w-[5.5rem] sm:h-[5.5rem]" />}
+      </div>
       <div className={`flex flex-col items-start leading-[0.7] self-end rotate-180 ${SUIT_COLORS[suit]}`}>
         <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        <span className="text-lg sm:text-3xl">{SUIT_ICONS[suit] || '★'}</span>
+        {isJoker ? <span className="text-lg sm:text-3xl">🃏</span> : <SuitGlyph suit={suit} className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10" />}
       </div>
     </motion.div>
   );
@@ -274,11 +264,20 @@ export const TargetSuitWheel: React.FC<{ suit: Suit | null; isSpinning: boolean;
             const y2 = 50 + 50 * Math.sin((endAngle - 90) * Math.PI / 180);
             const centerAngle = startAngle + angle / 2;
             const fillColor = s === 'Moons' ? '#000000' : (s === 'Stars' ? '#1e1b4b' : (s === 'Diamonds' || s === 'Hearts' ? '#0f172a' : '#f8fafc'));
-            const iconColor = s === 'Moons' ? 'fill-white' : (s === 'Stars' ? 'fill-yellow-400' : (s === 'Diamonds' || s === 'Hearts' ? 'fill-red-500' : 'fill-slate-900'));
+            const markFill =
+              s === 'Moons'
+                ? '#ffffff'
+                : s === 'Stars'
+                  ? '#facc15'
+                  : s === 'Diamonds' || s === 'Hearts'
+                    ? '#ef4444'
+                    : '#0f172a';
             return (
               <g key={s}>
                 <path d={`M 50 50 L ${x1} ${y1} A 50 50 0 ${angle > 180 ? 1 : 0} 1 ${x2} ${y2} Z`} fill={fillColor} stroke="#1e293b" strokeWidth="0.5" />
-                <g transform={`rotate(${centerAngle} 50 50)`}><text x="50" y="20" textAnchor="middle" dominantBaseline="middle" className={`text-[12px] font-black select-none ${iconColor}`}>{SUIT_ICONS[s]}</text></g>
+                <g transform={`rotate(${centerAngle} 50 50)`}>
+                  <SuitWheelMarkerG suit={s} size={11} x={50} y={19} fill={markFill} />
+                </g>
               </g>
             );
           })}

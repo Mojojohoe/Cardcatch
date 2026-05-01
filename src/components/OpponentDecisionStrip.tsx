@@ -2,7 +2,12 @@ import React from 'react';
 
 export const OpponentDecisionStrip: React.FC<{
   opponentName: string;
-  decision: { powerCardId: number; options: string[]; selectedOption: string | null } | null;
+  decision: {
+    powerCardId: number;
+    options: string[];
+    selectedOption: string | null;
+    priestessOpponentUsesPower?: boolean;
+  } | null;
 }> = ({ opponentName, decision }) => {
   if (!decision) return null;
 
@@ -12,16 +17,18 @@ export const OpponentDecisionStrip: React.FC<{
       : decision.powerCardId === 15
         ? `${opponentName} is making a deal`
         : decision.powerCardId === 2
-          ? `${opponentName} is consulting the High Priestess`
+          ? `${opponentName} is resolving High Priestess`
         : `${opponentName} is spinning fate`;
 
   if (decision.powerCardId === 2) {
+    const youUsedMajor = Boolean(decision.priestessOpponentUsesPower);
     return (
       <div className="mt-2 flex flex-col items-center gap-1 max-w-[min(100%,18rem)] text-center px-2">
         <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300">{headline}</span>
-        <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500 leading-snug">
-          The veil listens · held card may shift before reveal
-        </span>
+        <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500 leading-snug normal-case">
+          {youUsedMajor
+            ? 'They see draft decoys—and may swap their suit card before resolution.'
+            : 'They skim one spare Major from your pile (no swap shell game).'}</span>
       </div>
     );
   }

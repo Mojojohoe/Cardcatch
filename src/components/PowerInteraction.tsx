@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { CardVisual } from './GameVisuals';
+import { MAJOR_ARCANA } from '../types';
+import { CardVisual, PowerCardVisual } from './GameVisuals';
 
 export interface PendingDecisionView {
   powerCardId: number;
@@ -9,6 +10,9 @@ export interface PendingDecisionView {
   wheelResult?: string | null;
   priestessOpponentUsesPower?: boolean;
   priestessOpponentName?: string;
+  priestessPowerCandidates?: number[] | null;
+  priestessPeekStashPowerId?: number | null;
+  priestessPeekStashEmpty?: boolean;
 }
 
 export const FortuneWheelVisual: React.FC<{
@@ -118,6 +122,9 @@ export const PowerDecisionModal: React.FC<{
 
   const oppName = decision.priestessOpponentName || 'Opponent';
   const oppUsesPower = Boolean(decision.priestessOpponentUsesPower);
+  const stashEmpty = Boolean(decision.priestessPeekStashEmpty);
+  const stashId =
+    typeof decision.priestessPeekStashPowerId === 'number' ? decision.priestessPeekStashPowerId : null;
   const locked = priestessLockedCard || '';
   const swapCard =
     priestessPickIndex !== null && priestessPickIndex >= 0 && priestessPickIndex < priestessHand.length
@@ -135,78 +142,136 @@ export const PowerDecisionModal: React.FC<{
             : decision.powerCardId === 15
               ? 'Devil Deal'
               : decision.powerCardId === 2
-                ? 'Consult High Priestess'
+                ? 'High Priestess reveal'
                 : 'Wheel Of Fortune'}
         </h3>
         {isPriestess && locked ? (
           <div className="space-y-4">
-            <p className="text-center text-[11px] sm:text-xs font-black uppercase tracking-widest text-slate-400 leading-relaxed">
-              Committed card on the altar · opponent intel · seal your choice before the veil lifts
+            <p className="text-center text-[11px] sm:text-xs font-bold text-slate-400 leading-relaxed normal-case px-2">
+              Your played card stays locked unless you explicitly swap below. Priestess intel only narrows whether they wired a Major Arcana.
             </p>
             <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/40 px-4 py-3 text-center">
               <p className="text-[11px] font-black uppercase tracking-wider text-indigo-200">
                 {oppUsesPower ? (
                   <>
-                    <span className="text-yellow-300">{oppName}</span> is playing a Major Arcana this round.
+                    <span className="text-yellow-300">{oppName}</span> wired a Major Arcana for this trick.
                   </>
                 ) : (
                   <>
-                    <span className="text-slate-200">{oppName}</span> is not playing a Major Arcana this round.
+                    <span className="text-slate-200">{oppName}</span> is not committing a Major Arcana this trick.
                   </>
                 )}
               </p>
             </div>
 
+            {oppUsesPower && decision.priestessPowerCandidates && decision.priestessPowerCandidates.length >= 3 && (
+              <div className="space-y-3 rounded-xl border border-amber-500/35 bg-black/35 px-3 py-4">
+                <p className="text-center text-[10px] font-bold text-amber-200/95 normal-case px-2">
+                  Dealer shows three plausible Majors pulled from tonight&apos;s draft. One is theirs; the layout is scrambled.
+                </p>
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-5">
+                  {decision.priestessPowerCandidates.slice(0, 3).map((id, idx) => (
+                    <div key={`${id}-${idx}`} className="flex flex-col items-center gap-1">
+                      <PowerCardVisual cardId={id} small revealed />
+                      <span className="text-[8px] font-black uppercase tracking-wider text-slate-500">{MAJOR_ARCANA[id]?.name ?? id}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!oppUsesPower && (
+              <div className="space-y-3 rounded-xl border border-violet-500/35 bg-violet-950/30 px-3 py-4 text-center">
+                <p className="text-[10px] font-bold text-violet-100/95 normal-case px-2 leading-relaxed">
+                  {stashEmpty ? (
+                    <>
+                      They are not committing a Major this trick, and carry no spare Major in their pile to glimpse.
+                    </>
+                  ) : stashId !== null ? (
+                    <>
+                      They are not committing a Major—you glimpse one Major still tucked in{' '}
+                      <span className="text-yellow-300 font-black">{oppName}</span>
+                      &apos;s pile (excluding anything on the table).
+                    </>
+                  ) : (
+                    <>
+                      No stash intel this round — confirm below when ready.
+                    </>
+                  )}
+                </p>
+                {stashId !== null && (
+                  <div className="flex flex-col items-center gap-2 pt-1">
+                    <PowerCardVisual cardId={stashId} small revealed />
+                    <span className="text-[8px] font-black uppercase tracking-wider text-slate-500">
+                      {MAJOR_ARCANA[stashId]?.name ?? stashId}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-col items-center gap-3">
-              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Committed to the round</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Your locked play</span>
               <div className="scale-90 origin-top">
                 <CardVisual card={locked} revealed noAnimate />
               </div>
             </div>
 
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 text-center">
-                Your hand · select a different card to swap · tap again to deselect
-              </p>
-              <div className="flex flex-wrap justify-center gap-2 py-2 max-h-[220px] overflow-y-auto rounded-xl border border-slate-800/80 bg-black/40 p-3">
-                {priestessHand.map((card, idx) => (
-                  <button
-                    type="button"
-                    key={`pv-${idx}-${card}`}
-                    onClick={() => setPriestessPickIndex((cur) => (cur === idx ? null : idx))}
-                    className={`rounded-lg outline-none ring-offset-2 ring-offset-slate-950 transition-transform hover:scale-105 active:scale-95 ${
-                      priestessPickIndex === idx ? 'ring-2 ring-yellow-400' : 'ring-0'
-                    }`}
-                  >
-                    <div className={`scale-[0.55] sm:scale-[0.65] origin-center ${card === locked ? 'opacity-100' : ''}`}>
-                      <CardVisual card={card} revealed noAnimate disabled={false} />
-                    </div>
-                  </button>
-                ))}
+            {oppUsesPower && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 text-center">
+                  Your hand · select a different card to swap · tap again to deselect
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 py-2 max-h-[220px] overflow-y-auto rounded-xl border border-slate-800/80 bg-black/40 p-3">
+                  {priestessHand.map((card, idx) => (
+                    <button
+                      type="button"
+                      key={`pv-${idx}-${card}`}
+                      onClick={() => setPriestessPickIndex((cur) => (cur === idx ? null : idx))}
+                      className={`rounded-lg outline-none ring-offset-2 ring-offset-slate-950 transition-transform hover:scale-105 active:scale-95 ${
+                        priestessPickIndex === idx ? 'ring-2 ring-yellow-400' : 'ring-0'
+                      }`}
+                    >
+                      <div className={`scale-[0.55] sm:scale-[0.65] origin-center ${card === locked ? 'opacity-100' : ''}`}>
+                        <CardVisual card={card} revealed noAnimate disabled={false} />
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            {oppUsesPower ? (
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => onSubmit('PRIESTESS_RESOLVE')}
+                  className="flex-1 py-3 rounded-xl border border-emerald-600/60 bg-emerald-900/40 text-emerald-200 font-black uppercase text-xs tracking-widest hover:bg-emerald-800/50"
+                >
+                  Hold committed card
+                </button>
+                <button
+                  type="button"
+                  disabled={!swapIsValid}
+                  onClick={() => onSubmit('PRIESTESS_RESOLVE', undefined, swapCard)}
+                  className={`flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest border ${
+                    swapIsValid
+                      ? 'border-yellow-500 bg-yellow-500 text-black hover:bg-yellow-400'
+                      : 'border-slate-700 bg-slate-900 text-slate-600 cursor-not-allowed'
+                  }`}
+                >
+                  Swap to chosen card
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
                 onClick={() => onSubmit('PRIESTESS_RESOLVE')}
-                className="flex-1 py-3 rounded-xl border border-emerald-600/60 bg-emerald-900/40 text-emerald-200 font-black uppercase text-xs tracking-widest hover:bg-emerald-800/50"
+                className="w-full py-3 rounded-xl border border-violet-500/60 bg-violet-900/50 text-violet-100 font-black uppercase text-xs tracking-widest hover:bg-violet-800/55"
               >
-                Hold committed card
+                Continue · Priestess vision recorded
               </button>
-              <button
-                type="button"
-                disabled={!swapIsValid}
-                onClick={() => onSubmit('PRIESTESS_RESOLVE', undefined, swapCard)}
-                className={`flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest border ${
-                  swapIsValid
-                    ? 'border-yellow-500 bg-yellow-500 text-black hover:bg-yellow-400'
-                    : 'border-slate-700 bg-slate-900 text-slate-600 cursor-not-allowed'
-                }`}
-              >
-                Swap to chosen card
-              </button>
-            </div>
+            )}
           </div>
         ) : null}
         {isWheel ? (

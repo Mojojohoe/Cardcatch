@@ -47,6 +47,8 @@ export const createFixtureRoom = (): RoomData => ({
     disableJokers: false,
     disablePowerCards: false,
     enableDesperation: false,
+    desperationStarterTierEnabled: true,
+    preydatorDesperationSeats: 'guest',
     tiers: ['TIER 1']
   },
   currentTurn: 1,
