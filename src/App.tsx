@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
@@ -334,6 +335,8 @@ interface CardVisualProps {
   /** Round-resolution entrance: card lifts from below like drawing from the deck. */
   presentation?: 'default' | 'deckPull' | 'none';
   deckPullSide?: 'left' | 'right';
+  /** Slower draw when famine / deliberate acquisition pacing is shown */
+  presentationPace?: 'normal' | 'slow';
 }
 
 const WolfIcon = () => (
@@ -355,9 +358,11 @@ const CardVisual: React.FC<CardVisualProps> = (props) => {
     noAnimate = false,
     presentation = 'default',
     deckPullSide = 'left',
+    presentationPace = 'normal',
   } = props;
   const { suit, value, isJoker } = useMemo(() => (revealed ? parseCard(card) : { suit: '', value: '', isJoker: false }), [card, revealed]);
   const isMoonSuit = suit === 'Moons';
+  const deckSlow = presentationPace === 'slow' && presentation === 'deckPull';
   
   const entrance =
     noAnimate || presentation === 'none'
@@ -365,14 +370,18 @@ const CardVisual: React.FC<CardVisualProps> = (props) => {
       : presentation === 'deckPull'
         ? {
             initial: {
-              y: 130,
+              y: deckSlow ? 168 : 130,
               opacity: 0,
               rotateX: 22,
               rotateZ: deckPullSide === 'left' ? -6 : 6,
               scale: 0.82,
             },
             animate: { y: 0, opacity: 1, rotateX: 0, rotateZ: 0, scale: 1 },
-            transition: { duration: 0.58, delay, ease: [0.22, 1, 0.36, 1] },
+            transition: {
+              duration: deckSlow ? 1.35 : 0.58,
+              delay: deckSlow ? delay * 1.25 : delay,
+              ease: [0.22, 1, 0.36, 1],
+            },
           }
         : {
             initial: { x: 300, y: -100, opacity: 0, rotate: 45, scale: 0.5 },
@@ -538,26 +547,29 @@ const PowerCardVisual: React.FC<{
          {cardId} / 21
       </div>
 
-      {!disabled && (
-        <div
-          ref={popRef}
-          style={tooltipStyle}
-          className={`rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
-          aria-hidden={!tipOpen}
-        >
-          <div className="flex gap-3 items-start text-left">
-            <div className="shrink-0 rounded-lg bg-slate-900 p-2 border border-slate-700">
-              <IconComponent className="text-yellow-400" size={small ? 20 : 26} />
+      {!disabled &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={popRef}
+            style={tooltipStyle}
+            className={`rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+            aria-hidden={!tipOpen}
+          >
+            <div className="flex gap-3 items-start text-left">
+              <div className="shrink-0 rounded-lg bg-slate-900 p-2 border border-slate-700">
+                <IconComponent className="text-yellow-400" size={small ? 20 : 26} />
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-yellow-400/95 font-black text-[11px] uppercase tracking-wide border-b border-yellow-500/25 pb-1 mb-1.5">
+                  {card.name}
+                </p>
+                <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{card.description}</p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-yellow-400/95 font-black text-[11px] uppercase tracking-wide border-b border-yellow-500/25 pb-1 mb-1.5">
-                {card.name}
-              </p>
-              <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{card.description}</p>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
       {destroyed && small && (
         <span className="absolute bottom-0 left-0 right-0 text-[5px] font-black uppercase tracking-tighter text-center text-orange-100 bg-black/60 py-0.5 pointer-events-none z-[60]">
           Blocked
@@ -739,8 +751,12 @@ const AcquiredAssets: React.FC<{
   gains: { type: 'card' | 'power' | 'draw', id: string | number | 'new-card' }[];
   side: 'left' | 'right';
   label: string;
-}> = ({ gains, side, label }) => {
+  /** Slower staggers + draw arcs when deck has just emptied into bones */
+  acquisitionPace?: 'normal' | 'deliberate';
+}> = ({ gains, side, label, acquisitionPace = 'normal' }) => {
   if (!gains || gains.length === 0) return null;
+
+  const deliberate = acquisitionPace === 'deliberate';
 
   return (
     <div className={`absolute top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50 ${side === 'left' ? 'left-6 sm:left-16' : 'right-6 sm:right-16'}`}>
@@ -754,12 +770,32 @@ const AcquiredAssets: React.FC<{
             key={i}
             initial={{ x: side === 'left' ? -20 : 20, opacity: 0, scale: 0.8 }}
             animate={{ x: 0, opacity: 1, scale: 1 }}
-            transition={{ delay: 0.8 + i * 0.15, type: 'spring', damping: 15 }}
+            transition={
+              deliberate
+                ? {
+                    delay: 1.15 + i * 0.68,
+                    type: 'spring',
+                    damping: 26,
+                    stiffness: 38,
+                  }
+                : { delay: 0.8 + i * 0.15, type: 'spring', damping: 15 }
+            }
             className="relative"
           >
             {gain.type === 'card' && (
               <div className="scale-[0.4] sm:scale-[0.6] origin-center">
-                <CardVisual card={gain.id as string} revealed />
+                {deliberate ? (
+                  <CardVisual
+                    card={gain.id as string}
+                    revealed
+                    presentation="deckPull"
+                    deckPullSide={side === 'left' ? 'left' : 'right'}
+                    delay={i * 0.06}
+                    presentationPace="slow"
+                  />
+                ) : (
+                  <CardVisual card={gain.id as string} revealed />
+                )}
               </div>
             )}
             {gain.type === 'power' && (
@@ -1180,100 +1216,121 @@ function inferCoinFlipWinnerUid(message: string, room: RoomData): string | null 
   return null;
 }
 
-/** 3D “priority poker” riff: predator (red wolf) vs prey (blue rabbit), CodePen-style rotateY tumble. */
+/** Priority coin: identical ⚖ faces while spinning, then a clear predator / prey / preydator panel (no mirrored “backwards wolf”). */
 const PriorityFlipCard: React.FC<{
   winnerUid: string | null;
   room: RoomData;
 }> = ({ winnerUid, room }) => {
   const role = winnerUid ? room.players[winnerUid]?.role : null;
+  const [landed, setLanded] = useState(false);
 
-  const endRotateY = useMemo(() => {
-    if (!winnerUid) return 1080 + 90;
-    if (role === 'Prey') return 1440 + 180;
-    if (role === 'Predator') return 1440;
-    if (role === 'Preydator') return 1440;
-    return 1080 + 90;
-  }, [winnerUid, role]);
-
-  const showPreydatorFinish = Boolean(winnerUid && role === 'Preydator');
-  const showUnknown = !winnerUid;
+  useEffect(() => {
+    const ms = winnerUid ? 4150 : 3400;
+    const t = window.setTimeout(() => setLanded(true), ms);
+    return () => window.clearTimeout(t);
+  }, [winnerUid]);
 
   return (
-    <div className="mb-6 flex flex-col items-center gap-3 [perspective:1400px]">
-      <div className="relative h-[7.25rem] w-[11.25rem] sm:h-[7.75rem] sm:w-[12rem]">
-        <motion.div
-          initial={{ rotateY: -22, scale: 0.88, opacity: 0.75 }}
-          animate={{ rotateY: endRotateY, scale: 1, opacity: 1 }}
-          transition={{
-            duration: 4.45,
-            ease: [0.15, 0.65, 0.18, 0.99],
-          }}
-          className="relative h-full w-full origin-center [transform-style:preserve-3d]"
-        >
-          <div
-            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-red-500/70 bg-gradient-to-br from-red-950 via-red-900 to-black text-red-100 shadow-[0_12px_40px_rgba(220,38,38,0.35)]"
-            style={{
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(0deg) translateZ(3px)',
-            }}
-          >
-            <div className="h-14 w-14 sm:h-16 sm:w-16">
-              <WolfIcon />
-            </div>
-            <span className="mt-1 text-[9px] font-black uppercase tracking-[0.28em] text-red-200/95">Predator</span>
-          </div>
-          <div
-            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-sky-500/70 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-sky-100 shadow-[0_12px_40px_rgba(56,189,248,0.28)]"
-            style={{
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg) translateZ(3px)',
-            }}
-          >
-            <Rabbit className="h-14 w-14 sm:h-16 sm:w-16 opacity-90" strokeWidth={1.5} />
-            <span className="mt-1 text-[9px] font-black uppercase tracking-[0.28em] text-sky-200/95">Prey</span>
-          </div>
-        </motion.div>
-
-        {showPreydatorFinish && (
+    <div className="mb-6 flex flex-col items-center gap-4 [perspective:1400px]">
+      <div className="relative h-[8rem] w-[12.5rem] sm:h-[8.5rem] sm:w-[13.25rem]">
+        {!landed && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 3.85, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-purple-500/80 bg-gradient-to-br from-purple-950/95 via-fuchsia-950/90 to-slate-950 shadow-[0_0_36px_rgba(168,85,247,0.45)]"
+            initial={{ rotateY: -14, scale: 0.92, opacity: 0.88 }}
+            animate={{ rotateY: [-14, 360 * 14], scale: 1, opacity: 1 }}
+            transition={{ duration: 4.05, ease: [0.18, 0.72, 0.16, 0.99] }}
+            className="absolute inset-0 origin-center [transform-style:preserve-3d]"
           >
-            <div className="flex items-center gap-3 opacity-95">
-              <div className="h-10 w-10 text-red-200">
-                <WolfIcon />
-              </div>
-              <Rabbit className="h-10 w-10 text-sky-200" strokeWidth={1.5} />
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-amber-500/65 bg-gradient-to-br from-amber-950 via-slate-900 to-slate-950 text-amber-100 shadow-[0_12px_40px_rgba(245,158,11,0.28)]"
+              style={{
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                transform: 'rotateY(0deg) translateZ(5px)',
+              }}
+            >
+              <span className="text-4xl sm:text-5xl font-black text-amber-200/95 drop-shadow-lg">⚖</span>
+              <span className="mt-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.32em] text-amber-300/90">Priority</span>
             </div>
-            <span className="mt-1.5 text-[9px] font-black uppercase tracking-[0.22em] text-purple-100/95">Preydator</span>
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-amber-500/60 bg-gradient-to-br from-slate-950 via-amber-950/85 to-black text-amber-50 shadow-[0_12px_40px_rgba(251,191,36,0.22)]"
+              style={{
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                transform: 'rotateY(180deg) translateZ(5px)',
+              }}
+            >
+              <span className="text-4xl sm:text-5xl font-black text-amber-200/95 drop-shadow-lg">⚖</span>
+              <span className="mt-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.32em] text-amber-200/88">Priority</span>
+            </div>
           </motion.div>
         )}
 
-        {showUnknown && (
+        {landed && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.92 }}
-            transition={{ delay: 3.6, duration: 0.5 }}
-            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-2xl border border-amber-400/40 bg-black/55 backdrop-blur-[2px]"
+            initial={{ opacity: 0, scale: 0.9, rotateY: -6 }}
+            animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+            transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 overflow-hidden shadow-[0_16px_52px_rgba(0,0,0,0.5)]"
           >
-            <span className="text-3xl text-amber-200/90 drop-shadow-lg">⚖</span>
-            <span className="mt-2 text-[8px] font-black uppercase tracking-widest text-amber-100/85">Seat order only</span>
+            {winnerUid ? (
+              role === 'Predator' ? (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-red-950 via-red-900 to-black" />
+                  <div className="relative z-10 flex flex-col items-center gap-2 text-red-100">
+                    <div className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem] text-red-200">
+                      <WolfIcon />
+                    </div>
+                    <span className="text-sm sm:text-base font-black uppercase tracking-[0.22em] text-red-50">Predator</span>
+                  </div>
+                </>
+              ) : role === 'Prey' ? (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900" />
+                  <div className="relative z-10 flex flex-col items-center gap-2 text-sky-100">
+                    <Rabbit className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem] opacity-95" strokeWidth={1.5} />
+                    <span className="text-sm sm:text-base font-black uppercase tracking-[0.22em] text-sky-100">Prey</span>
+                  </div>
+                </>
+              ) : role === 'Preydator' ? (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-950 via-fuchsia-950 to-slate-950" />
+                  <div className="relative z-10 flex flex-col items-center gap-3 text-purple-50">
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 text-red-200">
+                        <WolfIcon />
+                      </div>
+                      <Rabbit className="h-14 w-14 text-sky-200" strokeWidth={1.5} />
+                    </div>
+                    <span className="text-xs sm:text-sm font-black uppercase tracking-[0.24em] text-purple-100">Preydator</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-black" />
+                  <span className="relative z-10 text-lg font-black uppercase tracking-widest text-white">Leads</span>
+                </>
+              )
+            ) : (
+              <>
+                <div className="absolute inset-0 bg-black/88 backdrop-blur-[2px]" />
+                <div className="relative z-10 flex flex-col items-center gap-1.5 text-center px-2">
+                  <span className="text-4xl sm:text-5xl text-amber-300 drop-shadow-lg">⚖</span>
+                  <span className="text-xs sm:text-sm font-black uppercase tracking-widest text-amber-100/95">Seat order only</span>
+                </div>
+              </>
+            )}
           </motion.div>
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-0.5 text-center px-4">
-        <span className="text-[7px] font-black uppercase tracking-[0.35em] text-amber-200/95">Priority flip</span>
+      <div className="flex flex-col items-center gap-1 text-center px-4">
+        <span className="text-xs sm:text-sm font-black uppercase tracking-[0.28em] text-amber-200/95">Priority flip</span>
         {winnerUid && (
           <motion.span
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 3.9, duration: 0.45 }}
-            className="max-w-[18rem] text-[10px] font-bold uppercase italic tracking-wide text-yellow-300/95"
+            transition={{ delay: 0.12, duration: 0.45 }}
+            className="max-w-[20rem] text-sm sm:text-base font-bold uppercase italic tracking-wide text-yellow-300/95 leading-snug"
           >
             {room.players[winnerUid].name} — leads (
             {room.players[winnerUid].role === 'Preydator'
@@ -1404,7 +1461,7 @@ const ResolutionSequence: React.FC<{
         }
         let pauseMs =
           event.type === 'COIN_FLIP'
-            ? 5200
+            ? 5800
             : event.type === 'POWER_DESTROYED'
               ? 1500
               : event.type === 'CARD_EMPOWER' || event.type === 'TARGET_CHANGE'
@@ -1500,8 +1557,8 @@ const ResolutionSequence: React.FC<{
           animate={{ y: 0, opacity: 1 }}
           className="flex flex-col items-center"
         >
-          <div className="flex items-center gap-3">
-            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Table suit</span>
+          <div className="flex items-center gap-3 flex-wrap justify-center">
+            <span className="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-widest">Table suit</span>
             <motion.div
               key={currentTarget || 'none'}
               initial={{ scale: 0.75, opacity: 0.4, filter: 'drop-shadow(0 0 0 rgba(251,191,36,0))' }}
@@ -1511,7 +1568,7 @@ const ResolutionSequence: React.FC<{
             >
               <SuitGlyph suit={currentTarget || 'Hearts'} className="w-[2.35rem] h-[2.35rem] sm:w-11 sm:h-11 drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]" />
             </motion.div>
-            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">this round</span>
+            <span className="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-widest">this round</span>
           </div>
         </motion.div>
       </div>
@@ -1811,6 +1868,11 @@ interface GameInstanceProps {
   isDual?: boolean;
 }
 
+/** UI time to show “deck empty / dealing bones” before the full-screen FAMINE callout */
+const FAMINE_BONE_DEAL_UI_MS = 6400;
+
+type FamineBannerPhase = 'idle' | 'bone_deal' | 'famine_title';
+
 const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const serviceRef = useRef(new GameService());
   const [playerName, setPlayerName] = useState(isDual ? `Tester ${instanceId.slice(-1)}` : '');
@@ -1831,6 +1893,23 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const lastTurnRef = useRef(0);
   const cardSelectionTurnRef = useRef<number | null>(null);
   const myUid = serviceRef.current.getUid();
+  const [famineBannerPhase, setFamineBannerPhase] = useState<FamineBannerPhase>('idle');
+  const famineActivePrev = useRef(false);
+
+  useEffect(() => {
+    if (!room) return;
+    const on = Boolean(room.famineActive);
+    if (!famineActivePrev.current && on) {
+      setFamineBannerPhase('bone_deal');
+      const tid = window.setTimeout(() => setFamineBannerPhase('famine_title'), FAMINE_BONE_DEAL_UI_MS);
+      famineActivePrev.current = on;
+      return () => window.clearTimeout(tid);
+    }
+    if (famineActivePrev.current && !on) {
+      setFamineBannerPhase('idle');
+    }
+    famineActivePrev.current = on;
+  }, [room?.famineActive]);
 
   useEffect(() => {
     if (!room || room.status !== 'playing') return;
@@ -2560,10 +2639,28 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
   return (
     <div className="h-full bg-emerald-950/40 relative flex flex-col p-4 overflow-hidden border-x border-emerald-900/50">
-      {room.famineActive && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[240] bg-stone-900/90 border border-stone-500 px-4 py-1 rounded-full">
-          <span className="text-[10px] font-black uppercase tracking-widest text-stone-200">Deck empty · dealing bone cards to even hands</span>
+      {room.famineActive && famineBannerPhase === 'bone_deal' && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[241] bg-stone-900/95 border border-stone-500 px-5 py-2 rounded-full shadow-lg max-w-[min(94vw,32rem)]">
+          <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-stone-100 text-center block">
+            Deck empty · dealing bone cards to even hands
+          </span>
         </div>
+      )}
+      {room.famineActive && famineBannerPhase === 'famine_title' && (
+        <>
+          <div
+            className="pointer-events-none absolute inset-0 z-[233] bg-[radial-gradient(ellipse_85%_65%_at_50%_45%,rgba(120,53,15,0.52),rgba(41,37,36,0.78)_45%,rgba(12,10,9,0.92)_100%)]"
+            aria-hidden
+          />
+          <div className="pointer-events-none absolute top-8 sm:top-10 left-1/2 -translate-x-1/2 z-[239] text-center">
+            <span className="block text-[clamp(2.5rem,10vw,5.5rem)] font-black uppercase tracking-[0.12em] text-amber-950 drop-shadow-[0_4px_0_rgba(254,243,199,0.25),0_0_40px_rgba(251,191,36,0.35)]">
+              FAMINE
+            </span>
+            <span className="mt-2 block text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.35em] text-amber-100/80">
+              The draw pile is gone — bones only
+            </span>
+          </div>
+        </>
       )}
       <DesperationVignette tier={me.desperationTier} totalTiers={room.settings.tiers.length} />
 
@@ -2757,7 +2854,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                  </div>
                )}
 
-               <span className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-400 mb-6 h-4 text-center">
+               <span className="text-base sm:text-2xl md:text-3xl font-black uppercase tracking-[0.18em] sm:tracking-[0.22em] text-yellow-400 mb-8 sm:mb-10 text-center px-2 leading-tight max-w-[min(100%,28rem)]">
                  {room.status === 'powering'
                      ? powerShowdown
                      ? 'Cards locked — choose power effects next'
@@ -2776,11 +2873,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      className="flex flex-col items-center gap-4"
                    >
                      {room.targetSuit && (
-                       <div className="flex flex-col items-center gap-1.5 -mt-2 mb-1">
-                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Table suit</span>
-                         <div className={`flex items-center gap-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)] ${SUIT_COLORS[room.targetSuit]}`}>
+                       <div className="flex flex-col items-center gap-2 -mt-2 mb-2">
+                         <span className="text-sm sm:text-base font-black uppercase tracking-widest text-slate-400">Table suit</span>
+                         <div className={`flex items-center gap-3 sm:gap-4 drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)] ${SUIT_COLORS[room.targetSuit]}`}>
                            <SuitGlyph suit={room.targetSuit} className="w-10 h-10 sm:w-12 sm:h-12" />
-                           <span className="text-sm sm:text-base font-black uppercase tracking-wider">{room.targetSuit}</span>
+                           <span className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight">{room.targetSuit}</span>
                          </div>
                        </div>
                      )}
@@ -2858,7 +2955,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           );
                         })()}
                      </div>
-                     <span className={`text-xs font-black uppercase tracking-widest ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''}`}>
+                     <span
+                       className={`text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''}`}
+                     >
                        {room.targetSuit}
                      </span>
                    </motion.div>
@@ -2901,11 +3000,19 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 {/* Captured Assets Section */}
                 {room.lastOutcome.gains && (
                   <>
-                    <AcquiredAssets gains={room.lastOutcome.gains[room.hostUid] || []} side="left" label={room.players[room.hostUid].name} />
-                    <AcquiredAssets 
-                      gains={room.lastOutcome.gains[Object.keys(room.players).find(id => id !== room.hostUid)!] || []} 
-                      side="right" 
-                      label={room.players[Object.keys(room.players).find(id => id !== room.hostUid)!].name} 
+                    <AcquiredAssets
+                      gains={room.lastOutcome.gains[room.hostUid] || []}
+                      side="left"
+                      label={room.players[room.hostUid].name}
+                      acquisitionPace={famineBannerPhase === 'bone_deal' ? 'deliberate' : 'normal'}
+                    />
+                    <AcquiredAssets
+                      gains={
+                        room.lastOutcome.gains[Object.keys(room.players).find((id) => id !== room.hostUid)!] || []
+                      }
+                      side="right"
+                      label={room.players[Object.keys(room.players).find((id) => id !== room.hostUid)!].name}
+                      acquisitionPace={famineBannerPhase === 'bone_deal' ? 'deliberate' : 'normal'}
                     />
                   </>
                 )}

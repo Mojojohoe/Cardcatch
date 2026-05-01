@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePowerTooltipPosition } from '../hooks/usePowerTooltipPosition';
 import { motion } from 'motion/react';
 import {
@@ -284,24 +285,29 @@ export const PowerCardVisual: React.FC<{
         <p className={`text-slate-500 font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em]`}>{card.description}</p>
       </div>
       <div className={`mt-auto pt-3 font-black text-slate-400 uppercase tracking-[0.3em] ${panel || small ? 'hidden' : 'block text-[8px] sm:text-[10px]'}`}>{cardId} / 21</div>
-      {!disabled && (
-        <div
-          ref={popRef}
-          style={tooltipStyle}
-          className="rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md"
-          aria-hidden={!tipOpen}
-        >
-          <div className="flex gap-3 items-start text-left">
-            <div className="shrink-0 rounded-lg bg-slate-900 p-2 border border-slate-700">
-              <IconComponent className="text-yellow-400" size={panel ? 24 : small ? 20 : 26} />
+      {!disabled &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={popRef}
+            style={tooltipStyle}
+            className="rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md"
+            aria-hidden={!tipOpen}
+          >
+            <div className="flex gap-3 items-start text-left">
+              <div className="shrink-0 rounded-lg bg-slate-900 p-2 border border-slate-700">
+                <IconComponent className="text-yellow-400" size={panel ? 24 : small ? 20 : 26} />
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-yellow-400/95 font-black text-[11px] uppercase tracking-wide border-b border-yellow-500/25 pb-1 mb-1.5">
+                  {card.name}
+                </p>
+                <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{card.description}</p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-yellow-400/95 font-black text-[11px] uppercase tracking-wide border-b border-yellow-500/25 pb-1 mb-1.5">{card.name}</p>
-              <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{card.description}</p>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </motion.div>
   );
 };

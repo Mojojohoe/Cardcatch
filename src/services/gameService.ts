@@ -2054,7 +2054,16 @@ export class GameService {
       }
     });
 
-    // Generic outcome gains application.
+    const hostUid = roomData.hostUid;
+    const guestUid = uids.find(id => id !== hostUid)!;
+
+    /** Deck pulls from numbered draws + winner “standard”; host and guest alternate so neither eats the deck first. Shortfall deals random Bones-* cards. */
+    const deckPullBudget: Record<string, number> = {};
+    uids.forEach((uid) => {
+      deckPullBudget[uid] = 0;
+    });
+
+    // Generic outcome gains application (deck pulls aggregated into deckPullBudget and resolved below).
     uids.forEach(uid => {
       const uidGains = outcome.gains?.[uid] || [];
       uidGains.forEach(gain => {
@@ -2066,15 +2075,13 @@ export class GameService {
           if (gain.id === 'random-power') {
             if (powerDeck.length > 0) updatedPlayers[uid].powerCards.push(powerDeck.splice(0, 1)[0]);
           } else if (gain.id === 'standard') {
-            if (newDeck.length > 0) updatedPlayers[uid].hand.push(newDeck.splice(0, 1)[0]);
+            deckPullBudget[uid] += 1;
           } else if (gain.id === 'new-card') {
             const s = SUITS[Math.floor(Math.random() * SUITS.length)];
             const v = VALUES[Math.floor(Math.random() * VALUES.length)];
             updatedPlayers[uid].hand.push(`${s}-${v}`);
           } else if (typeof gain.id === 'number' && gain.id > 0) {
-            for (let i = 0; i < gain.id; i++) {
-              if (newDeck.length > 0) updatedPlayers[uid].hand.push(newDeck.splice(0, 1)[0]);
-            }
+            deckPullBudget[uid] += gain.id;
           } else if (typeof gain.id === 'number' && gain.id < 0) {
             const removeCount = Math.abs(gain.id);
             for (let i = 0; i < removeCount; i++) {
@@ -2086,6 +2093,31 @@ export class GameService {
         }
       });
     });
+
+    const boneSubstitutionGains: { uid: string; id: string }[] = [];
+    const dealOneDeckOrBone = (targetUid: string) => {
+      if (newDeck.length > 0) {
+        updatedPlayers[targetUid].hand.push(newDeck.shift()!);
+        return;
+      }
+      const val = VALUES[Math.floor(Math.random() * VALUES.length)];
+      const cid = `Bones-${val}`;
+      updatedPlayers[targetUid].hand.push(cid);
+      boneSubstitutionGains.push({ uid: targetUid, id: cid });
+    };
+
+    const turnOrder = [hostUid, guestUid];
+    while ((deckPullBudget[hostUid] ?? 0) > 0 || (deckPullBudget[guestUid] ?? 0) > 0) {
+      let moved = false;
+      for (const uid of turnOrder) {
+        if ((deckPullBudget[uid] ?? 0) <= 0) continue;
+        deckPullBudget[uid] -= 1;
+        dealOneDeckOrBone(uid);
+        moved = true;
+        break;
+      }
+      if (!moved) break;
+    }
 
     const availableSuits = [...(roomData.availableSuits || SUITS)];
     uids.forEach(uid => {
@@ -2139,9 +2171,22 @@ export class GameService {
       else if (updatedPlayers[p1Uid].hand.length === 0 && updatedPlayers[p2Uid].hand.length === 0 && outcome.winnerUid !== 'draw') winner = outcome.winnerUid;
     }
 
+    let nextOutcome = outcome;
+    if (boneSubstitutionGains.length > 0 && outcome.gains) {
+      const gainsClone = Object.fromEntries(
+        Object.entries(outcome.gains).map(([uid, arr]) => [uid, [...arr]])
+      ) as typeof outcome.gains;
+      boneSubstitutionGains.forEach(({ uid, id }) => {
+        if (!gainsClone[uid]) gainsClone[uid] = [];
+        gainsClone[uid].push({ type: 'card', id });
+      });
+      nextOutcome = { ...outcome, gains: gainsClone };
+    }
+
     return {
       ...roomData,
       players: updatedPlayers,
+      lastOutcome: nextOutcome,
       status: nextStatus,
       winner,
       currentTurn: roomData.currentTurn + 1,

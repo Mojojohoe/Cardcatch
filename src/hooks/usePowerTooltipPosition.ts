@@ -22,11 +22,12 @@ export function usePowerTooltipPosition(
     const vh = window.innerHeight;
 
     let w = FALLBACK_POP_W;
-    let h = 140;
-    if (pop && pop.offsetParent !== null && pop.getClientRects().length > 0) {
-      const pr = pop.getBoundingClientRect();
-      if (pr.width > 40) w = pr.width;
-      if (pr.height > 40) h = pr.height;
+    let h = 160;
+    // `position: fixed` tooltip nodes usually have offsetParent === null; still measure rects.
+    const pr = pop?.getBoundingClientRect();
+    if (pr && Number.isFinite(pr.width) && Number.isFinite(pr.height) && pr.width > 12 && pr.height > 12) {
+      w = pr.width;
+      h = pr.height;
     }
 
     let left = r.left + r.width / 2 - w / 2;
@@ -61,14 +62,24 @@ export function usePowerTooltipPosition(
   }, [open, clamp]);
 
   if (!open || !xy) {
+    // Avoid huge negative coordinates — those extend scroll extents and clash with ancestor transforms.
     return {
       position: 'fixed' as const,
-      left: '-10000px',
-      top: '-10000px',
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0,
+      margin: 0,
+      padding: 0,
+      border: 'none',
+      outline: 'none',
+      overflow: 'hidden' as const,
+      clipPath: 'inset(50%)',
       visibility: 'hidden' as const,
       opacity: 0,
       pointerEvents: 'none' as const,
-      maxWidth: `min(${FALLBACK_POP_W}px, calc(100vw - ${EDGE * 2}px))`,
+      maxWidth: 0,
+      zIndex: 0,
     };
   }
 
@@ -78,7 +89,7 @@ export function usePowerTooltipPosition(
     left: xy.left,
     width: Math.min(FALLBACK_POP_W, vwSafe() - EDGE * 2),
     maxWidth: `calc(100vw - ${EDGE * 2}px)`,
-    zIndex: 500,
+    zIndex: 10050,
     visibility: 'visible' as const,
     opacity: 1,
     pointerEvents: 'none' as const,
