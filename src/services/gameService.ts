@@ -500,7 +500,9 @@ export class GameService {
       }
     }
     const draftPowerAppearances = settings.disablePowerCards ? [] : Array.from(new Set(draftSets.flat()));
-    const desperationOpenTier = settings.enableDesperation && settings.desperationStarterTierEnabled ? 1 : 0;
+    /** Prey seats: tier 0 on ladder when enabled; −1 = not on ladder until first spin → then tier 1. */
+    const desperationOpenTier =
+      settings.enableDesperation && settings.desperationStarterTierEnabled ? 0 : -1;
 
     this.state = {
       ...this.state,
@@ -1046,11 +1048,13 @@ export class GameService {
     const newDeck = [...this.state.deck];
     let newWinner = this.state.winner;
 
+    const advanceDesperationTier = (t: number) => (t < 0 ? 1 : t + 1);
+
     if (result === 'GAME OVER') {
       newWinner = Object.keys(this.state.players).find(id => id !== uid)!;
       updatedPlayers[uid] = {
         ...player,
-        desperationTier: player.desperationTier + 1,
+        desperationTier: advanceDesperationTier(player.desperationTier),
         desperationSpinning: false
       };
     } else if (result?.startsWith('Gain')) {
@@ -1059,7 +1063,7 @@ export class GameService {
       const cards = newDeck.splice(0, count);
       updatedPlayers[uid] = {
         ...player,
-        desperationTier: player.desperationTier + 1,
+        desperationTier: advanceDesperationTier(player.desperationTier),
         hand: [...player.hand, ...cards],
         desperationSpinning: false,
         desperationResult: null
@@ -1067,7 +1071,7 @@ export class GameService {
     } else {
       updatedPlayers[uid] = {
         ...player,
-        desperationTier: player.desperationTier + 1,
+        desperationTier: advanceDesperationTier(player.desperationTier),
         desperationSpinning: false,
         // Keep desperationResult so it can be seen on Game Over screen
       };
@@ -1110,8 +1114,10 @@ export class GameService {
     const initialCardsPlayed = { ...engageLocks };
     let c1 = players[p1Uid].currentMove!;
     let c2 = players[p2Uid].currentMove!;
-    let power1 = players[p1Uid].currentPowerCard;
-    let power2 = players[p2Uid].currentPowerCard;
+    const committedPower1 = players[p1Uid].currentPowerCard;
+    const committedPower2 = players[p2Uid].currentPowerCard;
+    let power1 = committedPower1;
+    let power2 = committedPower2;
     const pendingDecisions = roomData.pendingPowerDecisions || {};
     const p1Decision = pendingDecisions[p1Uid];
     const p2Decision = pendingDecisions[p2Uid];
@@ -1140,7 +1146,19 @@ export class GameService {
     const resolvePowerPre = (pUid: string, oUid: string, p: number | null, oPower: number | null) => {
       if (p === 16) { // Tower
         if (oPower !== null && oPower !== 16) {
-          events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 16, message: `${players[pUid].name}'s Tower blocks ${players[oUid].name}'s power!` });
+          const destroyedName = MAJOR_ARCANA[oPower]?.name ?? `Power ${oPower}`;
+          events.push({
+            type: 'POWER_TRIGGER',
+            uid: pUid,
+            powerCardId: 16,
+            message: `${players[pUid].name}'s Tower blocks ${players[oUid].name}'s power card.`,
+          });
+          events.push({
+            type: 'POWER_DESTROYED',
+            uid: oUid,
+            powerCardId: oPower,
+            message: `${players[oUid].name}'s ${destroyedName} is destroyed.`,
+          });
           blockedPowers[oUid] = true;
           if (pUid === p1Uid) power2 = null;
           else power1 = null;
@@ -1191,7 +1209,7 @@ export class GameService {
             type: 'POWER_TRIGGER',
             uid,
             powerCardId: 2,
-            message: `${players[uid].name} reads High Priestess: ${oppName} committed no Major and is carrying no spare Major Arcana.`
+            message: `${players[uid].name} (High Priestess): ${oppName} played no power card and has no spare power cards to reveal.`
           });
         } else if (typeof decision?.priestessPeekStashPowerId === 'number') {
           const peek = MAJOR_ARCANA[decision.priestessPeekStashPowerId];
@@ -1199,7 +1217,7 @@ export class GameService {
             type: 'POWER_TRIGGER',
             uid,
             powerCardId: 2,
-            message: `${players[uid].name} reads High Priestess: ${peek.name} (${oppName}'s bag, not counting this trick's play).`
+            message: `${players[uid].name} (High Priestess): glimpsed ${peek.name} among ${oppName}'s spare power cards.`
           });
         }
         return;
@@ -1209,10 +1227,10 @@ export class GameService {
         type: 'POWER_TRIGGER',
         uid,
         powerCardId: 2,
-        message: `${players[uid].name} reads the High Priestess: ${oppName} is committing a Major Arcana${
+        message: `${players[uid].name} (High Priestess): ${oppName} played a power card${
           decision?.priestessPowerCandidates?.length === 3
-            ? ' — three plausible majors from tonight’s draft are shown on-screen.'
-            : ' this trick.'
+            ? ' — three draft candidates are shown.'
+            : '.'
         }`
       });
       if (finalCard !== locked) {
@@ -1257,7 +1275,13 @@ export class GameService {
       if (decision.selectedOption === 'FROGIFY') {
         if (uid === p1Uid) c2 = 'Frogs-1';
         else c1 = 'Frogs-1';
-        events.push({ type: 'TRANSFORM', uid: oppUid, cardId: 'Frogs-1', message: `${players[uid].name} casts Frogs and warps the opposing card!` });
+        events.push({
+          type: 'TRANSFORM',
+          uid: oppUid,
+          cardId: 'Frogs-1',
+          powerCardId: 1,
+          message: `${players[uid].name} casts Frogs and warps the opposing card!`,
+        });
       }
     };
 
@@ -1374,11 +1398,23 @@ export class GameService {
       const pc2 = parseCard(c2);
       if (!pc1.isJoker && pc1.suit !== 'Stars') {
         c1 = `Stars-${pc1.value}`;
-        events.push({ type: 'TRANSFORM', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name}'s card became a Star!` });
+        events.push({
+          type: 'TRANSFORM',
+          uid: p1Uid,
+          cardId: c1,
+          powerCardId: 17,
+          message: `${players[p1Uid].name}'s card became a Star!`,
+        });
       }
       if (!pc2.isJoker && pc2.suit !== 'Stars') {
         c2 = `Stars-${pc2.value}`;
-        events.push({ type: 'TRANSFORM', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name}'s card became a Star!` });
+        events.push({
+          type: 'TRANSFORM',
+          uid: p2Uid,
+          cardId: c2,
+          powerCardId: 17,
+          message: `${players[p2Uid].name}'s card became a Star!`,
+        });
       }
     }
 
@@ -1444,7 +1480,11 @@ export class GameService {
     // Phase 3: Resolution
     if (power1 === 14 || power2 === 14) {
         winnerUid = 'draw';
-        events.push({ type: 'POWER_TRIGGER', message: 'Temperance forced transparency and balance.' });
+        events.push({
+          type: 'POWER_TRIGGER',
+          powerCardId: 14,
+          message: 'Temperance forced transparency and balance.',
+        });
     } else {
         const evalClash = (cr1: string, cr2: string) => {
           const pr1 = parseCard(cr1);
@@ -1593,14 +1633,40 @@ export class GameService {
               message: `${players[winnerUid].name} wins the duel of Death (fresh flip — ${coinFlip}).`
             });
           }
+          events.push({
+            type: 'POWER_TRIGGER',
+            uid: winnerUid,
+            powerCardId: 13,
+            message: `${players[winnerUid].name}'s Death wins the duel.`
+          });
         } else {
-          if (power1 === 13 && !blockedPowers[p1Uid]) winnerUid = p1Uid;
-          if (power2 === 13 && !blockedPowers[p2Uid]) winnerUid = p2Uid;
+          if (power1 === 13 && !blockedPowers[p1Uid]) {
+            winnerUid = p1Uid;
+            events.push({
+              type: 'POWER_TRIGGER',
+              uid: p1Uid,
+              powerCardId: 13,
+              message: `${players[p1Uid].name}'s Death claims the round.`
+            });
+          }
+          if (power2 === 13 && !blockedPowers[p2Uid]) {
+            winnerUid = p2Uid;
+            events.push({
+              type: 'POWER_TRIGGER',
+              uid: p2Uid,
+              powerCardId: 13,
+              message: `${players[p2Uid].name}'s Death claims the round.`
+            });
+          }
         }
 
         if (power1 === 20 || power2 === 20) {
           if (!(power1 === 20 && power2 === 20)) {
-            events.push({ type: 'POWER_TRIGGER', message: `Judgement has inverted the fate!` });
+            events.push({
+              type: 'POWER_TRIGGER',
+              powerCardId: 20,
+              message: `Judgement has inverted the fate!`,
+            });
             if (winnerUid === p1Uid) winnerUid = p2Uid;
             else if (winnerUid === p2Uid) winnerUid = p1Uid;
           }
@@ -1621,8 +1687,57 @@ export class GameService {
           events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 7, message: `${players[p2Uid].name}'s Chariot saves the card!` });
         }
 
-        if (power1 === 12) { winnerUid = p2Uid; events.push({ type: 'POWER_TRIGGER', powerCardId: 12, message: `${players[p1Uid].name} forfeits via The Hanged Man.` }); }
-        if (power2 === 12) { winnerUid = p1Uid; events.push({ type: 'POWER_TRIGGER', powerCardId: 12, message: `${players[p2Uid].name} forfeits via The Hanged Man.` }); }
+        const bothHanged =
+          committedPower1 === 12 &&
+          committedPower2 === 12 &&
+          !blockedPowers[p1Uid] &&
+          !blockedPowers[p2Uid];
+
+        if (bothHanged) {
+          if (coinFlip === 'Host') {
+            winnerUid = p1Uid;
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${players[p1Uid].name} wins the twin Hanged Man tie (initiative ${coinFlip}).`,
+            });
+          } else if (coinFlip === 'Opponent') {
+            winnerUid = p2Uid;
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${players[p2Uid].name} wins the twin Hanged Man tie (initiative ${coinFlip}).`,
+            });
+          } else {
+            const hostWins = Math.random() > 0.5;
+            coinFlip = hostWins ? 'Host' : 'Opponent';
+            winnerUid = hostWins ? p1Uid : p2Uid;
+            events.push({
+              type: 'COIN_FLIP',
+              message: `${players[winnerUid].name} wins the twin Hanged Man tie (fresh flip — ${coinFlip}).`,
+            });
+          }
+          events.push({
+            type: 'POWER_TRIGGER',
+            powerCardId: 12,
+            message: `${players[p1Uid].name} and ${players[p2Uid].name} both played The Hanged Man.`,
+          });
+        } else {
+          if (power1 === 12 && !blockedPowers[p1Uid]) {
+            winnerUid = p2Uid;
+            events.push({
+              type: 'POWER_TRIGGER',
+              powerCardId: 12,
+              message: `${players[p1Uid].name} forfeits via The Hanged Man.`,
+            });
+          }
+          if (power2 === 12 && !blockedPowers[p2Uid]) {
+            winnerUid = p1Uid;
+            events.push({
+              type: 'POWER_TRIGGER',
+              powerCardId: 12,
+              message: `${players[p2Uid].name} forfeits via The Hanged Man.`,
+            });
+          }
+        }
     }
 
     // Hierophant 5
@@ -1645,7 +1760,9 @@ export class GameService {
        const wVal = getCardValue(winnerUid === p1Uid ? c1 : c2);
        const lVal = getCardValue(winnerUid === p1Uid ? c2 : c1);
 
-       if (power1 === 12 || power2 === 12) finalMessage = `${wName} takes the round by sacrifice!`;
+       const hanged1 = committedPower1 === 12 && !blockedPowers[p1Uid];
+       const hanged2 = committedPower2 === 12 && !blockedPowers[p2Uid];
+       if (hanged1 || hanged2) finalMessage = `${wName} takes the round (Hanged Man).`;
        else if (power1 === 20 || power2 === 20) finalMessage = `Judgement declares ${wName} the survivor!`;
        else if (wCard.isJoker && !lCard.isJoker) {
          if (lCard.suit === targetSuit) finalMessage = `${wName}'s Joker was caught by the Target Suit!`;
@@ -1677,8 +1794,8 @@ export class GameService {
       gains[p2Uid].push({ type: 'card', id: c1 });
       gains[p2Uid].push({ type: 'card', id: c2 });
     }
-    if (power1 === 12) gains[p1Uid].push({ type: 'draw', id: 3 });
-    if (power2 === 12) gains[p2Uid].push({ type: 'draw', id: 3 });
+    if (committedPower1 === 12 && !blockedPowers[p1Uid]) gains[p1Uid].push({ type: 'draw', id: 3 });
+    if (committedPower2 === 12 && !blockedPowers[p2Uid]) gains[p2Uid].push({ type: 'draw', id: 3 });
     if (power1 === 2 && winnerUid === p2Uid) gains[p1Uid].push({ type: 'draw', id: 1 });
     if (power2 === 2 && winnerUid === p1Uid) gains[p2Uid].push({ type: 'draw', id: 1 });
     if (power1 === 19) gains[p1Uid].push({ type: 'card', id: c1 }); // Copy own card
@@ -1710,11 +1827,12 @@ export class GameService {
       message: finalMessage,
       cardsPlayed: { [p1Uid]: c1, [p2Uid]: c2 },
       initialCardsPlayed,
-      powerCardsPlayed: { 
-        [p1Uid]: power1 !== null ? MAJOR_ARCANA[power1].name : 'None', 
-        [p2Uid]: power2 !== null ? MAJOR_ARCANA[power2].name : 'None' 
+      powerCardsPlayed: {
+        [p1Uid]: committedPower1 !== null ? MAJOR_ARCANA[committedPower1].name : 'None',
+        [p2Uid]: committedPower2 !== null ? MAJOR_ARCANA[committedPower2].name : 'None',
       },
-      powerCardIdsPlayed: { [p1Uid]: power1, [p2Uid]: power2 },
+      powerCardIdsPlayed: { [p1Uid]: committedPower1, [p2Uid]: committedPower2 },
+      powerCardTowerBlocked: { [p1Uid]: blockedPowers[p1Uid], [p2Uid]: blockedPowers[p2Uid] },
       coinFlip,
       events,
       summonedCards,
@@ -1756,6 +1874,7 @@ export class GameService {
 
     // Vision power (Hierophant)
     const setVisionIntel = (pUid: string, oUid: string) => {
+      if (outcome.powerCardTowerBlocked?.[pUid]) return;
       const pPower = outcome.powerCardIdsPlayed[pUid];
       if (pPower === 5) { // 5: Hierophant
         updatedPlayers[pUid].secretIntel = {
@@ -1771,11 +1890,13 @@ export class GameService {
     const winnerUid = outcome.winnerUid;
     const temperanceActive = Object.values(outcome.powerCardIdsPlayed).includes(14);
     
-    // Special power cards after round
+    // Special power cards after round (gains[] handles draw counts incl. Hanged Man +3)
     uids.forEach(uid => {
       const power = outcome.powerCardIdsPlayed[uid];
       const oUid = uids.find(id => id !== uid)!;
       void oUid;
+
+      if (outcome.powerCardTowerBlocked?.[uid]) return;
 
       // Empress: Collect Both
       if (power === 3) {
@@ -1797,11 +1918,6 @@ export class GameService {
         const played = outcome.cardsPlayed[uid];
         updatedPlayers[uid].hand.push(played);
       }
-      
-      if (power === 12) { // Hanged Man: Gain 3
-        updatedPlayers[uid].hand.push(...newDeck.splice(0, 3));
-      }
-      
     });
 
     // Generic outcome gains application.

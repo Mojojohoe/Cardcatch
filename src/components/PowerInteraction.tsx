@@ -87,7 +87,7 @@ export const FortuneWheelVisual: React.FC<{
       </motion.div>
       <div className="absolute inset-0 flex items-center justify-center z-10">
         <div className="w-16 h-16 rounded-full bg-amber-700 border-4 border-amber-300 flex items-center justify-center">
-          <span className="text-[10px] font-black text-black uppercase">Fortune</span>
+          <span className="text-[10px] font-black text-black uppercase">Wheel</span>
         </div>
       </div>
     </div>
@@ -108,11 +108,11 @@ export const PowerDecisionModal: React.FC<{
   const isPriestess = decision.powerCardId === 2;
 
   const optionMeta: Record<string, { title: string; description: string }> = {
-    STEAL_JOKER: { title: 'Steal Joker', description: 'Take one Joker from the opponent if they have one.' },
-    FROGIFY: { title: 'Frogify', description: 'Transform opponent played card into Frogs-1.' },
-    DEVIL_KING: { title: 'Royal Pact', description: 'Discard 2 random cards to make your played card a King.' },
-    DEVIL_BLOCK: { title: 'Seal Their Arcana', description: 'Discard 2 random cards to block opponent power this round.' },
-    DEVIL_RANDOMIZE: { title: 'Chaotic Suits', description: 'Discard 2 random cards and randomize both played suits.' }
+    STEAL_JOKER: { title: 'Steal Joker', description: 'Take a Joker from the opponent if they have one.' },
+    FROGIFY: { title: 'Frogify', description: 'Turn the opponent\'s played card into Frogs-1.' },
+    DEVIL_KING: { title: 'Upgrade to King', description: 'Discard 2 cards from hand. Your played card becomes a King.' },
+    DEVIL_BLOCK: { title: 'Block power card', description: 'Discard 2 cards. The opponent\'s power card does nothing this round.' },
+    DEVIL_RANDOMIZE: { title: 'Randomize suits', description: 'Discard 2 cards. Randomize both played suit cards.' },
   };
 
   const spinWheel = () => {
@@ -134,31 +134,37 @@ export const PowerDecisionModal: React.FC<{
     swapCard !== null && swapCard !== locked && priestessHand.some((c) => c === swapCard);
 
   return (
-    <div className="absolute inset-0 z-[260] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4">
-      <div className={`w-full ${isPriestess ? 'max-w-4xl' : 'max-w-xl'} rounded-2xl border border-yellow-500/40 bg-slate-950 p-6 space-y-4 max-h-[min(720px,calc(100vh-48px))] overflow-y-auto`}>
-        <h3 className="text-xl font-black uppercase text-yellow-400">
+    <div className="pointer-events-none absolute inset-0 z-[260] flex flex-col justify-end p-0">
+      <div className="pointer-events-auto w-full max-h-[min(52vh,480px)] sm:max-h-[min(58vh,560px)] flex flex-col rounded-t-3xl border border-yellow-500/45 border-b-0 bg-slate-950/96 backdrop-blur-xl shadow-[0_-20px_60px_rgba(0,0,0,0.55)] mx-auto sm:max-w-2xl lg:max-w-4xl overflow-hidden">
+        <div className="shrink-0 flex justify-center pt-2 pb-1">
+          <div className="h-1 w-14 rounded-full bg-slate-600/70" aria-hidden />
+        </div>
+        <div
+          className={`overflow-y-auto px-4 pb-6 pt-1 space-y-4 flex-1 min-h-0 ${isPriestess ? '' : ''}`}
+        >
+        <h3 className="text-lg sm:text-xl font-black uppercase text-yellow-400">
           {decision.powerCardId === 1
-            ? 'Cast Spell'
+            ? 'Magician'
             : decision.powerCardId === 15
               ? 'Devil Deal'
               : decision.powerCardId === 2
-                ? 'High Priestess reveal'
-                : 'Wheel Of Fortune'}
+                ? 'High Priestess'
+                : 'Wheel of Fortune'}
         </h3>
         {isPriestess && locked ? (
           <div className="space-y-4">
             <p className="text-center text-[11px] sm:text-xs font-bold text-slate-400 leading-relaxed normal-case px-2">
-              Your played card stays locked unless you explicitly swap below. Priestess intel only narrows whether they wired a Major Arcana.
+              Your suit card stays locked unless you swap below. Priestess shows whether they played a power card this round.
             </p>
             <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/40 px-4 py-3 text-center">
-              <p className="text-[11px] font-black uppercase tracking-wider text-indigo-200">
+              <p className="text-[11px] font-black uppercase tracking-wider text-indigo-200 normal-case">
                 {oppUsesPower ? (
                   <>
-                    <span className="text-yellow-300">{oppName}</span> wired a Major Arcana for this trick.
+                    <span className="text-yellow-300">{oppName}</span> played a power card this round.
                   </>
                 ) : (
                   <>
-                    <span className="text-slate-200">{oppName}</span> is not committing a Major Arcana this trick.
+                    <span className="text-slate-200">{oppName}</span> did not play a power card this round.
                   </>
                 )}
               </p>
@@ -167,7 +173,7 @@ export const PowerDecisionModal: React.FC<{
             {oppUsesPower && decision.priestessPowerCandidates && decision.priestessPowerCandidates.length >= 3 && (
               <div className="space-y-3 rounded-xl border border-amber-500/35 bg-black/35 px-3 py-4">
                 <p className="text-center text-[10px] font-bold text-amber-200/95 normal-case px-2">
-                  Dealer shows three plausible Majors pulled from tonight&apos;s draft. One is theirs; the layout is scrambled.
+                  Three candidates from the draft — one is their power card (order is scrambled).
                 </p>
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-5">
                   {decision.priestessPowerCandidates.slice(0, 3).map((id, idx) => (
@@ -185,18 +191,16 @@ export const PowerDecisionModal: React.FC<{
                 <p className="text-[10px] font-bold text-violet-100/95 normal-case px-2 leading-relaxed">
                   {stashEmpty ? (
                     <>
-                      They are not committing a Major this trick, and carry no spare Major in their pile to glimpse.
+                      They did not play a power card and have no spare power cards in hand to reveal.
                     </>
                   ) : stashId !== null ? (
                     <>
-                      They are not committing a Major—you glimpse one Major still tucked in{' '}
+                      They did not play a power card — you see one spare power card they are holding ({' '}
                       <span className="text-yellow-300 font-black">{oppName}</span>
-                      &apos;s pile (excluding anything on the table).
+                      ).
                     </>
                   ) : (
-                    <>
-                      No stash intel this round — confirm below when ready.
-                    </>
+                    <>Confirm when ready.</>
                   )}
                 </p>
                 {stashId !== null && (
@@ -269,7 +273,7 @@ export const PowerDecisionModal: React.FC<{
                 onClick={() => onSubmit('PRIESTESS_RESOLVE')}
                 className="w-full py-3 rounded-xl border border-violet-500/60 bg-violet-900/50 text-violet-100 font-black uppercase text-xs tracking-widest hover:bg-violet-800/55"
               >
-                Continue · Priestess vision recorded
+                Continue
               </button>
             )}
           </div>
@@ -283,8 +287,8 @@ export const PowerDecisionModal: React.FC<{
             >
               Spin Wheel
             </button>
-            <p className="text-center text-amber-300/90 text-xs uppercase tracking-wider font-black">
-              Spin once to resolve in the shared round sequence.
+            <p className="text-center text-amber-300/90 text-xs font-bold normal-case">
+              Spin once — result applies when the round resolves.
             </p>
           </div>
         ) : !isPriestess ? (
@@ -307,6 +311,7 @@ export const PowerDecisionModal: React.FC<{
             ))}
           </div>
         ) : null}
+        </div>
       </div>
     </div>
   );

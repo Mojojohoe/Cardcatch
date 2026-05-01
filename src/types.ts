@@ -54,8 +54,8 @@ export interface GameSettings {
   disablePowerCards: boolean;
   enableDesperation: boolean;
   /**
-   * When desperation is on: if true, the prey/preydator side starts already on “tier 1” (skipped default tier-zero spin).
-   * If false, they start at tier 0 until their first desperation spin bumps them.
+   * When desperation is on: if true, prey seats begin **at desperation tier 0** from deal (on the ladder immediately).
+   * If false, they have **no numbered desperation tier** until their **first in-match** desperation spin, which moves them to tier 1.
    */
   desperationStarterTierEnabled: boolean;
   /**
@@ -76,6 +76,7 @@ export interface PlayerData {
   currentPowerCard: number | null;
   confirmed: boolean;
   readyForNextRound: boolean;
+  /** Ladder step; −1 = not on ladder until first desperation spin (tier 0 disabled in settings). */
   desperationTier: number;
   desperationResult: string | null;
   desperationSpinning: boolean;
@@ -111,6 +112,7 @@ export interface PendingPowerDecision {
 
 export type ResolutionEventType = 
   | 'POWER_TRIGGER' 
+  | 'POWER_DESTROYED'
   | 'CARD_SWAP' 
   | 'CARD_EMPOWER' 
   | 'TARGET_CHANGE' 
@@ -167,6 +169,8 @@ export interface RoomData {
     cardsPlayed: Record<string, string>;
     powerCardsPlayed: Record<string, string>;
     powerCardIdsPlayed: Record<string, number | null>;
+    /** True when that player's committed power was blocked by The Tower (card is still consumed). */
+    powerCardTowerBlocked?: Record<string, boolean>;
     coinFlip?: string; // 'Host' | 'Opponent' winner of initiative
     events: ResolutionEvent[];
     summonedCards?: Record<string, string>; // e.g. Justice summoned card

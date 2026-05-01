@@ -54,7 +54,7 @@ export const WolfIcon = () => (
 );
 
 export const DesperationVignette: React.FC<{ tier: number; totalTiers: number }> = ({ tier, totalTiers }) => {
-  if (tier === 0 || totalTiers === 0) return null;
+  if (tier <= 0 || totalTiers === 0) return null;
   const intensity = Math.min(tier / totalTiers, 1);
   return (
     <div
@@ -212,8 +212,10 @@ export const PowerCardVisual: React.FC<{
   selected?: boolean;
   disabled?: boolean;
   small?: boolean;
-}> = ({ cardId, revealed = true, onClick, selected, disabled, small = false }) => {
+  destroyed?: boolean;
+}> = ({ cardId, revealed = true, onClick, selected, disabled, small = false, destroyed = false }) => {
   const card = MAJOR_ARCANA[cardId];
+  const tip = card ? `${card.name}: ${card.description}` : '';
   const IconComponent = useMemo(() => {
     const icons: Record<string, any> = { Sparkles, Wand2, Eye, Crown, Shield, BookOpen, Heart, RefreshCw, Scale, Anchor, Skull, Waves, Flame, ZapOff, Star, Moon, Sun, Globe, BookType, FastForward, BicepsFlexed, Lamp, Gavel };
     return icons[card.icon] || Sparkles;
@@ -224,18 +226,40 @@ export const PowerCardVisual: React.FC<{
   }
 
   return (
-    <motion.div layout whileHover={!disabled ? { scale: small ? 2.4 : 1.1, zIndex: 200, transition: { type: 'spring', stiffness: 300, damping: 25 } } : {}} onClick={onClick}
-      className={`${small ? 'w-18 h-28 text-[9px]' : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px]'} group relative bg-slate-50 border-4 border-slate-800 rounded-2xl shadow-2xl p-3 flex flex-col items-center text-center justify-between overflow-hidden ${selected ? 'ring-4 ring-yellow-400 border-yellow-500' : ''} ${disabled ? 'opacity-50 grayscale' : 'cursor-pointer'} transition-shadow origin-left`}>
+    <motion.div
+      layout
+      title={tip}
+      whileHover={!disabled ? { scale: small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } } : {}}
+      onClick={onClick}
+      className={`${small ? 'w-18 h-28 text-[9px]' : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px]'} group relative bg-slate-50 border-4 border-slate-800 rounded-2xl shadow-2xl p-3 flex flex-col items-center text-center justify-between overflow-visible ${selected ? 'ring-4 ring-yellow-400 border-yellow-500' : ''} ${disabled ? 'opacity-50 grayscale' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35' : ''} transition-shadow origin-center`}
+    >
+      <div className="absolute top-0 left-0 w-full h-full bg-linear-to-b from-white/20 to-slate-900/5 pointer-events-none rounded-[13px] overflow-hidden" />
       <div className="flex flex-col items-center gap-0.5 z-10 w-full mb-1">
         <span className={`font-black border-b-2 border-slate-800 w-full pb-1 px-1 uppercase tracking-tighter leading-[0.9] text-slate-800 ${small ? 'text-[8px]' : 'text-[18px] sm:text-[32px]'}`}>{card.name}</span>
+        {!small && (
+          <span className="font-mono text-slate-400 font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70">Power card</span>
+        )}
       </div>
-      <div className={`z-10 bg-slate-900 ${small ? 'p-1.5' : 'p-5 sm:p-7'} rounded-full border-2 border-slate-800 shadow-xl group-hover:scale-105 transition-transform my-2`}>
+      <div className={`z-10 bg-slate-900 ${small ? 'p-1.5' : 'p-4 sm:p-6'} rounded-full border-2 border-slate-800 shadow-xl group-hover:scale-105 transition-transform my-2`}>
         <IconComponent className="text-yellow-400" size={small ? 16 : 40} />
       </div>
-      <div className={`text-slate-700 font-bold leading-tight z-10 w-full px-2 mt-auto ${small ? 'hidden' : 'block'}`}>
-        <p className={`italic text-slate-500 font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em]`}>{card.description}</p>
+      <div className={`text-slate-700 font-bold leading-snug z-10 w-full px-2 mt-auto ${small ? 'hidden' : 'block'}`}>
+        <p className={`text-slate-500 font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em]`}>{card.description}</p>
       </div>
       <div className={`mt-auto pt-3 font-black text-slate-400 uppercase tracking-[0.3em] ${small ? 'hidden' : 'block text-[8px] sm:text-[10px]'}`}>{cardId} / 21</div>
+      {!disabled && (
+        <div className="absolute left-1/2 top-full z-[300] mt-2 w-[min(22rem,calc(100vw-1.25rem))] max-w-[calc(100vw-1.25rem)] -translate-x-1/2 rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md pointer-events-none opacity-0 translate-y-1 scale-[0.98] group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 transition-all duration-200 ease-out">
+          <div className="flex gap-3 items-start text-left">
+            <div className="shrink-0 rounded-lg bg-slate-900 p-2 border border-slate-700">
+              <IconComponent className="text-yellow-400" size={small ? 20 : 26} />
+            </div>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="text-yellow-400/95 font-black text-[11px] uppercase tracking-wide border-b border-yellow-500/25 pb-1 mb-1.5">{card.name}</p>
+              <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{card.description}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 };

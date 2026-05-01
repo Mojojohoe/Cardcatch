@@ -51,7 +51,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { GameService, parseCard, DESPERATION_SLICES, desperationSpinAllowed } from './services/gameService';
-import { RoomData, PlayerData, Suit, CARD_UNICODE, SUITS, PlayerRole, Difficulty, GameSettings, MAJOR_ARCANA, PowerCard, ResolutionEventType } from './types';
+import { RoomData, PlayerData, Suit, CARD_UNICODE, SUITS, PlayerRole, Difficulty, GameSettings, MAJOR_ARCANA, PowerCard, ResolutionEvent, ResolutionEventType } from './types';
 import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerInteraction';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { SuitGlyph, SuitWheelMarkerG } from './components/SuitGlyphs';
@@ -90,7 +90,7 @@ function preySideLabel(role: PlayerRole): string {
 }
 
 const DesperationVignette: React.FC<{ tier: number, totalTiers: number }> = ({ tier, totalTiers }) => {
-  if (tier === 0 || totalTiers === 0) return null;
+  if (tier <= 0 || totalTiers === 0) return null;
   const intensity = Math.min(tier / totalTiers, 1);
   return (
     <div 
@@ -287,7 +287,7 @@ const DesperationWheel: React.FC<{
         {showResult && result && (
           <motion.div initial={{ scale: 0.8, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} className="flex flex-col items-center gap-6">
              <div className="flex flex-col items-center">
-               <span className="text-[11px] font-black text-purple-500 uppercase tracking-[0.5em] mb-2">{isSpectator ? "OPPONENT DRAWN" : "OUTCOME ACQUIRED"}</span>
+               <span className="text-[11px] font-black text-purple-500 uppercase tracking-[0.5em] mb-2">{isSpectator ? 'Opponent spun' : 'Result'}</span>
                <div className={`text-5xl sm:text-7xl font-black uppercase tracking-tighter ${result === "GAME OVER" ? "text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.5)]" : "text-yellow-400 drop-shadow-[0_0_30px_rgba(250,204,21,0.5)]"}`}>
                  {result.toUpperCase().replace("GAIN", "DRAW")}
                </div>
@@ -298,7 +298,7 @@ const DesperationWheel: React.FC<{
                  onClick={onResolve}
                  className="bg-white text-emerald-950 px-20 py-4 rounded-full font-black uppercase tracking-[0.1em] text-[15px] transition-all hover:bg-yellow-400 active:scale-95 shadow-[0_0_60px_rgba(255,255,255,0.3)] animate-pulse"
                >
-                 {result === "GAME OVER" ? "TERMINATE" : "EXECUTE RECOVERY"}
+                 {result === 'GAME OVER' ? 'End game' : 'Continue'}
                </button>
              )}
           </motion.div>
@@ -307,9 +307,11 @@ const DesperationWheel: React.FC<{
         {!isSpinning && !result && !isSpectator && (
           <div className="flex flex-col items-center gap-4">
             <div className="px-6 py-2 bg-purple-900/30 rounded-full border border-purple-500/20">
-              <span className="text-[12px] font-black text-purple-400 uppercase tracking-[0.2em]">PROTOCOL DEPTH: {currentTier} / {tiers.length}</span>
+              <span className="text-[12px] font-black text-purple-400 uppercase tracking-[0.2em]">
+                Desperation {currentTier} / {tiers.length}
+              </span>
             </div>
-            <p className="text-[11px] text-emerald-600 font-bold uppercase tracking-widest">{tiers[currentTier-1]}</p>
+            <p className="text-[11px] text-emerald-600 font-bold uppercase tracking-widest">{tiers[currentTier - 1]}</p>
             <button onClick={onClose} className="text-[10px] font-black text-emerald-800 uppercase hover:text-white transition-all flex items-center gap-2 group">
               <RotateCcw className="w-4 h-4 group-hover:rotate-[-90deg] transition-transform" /> ABORT
             </button>
@@ -329,6 +331,9 @@ interface CardVisualProps {
   role?: PlayerRole;
   delay?: number;
   noAnimate?: boolean;
+  /** Round-resolution entrance: card lifts from below like drawing from the deck. */
+  presentation?: 'default' | 'deckPull' | 'none';
+  deckPullSide?: 'left' | 'right';
 }
 
 const WolfIcon = () => (
@@ -339,15 +344,41 @@ const WolfIcon = () => (
 );
 
 const CardVisual: React.FC<CardVisualProps> = (props) => {
-  const { card, selected, onClick, disabled, revealed = true, role, delay = 0, noAnimate = false } = props;
+  const {
+    card,
+    selected,
+    onClick,
+    disabled,
+    revealed = true,
+    role,
+    delay = 0,
+    noAnimate = false,
+    presentation = 'default',
+    deckPullSide = 'left',
+  } = props;
   const { suit, value, isJoker } = useMemo(() => (revealed ? parseCard(card) : { suit: '', value: '', isJoker: false }), [card, revealed]);
   const isMoonSuit = suit === 'Moons';
   
-  const entrance = noAnimate ? {} : {
-    initial: { x: 300, y: -100, opacity: 0, rotate: 45, scale: 0.5 },
-    animate: { x: 0, y: 0, opacity: 1, rotate: 0, scale: 1 },
-    transition: { type: "spring", damping: 20, stiffness: 100, delay }
-  };
+  const entrance =
+    noAnimate || presentation === 'none'
+      ? {}
+      : presentation === 'deckPull'
+        ? {
+            initial: {
+              y: 130,
+              opacity: 0,
+              rotateX: 22,
+              rotateZ: deckPullSide === 'left' ? -6 : 6,
+              scale: 0.82,
+            },
+            animate: { y: 0, opacity: 1, rotateX: 0, rotateZ: 0, scale: 1 },
+            transition: { duration: 0.58, delay, ease: [0.22, 1, 0.36, 1] },
+          }
+        : {
+            initial: { x: 300, y: -100, opacity: 0, rotate: 45, scale: 0.5 },
+            animate: { x: 0, y: 0, opacity: 1, rotate: 0, scale: 1 },
+            transition: { type: 'spring', damping: 20, stiffness: 100, delay },
+          };
 
   if (!revealed) {
     const isPredator = role === 'Predator';
@@ -384,11 +415,13 @@ const CardVisual: React.FC<CardVisualProps> = (props) => {
     <motion.div
       layout
       {...entrance}
+      style={{ transformPerspective: presentation === 'deckPull' ? 900 : undefined }}
       whileHover={!disabled ? { y: -10, zIndex: 50, scale: 1.05 } : {}}
       whileTap={!disabled ? { scale: 0.95 } : {}}
       onClick={onClick}
       className={`
         w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg shadow-xl flex flex-col justify-between p-2 cursor-pointer relative overflow-hidden transition-all
+        ${presentation === 'deckPull' ? 'perspective-[900px] origin-bottom' : ''}
         ${isMoonSuit ? 'bg-black' : 'bg-white'}
         ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : 'border-gray-200'}
         ${disabled ? 'opacity-60 grayscale cursor-not-allowed' : ''}
@@ -419,9 +452,12 @@ const PowerCardVisual: React.FC<{
   onClick?: () => void, 
   selected?: boolean,
   disabled?: boolean,
-  small?: boolean 
-}> = ({ cardId, revealed = true, onClick, selected, disabled, small = false }) => {
+  small?: boolean;
+  /** Tower blocked — greyed but hover still shows text */
+  destroyed?: boolean;
+}> = ({ cardId, revealed = true, onClick, selected, disabled, small = false, destroyed = false }) => {
   const card = MAJOR_ARCANA[cardId];
+  const tip = card ? `${card.name}: ${card.description}` : '';
   
   const IconComponent = useMemo(() => {
     const iconName = card.icon;
@@ -456,51 +492,65 @@ const PowerCardVisual: React.FC<{
   return (
     <motion.div 
       layout
+      title={tip}
       whileHover={!disabled ? { 
-        scale: small ? 2.4 : 1.1, 
+        scale: small ? 1.14 : 1.06, 
         zIndex: 200,
-        transition: { type: 'spring', stiffness: 300, damping: 25 }
+        transition: { type: 'spring', stiffness: 380, damping: 28 }
       } : {}}
       onClick={onClick}
       className={`
         ${small ? 'w-18 h-28 text-[9px]' : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px]'}
-        group relative bg-slate-50 border-4 border-slate-800 rounded-2xl shadow-2xl p-3 flex flex-col items-center text-center justify-between overflow-hidden
+        group relative bg-slate-50 border-4 border-slate-800 rounded-2xl shadow-2xl p-3 flex flex-col items-center text-center justify-between overflow-visible
         ${selected ? 'ring-4 ring-yellow-400 border-yellow-500' : ''}
         ${disabled ? 'opacity-50 grayscale' : 'cursor-pointer'}
-        transition-shadow origin-left
+        ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''}
+        transition-shadow origin-center
       `}
     >
-      <div className="absolute top-0 left-0 w-full h-full bg-linear-to-b from-white/20 to-slate-900/5 pointer-events-none" />
+      <div className="absolute top-0 left-0 w-full h-full bg-linear-to-b from-white/20 to-slate-900/5 pointer-events-none rounded-[13px] overflow-hidden" />
       
       <div className="flex flex-col items-center gap-0.5 z-10 w-full mb-1">
          <span className={`font-black border-b-2 border-slate-800 w-full pb-1 px-1 uppercase tracking-tighter leading-[0.9] text-slate-800 ${small ? 'text-[8px]' : 'text-[18px] sm:text-[32px]'}`}>
             {card.name}
          </span>
-         <span className="font-mono text-slate-400 font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70 mt-1">Major Arcana</span>
+         <span className="font-mono text-slate-400 font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70 mt-1">Power card</span>
       </div>
 
-      <div className={`z-10 bg-slate-900 ${small ? 'p-1.5' : 'p-5 sm:p-7'} rounded-full border-2 border-slate-800 shadow-xl group-hover:scale-105 transition-transform my-2`}>
+      <div className={`z-10 bg-slate-900 ${small ? 'p-1.5' : 'p-4 sm:p-6'} rounded-full border-2 border-slate-800 shadow-xl group-hover:scale-105 transition-transform my-2`}>
         <IconComponent className="text-yellow-400" size={small ? 16 : 40} />
       </div>
 
-      <div className={`text-slate-700 font-bold leading-tight z-10 w-full px-2 mt-auto ${small ? 'hidden' : 'block'}`}>
-        <p className={`italic text-slate-500 font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em]`}>{card.description}</p>
+      <div className={`text-slate-700 font-bold leading-snug z-10 w-full px-2 mt-auto ${small ? 'hidden' : 'block'}`}>
+        <p className={`text-slate-500 font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em]`}>{card.description}</p>
       </div>
 
       <div className={`mt-auto pt-3 font-black text-slate-400 uppercase tracking-[0.3em] ${small ? 'hidden' : 'block text-[8px] sm:text-[10px]'}`}>
          {cardId} / 21
       </div>
 
-      {/* Enlarged Overlay for Hover Reading */}
-      <div className="absolute inset-0 bg-slate-900/98 text-white p-2 sm:p-4 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
-        <IconComponent className="text-yellow-400 mb-2" size={small ? 16 : 28} />
-        <span className={`text-yellow-400 font-black mb-1 uppercase tracking-tighter border-b border-yellow-400/50 w-full pb-0.5 ${small ? 'text-[7px]' : 'text-xs sm:text-base'}`}>
-          {card.name}
+      {!disabled && (
+        <div
+          className={`absolute left-1/2 top-full z-[300] mt-2 w-[min(22rem,calc(100vw-1.25rem))] max-w-[calc(100vw-1.25rem)] -translate-x-1/2 rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md pointer-events-none opacity-0 translate-y-1 scale-[0.98] group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 transition-all duration-200 ease-out ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+        >
+          <div className="flex gap-3 items-start text-left">
+            <div className="shrink-0 rounded-lg bg-slate-900 p-2 border border-slate-700">
+              <IconComponent className="text-yellow-400" size={small ? 20 : 26} />
+            </div>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="text-yellow-400/95 font-black text-[11px] uppercase tracking-wide border-b border-yellow-500/25 pb-1 mb-1.5">
+                {card.name}
+              </p>
+              <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{card.description}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {destroyed && small && (
+        <span className="absolute bottom-0 left-0 right-0 text-[5px] font-black uppercase tracking-tighter text-center text-orange-100 bg-black/60 py-0.5 pointer-events-none z-[60]">
+          Blocked
         </span>
-        <p className={`leading-tight font-medium italic ${small ? 'text-[5px]' : 'text-[9px] sm:text-[11px]'}`}>
-          {card.description}
-        </p>
-      </div>
+      )}
     </motion.div>
   );
 };
@@ -796,7 +846,7 @@ const DevPowerMenu: React.FC<{
           <h3 className="text-yellow-400 font-black uppercase text-sm tracking-[0.2em] flex items-center gap-2">
             <Sparkles className="w-4 h-4" /> Architect Mode
           </h3>
-          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Force inject Major Arcana resonance</span>
+          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Force a power card (dev)</span>
         </div>
         <button 
           onClick={onClose} 
@@ -834,6 +884,86 @@ const DevPowerMenu: React.FC<{
   );
 };
 
+type ResolutionFx =
+  | null
+  | { kind: 'death_slash'; victimUid: string }
+  | { kind: 'tower_shield'; towerUid: string }
+  | { kind: 'fool_swap' }
+  | { kind: 'judgement_flash' }
+  | { kind: 'temperance_balance' }
+  | { kind: 'star_sparkle'; uid: string }
+  | { kind: 'frog_curse'; uid: string }
+  | { kind: 'emperor_glow'; uid: string }
+  | { kind: 'strength_pulse'; uid: string }
+  | { kind: 'lovers_hearts' }
+  | { kind: 'chariot_zip'; uid: string }
+  | { kind: 'hangman_drop'; uid: string }
+  | { kind: 'empress_pull'; uid: string }
+  | { kind: 'hermit_glow'; uid: string }
+  | { kind: 'devil_flame'; uid: string }
+  | { kind: 'justice_echo'; uid: string }
+  | { kind: 'priestess_glimpse'; uid: string }
+  | { kind: 'magician_steal'; uid: string }
+  | { kind: 'wheel_chaos'; uid: string };
+
+function deriveResolutionFx(event: ResolutionEvent, hostUid: string, guestUid: string): ResolutionFx {
+  const otherUid = (uid: string) => (uid === hostUid ? guestUid : hostUid);
+
+  if (event.type === 'POWER_TRIGGER') {
+    const id = event.powerCardId;
+    const uid = event.uid;
+    if (id === 13 && uid) return { kind: 'death_slash', victimUid: otherUid(uid) };
+    if (id === 16 && uid) return { kind: 'tower_shield', towerUid: uid };
+    if (id === 0) return { kind: 'fool_swap' };
+    if (id === 20) return { kind: 'judgement_flash' };
+    if (id === 14) return { kind: 'temperance_balance' };
+    if (id === 4 && uid) return { kind: 'emperor_glow', uid };
+    if (id === 8 && uid) return { kind: 'strength_pulse', uid };
+    if (id === 6) return { kind: 'lovers_hearts' };
+    if (id === 7 && uid) return { kind: 'chariot_zip', uid };
+    if (id === 12 && uid) return { kind: 'hangman_drop', uid };
+    if (id === 3 && uid) return { kind: 'empress_pull', uid };
+    if (id === 9 && uid) return { kind: 'hermit_glow', uid };
+    if (id === 15 && uid) return { kind: 'devil_flame', uid };
+    if (id === 11 && uid) return { kind: 'justice_echo', uid };
+    if (id === 2 && uid) return { kind: 'priestess_glimpse', uid };
+    if (id === 1 && uid) return { kind: 'magician_steal', uid };
+    if (id === 10 && uid) return { kind: 'wheel_chaos', uid };
+    return null;
+  }
+
+  if (event.type === 'TRANSFORM') {
+    if (event.uid && event.powerCardId === 17) return { kind: 'star_sparkle', uid: event.uid };
+    if (event.uid && (event.powerCardId === 1 || (event.cardId?.startsWith('Frogs') ?? false))) {
+      return { kind: 'frog_curse', uid: event.uid };
+    }
+  }
+
+  return null;
+}
+
+function resolutionColumnMotion(fx: ResolutionFx, uid: string) {
+  if (!fx) return {};
+  if (fx.kind === 'fool_swap') return { x: [0, -7, 7, -5, 5, 0], y: [0, 4, -4, 0], rotate: [0, -5, 5, 0] };
+  if (fx.kind === 'death_slash' && fx.victimUid === uid) return { x: [0, -9, 9, -5, 5, 0], scale: [1, 0.94, 1] };
+  if (fx.kind === 'strength_pulse' && fx.uid === uid) return { scale: [1, 1.09, 1] };
+  if (fx.kind === 'emperor_glow' && fx.uid === uid)
+    return { scale: [1, 1.05, 1], filter: ['brightness(1)', 'brightness(1.28)', 'brightness(1)'] };
+  if (fx.kind === 'chariot_zip' && fx.uid === uid) return { x: [0, -14, 6, 0], opacity: [1, 0.82, 1] };
+  if (fx.kind === 'hangman_drop' && fx.uid === uid) return { y: [0, 18, 0], opacity: [1, 0.55, 1] };
+  if (fx.kind === 'empress_pull' && fx.uid === uid) return { scale: [1, 1.06, 1], rotate: [0, 3, 0] };
+  if (fx.kind === 'hermit_glow' && fx.uid === uid)
+    return { filter: ['brightness(1)', 'brightness(1.18)', 'brightness(1)'] };
+  if (fx.kind === 'devil_flame' && fx.uid === uid) return { scale: [1, 1.04, 1], rotate: [0, -2, 2, 0] };
+  if (fx.kind === 'justice_echo' && fx.uid === uid) return { scale: [1, 1.06, 1] };
+  if (fx.kind === 'priestess_glimpse' && fx.uid === uid) return { scale: [1, 1.04, 1] };
+  if (fx.kind === 'magician_steal' && fx.uid === uid) return { rotate: [0, -4, 4, 0] };
+  if (fx.kind === 'wheel_chaos' && fx.uid === uid) return { rotate: [0, -7, 7, -4, 0], x: [0, 4, -4, 0] };
+  if (fx.kind === 'star_sparkle' && fx.uid === uid) return { scale: [1, 1.07, 1] };
+  if (fx.kind === 'frog_curse' && fx.uid === uid) return { scale: [1, 0.96, 1] };
+  return {};
+}
+
 const ResolutionSequence: React.FC<{ 
   room: RoomData, 
   myUid: string, 
@@ -849,16 +979,34 @@ const ResolutionSequence: React.FC<{
     { id: number; message: string; eventType?: ResolutionEventType }
   >([]);
   const [isDone, setIsDone] = useState(false);
+  const [towerScorch, setTowerScorch] = useState<Record<string, boolean>>({});
+  const [resolutionFx, setResolutionFx] = useState<ResolutionFx>(null);
+
+  useEffect(() => {
+    if (!isDone) return;
+    setTowerScorch((prev) => {
+      const next = { ...prev };
+      Object.keys(room.players).forEach((uid) => {
+        if (outcome.powerCardTowerBlocked?.[uid]) next[uid] = true;
+      });
+      return next;
+    });
+  }, [isDone, outcome.powerCardTowerBlocked, room.players]);
 
   useEffect(() => {
     let active = true;
     const processNext = async () => {
       await new Promise(r => setTimeout(r, 800));
       if (!active) return;
+
+      const hostUid = room.hostUid;
+      const guestUid = Object.keys(room.players).find(id => id !== hostUid)!;
       
       const events = outcome.events || [];
       for (let i = 0; i < events.length; i++) {
         const event = events[i];
+        const fx = deriveResolutionFx(event, hostUid, guestUid);
+        setResolutionFx(fx);
         setEventIndex(i);
         setVisibleEvents(prev => [
           ...prev,
@@ -901,26 +1049,44 @@ const ResolutionSequence: React.FC<{
                  }
                }
                const finalCard = outcome.cardsPlayed[event.uid];
-               if (finalCard && finalCard !== currentCards[event.uid]) {
-                  setCurrentCards(prev => ({ ...prev, [event.uid!]: finalCard }));
+               if (finalCard) {
+                  setCurrentCards(prev => {
+                    if (prev[event.uid!] === finalCard) return prev;
+                    return { ...prev, [event.uid!]: finalCard };
+                  });
                }
+            }
+            break;
+          case 'POWER_DESTROYED':
+            if (event.uid) {
+              setTowerScorch((prev) => ({ ...prev, [event.uid!]: true }));
             }
             break;
           case 'COIN_FLIP':
           case 'INTEL_REVEAL':
+            break;
           case 'TRANSFORM':
+            if (event.uid && event.cardId) {
+              setCurrentCards(prev => ({ ...prev, [event.uid!]: event.cardId! }));
+            }
             break;
         }
-        const pauseMs =
+        let pauseMs =
           event.type === 'COIN_FLIP'
             ? 2200
-            : event.type === 'CARD_EMPOWER' || event.type === 'TARGET_CHANGE'
-              ? 980
-              : event.type === 'POWER_TRIGGER'
-                ? 1050
-                : 1150;
+            : event.type === 'POWER_DESTROYED'
+              ? 1500
+              : event.type === 'CARD_EMPOWER' || event.type === 'TARGET_CHANGE'
+                ? 980
+                : event.type === 'POWER_TRIGGER'
+                  ? 1050
+                  : 1150;
+        if (fx?.kind === 'death_slash' || fx?.kind === 'tower_shield') pauseMs = Math.max(pauseMs, 1380);
+        if (fx?.kind === 'judgement_flash' || fx?.kind === 'temperance_balance') pauseMs = Math.max(pauseMs, 1240);
+        if (fx?.kind === 'fool_swap') pauseMs = Math.max(pauseMs, 1180);
         await new Promise(r => setTimeout(r, pauseMs));
         if (!active) return;
+        setResolutionFx(null);
       }
       
       setCurrentCards(prev => {
@@ -937,15 +1103,67 @@ const ResolutionSequence: React.FC<{
       onComplete();
     };
     processNext();
-    return () => { active = false; };
-  }, [outcome.events, outcome.cardsPlayed]);
+    return () => {
+      active = false;
+      setResolutionFx(null);
+    };
+  }, [outcome.events, outcome.cardsPlayed, room.hostUid, room.players]);
 
   const hostUid = room.hostUid;
   const guestUid = Object.keys(room.players).find(id => id !== hostUid)!;
 
   return (
-    <div className="flex flex-col items-center w-full h-full max-h-screen p-4 sm:p-6 justify-center rounded-2xl border border-slate-800/50 bg-[radial-gradient(ellipse_80%_55%_at_50%_0%,rgba(251,191,36,0.14),transparent_58%),linear-gradient(180deg,#020617_0%,#0f172a_50%,#020617_100%)] shadow-[inset_0_0_100px_rgba(15,23,42,0.55)]">
-      <div className="flex-none mb-4">
+    <div className="relative overflow-hidden flex flex-col items-center w-full h-full max-h-screen p-4 sm:p-6 justify-center rounded-2xl border border-slate-800/50 bg-[radial-gradient(ellipse_80%_55%_at_50%_0%,rgba(251,191,36,0.14),transparent_58%),linear-gradient(180deg,#020617_0%,#0f172a_50%,#020617_100%)] shadow-[inset_0_0_100px_rgba(15,23,42,0.55)]">
+      <AnimatePresence>
+        {resolutionFx?.kind === 'judgement_flash' && (
+          <motion.div
+            key="judgement-flash"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.72, 0.28, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.88 }}
+            className="pointer-events-none absolute inset-0 z-[70] bg-fuchsia-600/35 mix-blend-screen"
+          />
+        )}
+        {resolutionFx?.kind === 'temperance_balance' && (
+          <motion.div
+            key="temperance-balance"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.55, 0.22, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.92 }}
+            className="pointer-events-none absolute inset-0 z-[70] bg-[radial-gradient(ellipse_55%_45%_at_50%_50%,rgba(34,211,238,0.28),transparent_72%)]"
+          />
+        )}
+      </AnimatePresence>
+
+      <div className="relative flex-none mb-4">
+        <AnimatePresence>
+          {resolutionFx?.kind === 'lovers_hearts' && (
+            <>
+              <motion.div
+                key="lover-h1"
+                initial={{ opacity: 0, y: 8, scale: 0.5 }}
+                animate={{ opacity: [0, 1, 0.85], y: [8, -10, -4], scale: [0.5, 1.1, 1] }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.75 }}
+                className="pointer-events-none absolute -left-6 top-1/2 -translate-y-1/2 z-10"
+              >
+                <Heart className="w-5 h-5 text-pink-400 fill-pink-500/35 drop-shadow-[0_0_10px_rgba(244,114,182,0.6)]" />
+              </motion.div>
+              <motion.div
+                key="lover-h2"
+                initial={{ opacity: 0, y: 8, scale: 0.5 }}
+                animate={{ opacity: [0, 1, 0.85], y: [8, -14, -6], scale: [0.5, 1.05, 1] }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.75, delay: 0.06 }}
+                className="pointer-events-none absolute -right-6 top-1/2 -translate-y-1/2 z-10"
+              >
+                <Heart className="w-5 h-5 text-pink-400 fill-pink-500/35 drop-shadow-[0_0_10px_rgba(244,114,182,0.6)]" />
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
         <motion.div 
           initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -979,25 +1197,119 @@ const ResolutionSequence: React.FC<{
             </motion.div>
 
             <div className="relative">
-              <div className="flex items-center gap-2">
-                <motion.div 
-                  key={`${uid}-${currentCards[uid]}`}
-                  initial={{ scale: 0.78, opacity: 0.4, rotateZ: idx === 0 ? -2.5 : 2.5 }}
-                  animate={{
-                    scale: 1,
-                    opacity: 1,
-                    rotateZ: 0
-                  }}
-                  transition={{ type: 'spring', stiffness: 360, damping: 22 }}
-                  className="relative z-10 rounded-xl shadow-[0_0_32px_rgba(250,204,21,0.18)]"
+              <div className="flex items-end gap-2">
+                <motion.div
+                  className="relative z-10 rounded-xl shadow-[0_0_32px_rgba(250,204,21,0.18)] overflow-visible"
+                  animate={resolutionColumnMotion(resolutionFx, uid)}
+                  transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <CardVisual card={currentCards[uid]} revealed />
+                  <CardVisual
+                    card={currentCards[uid]}
+                    revealed
+                    presentation="deckPull"
+                    deckPullSide={idx === 0 ? 'left' : 'right'}
+                    delay={idx * 0.07}
+                  />
+                  <AnimatePresence>
+                    {resolutionFx?.kind === 'death_slash' && resolutionFx.victimUid === uid && (
+                      <motion.div
+                        key="death-slash"
+                        className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-xl"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                      >
+                        <motion.div
+                          className="absolute left-[-28%] top-1/2 h-[7px] w-[155%] origin-center -translate-y-1/2 rotate-[-36deg] bg-linear-to-r from-transparent via-white to-red-600 shadow-[0_0_32px_rgba(239,68,68,1)]"
+                          initial={{ scaleX: 0 }}
+                          animate={{ scaleX: 1 }}
+                          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                        />
+                        <motion.div
+                          className="pointer-events-none absolute inset-0 z-[29] flex rounded-xl overflow-hidden"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.1 }}
+                        >
+                          <motion.div
+                            className="w-1/2 h-full bg-black/50 backdrop-blur-[0.5px]"
+                            initial={{ x: 0 }}
+                            animate={{ x: '-32%' }}
+                            transition={{ delay: 0.15, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                          />
+                          <motion.div
+                            className="w-1/2 h-full bg-black/50 backdrop-blur-[0.5px]"
+                            initial={{ x: 0 }}
+                            animate={{ x: '32%' }}
+                            transition={{ delay: 0.15, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                          />
+                        </motion.div>
+                      </motion.div>
+                    )}
+                    {resolutionFx?.kind === 'tower_shield' && resolutionFx.towerUid === uid && (
+                      <motion.div
+                        key="tower-shield"
+                        className="pointer-events-none absolute inset-[-14px] z-[26] flex items-center justify-center"
+                        initial={{ opacity: 0, scale: 0.65 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+                      >
+                        <div className="absolute inset-2 rounded-full bg-sky-400/20 blur-2xl" />
+                        <Shield className="relative w-[5.25rem] h-[5.25rem] text-sky-200/95 drop-shadow-[0_0_28px_rgba(56,189,248,0.85)]" strokeWidth={1.35} />
+                      </motion.div>
+                    )}
+                    {resolutionFx?.kind === 'star_sparkle' && resolutionFx.uid === uid && (
+                      <motion.div
+                        key="star-sparkle"
+                        className="pointer-events-none absolute -inset-4 z-[24] flex items-center justify-center"
+                        initial={{ opacity: 0, scale: 0.6 }}
+                        animate={{ opacity: 1, scale: 1, rotate: [0, 8, -6, 0] }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.65 }}
+                      >
+                        <Sparkles className="w-[4.5rem] h-[4.5rem] text-amber-300 drop-shadow-[0_0_22px_rgba(253,224,71,0.95)]" />
+                      </motion.div>
+                    )}
+                    {resolutionFx?.kind === 'frog_curse' && resolutionFx.uid === uid && (
+                      <motion.div
+                        key="frog-curse"
+                        className="pointer-events-none absolute inset-0 z-[22] rounded-xl ring-[3px] ring-lime-400/80 shadow-[0_0_36px_rgba(163,230,53,0.55)]"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 1, 0.75] }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.55 }}
+                      />
+                    )}
+                  </AnimatePresence>
                   <div className="absolute -top-2 -right-2 z-20">
                     {outcome.powerCardIdsPlayed[uid] !== null && (
                       <div className="relative">
-                        <div className={`p-1 rounded-full bg-black border border-slate-700 shadow-xl overflow-hidden scale-65 origin-top-right ${outcome.powerCardIdsPlayed[uid] === 15 ? 'ring-2 ring-red-500 animate-pulse' : ''}`}>
-                          <PowerCardVisual cardId={outcome.powerCardIdsPlayed[uid]!} small />
-                        </div>
+                        <motion.div
+                          animate={
+                            towerScorch[uid]
+                              ? {
+                                  scale: [1, 1.08, 0.92],
+                                  filter: [
+                                    'brightness(1) grayscale(0)',
+                                    'brightness(1.35) sepia(0.35)',
+                                    'brightness(0.75) grayscale(1)',
+                                  ],
+                                }
+                              : { scale: 1, filter: 'brightness(1) grayscale(0)' }
+                          }
+                          transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+                          className={`p-1 rounded-full bg-black border border-slate-700 shadow-xl overflow-visible scale-65 origin-top-right ${outcome.powerCardIdsPlayed[uid] === 15 ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
+                        >
+                          <PowerCardVisual
+                            cardId={outcome.powerCardIdsPlayed[uid]!}
+                            small
+                            destroyed={Boolean(
+                              towerScorch[uid] ||
+                                (isDone && outcome.powerCardTowerBlocked?.[uid])
+                            )}
+                          />
+                        </motion.div>
                         <AnimatePresence>
                           {devilStolen[uid] !== undefined && (
                             <motion.div 
@@ -1016,14 +1328,15 @@ const ResolutionSequence: React.FC<{
 
                 <AnimatePresence>
                   {summoned[uid] && (
-                    <motion.div 
-                      initial={{ scale: 0.2, opacity: 0, x: -28, rotateY: -40 }} 
-                      animate={{ scale: 0.75, opacity: 1, x: 0, rotateY: 0 }}
-                      transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-                      className="origin-left"
-                    >
-                      <CardVisual card={summoned[uid]} revealed />
-                    </motion.div>
+                    <div className="origin-left scale-[0.72] sm:scale-[0.78]">
+                      <CardVisual
+                        card={summoned[uid]}
+                        revealed
+                        presentation="deckPull"
+                        deckPullSide={idx === 0 ? 'right' : 'left'}
+                        delay={0.14 + idx * 0.05}
+                      />
+                    </div>
                   )}
                 </AnimatePresence>
               </div>
@@ -1131,7 +1444,7 @@ const DraftingPhase: React.FC<{
           </motion.h2>
           <div className="flex items-center justify-center gap-4">
              <div className="h-px w-20 bg-emerald-800" />
-             <p className="text-sm text-emerald-400 font-black uppercase tracking-[0.4em]">Arcana Phase {currentSetIdx + 1} / 3</p>
+             <p className="text-sm text-emerald-400 font-black uppercase tracking-[0.4em]">Power draft {currentSetIdx + 1} / 3</p>
              <div className="h-px w-20 bg-emerald-800" />
           </div>
         </div>
@@ -1620,8 +1933,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 {room.settings.enableDesperation && (
                   <div className="space-y-3 pt-2">
                     <div className="flex items-center justify-between gap-4 pb-2 border-b border-purple-900/40">
-                      <span className="text-[10px] text-purple-100/95 leading-snug">
-                        Bonus: prey starts one desperation step ahead (tier 1). Turn off to begin at tier 0 as usual.
+                      <span className="text-[10px] text-purple-100/95 leading-snug normal-case font-bold">
+                        Tier 0 from deal: when on, prey begin at desperation tier 0. When off, they have no desperation tier until their first in-match spin, which moves them to tier 1.
                       </span>
                       <button
                         type="button"
@@ -1651,7 +1964,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     >
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] font-black text-purple-200 uppercase tracking-wider">
-                          Preydator · desperation seats
+                          Preydator · desperation access
                         </span>
                         <span className="text-[9px] text-purple-400/95 leading-snug normal-case font-bold">
                           Only applies when Host role is Preydator. Outside that, prey-side rules stay default.
@@ -1847,8 +2160,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 {room.settings.enableDesperation && (
                   <>
                     <div className="flex items-center justify-between gap-4 border-t border-purple-900/35 pt-3">
-                      <span className="text-[10px] text-purple-100/95 leading-snug">
-                        Starts one step ahead (tier bonus)
+                      <span className="text-[10px] text-purple-100/95 leading-snug normal-case font-bold">
+                        Tier 0 from deal (prey on ladder at deal)
                       </span>
                       <span className={`text-[10px] font-black shrink-0 ${room.settings.desperationStarterTierEnabled ? 'text-amber-300' : 'text-slate-500'}`}>
                         {room.settings.desperationStarterTierEnabled ? 'On' : 'Off'}
@@ -1968,7 +2281,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           result={me.desperationResult}
           offset={me.desperationOffset}
           tiers={room.settings.tiers}
-          currentTier={me.desperationResult ? me.desperationTier : me.desperationTier + 1}
+          currentTier={
+            me.desperationResult ? me.desperationTier : Math.max(1, me.desperationTier + 1)
+          }
           isSpectator={false}
         />
       )}
@@ -1983,7 +2298,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           result={opponent.desperationResult}
           offset={opponent.desperationOffset}
           tiers={room.settings.tiers}
-          currentTier={opponent.desperationResult ? opponent.desperationTier : opponent.desperationTier + 1}
+          currentTier={
+            opponent.desperationResult
+              ? opponent.desperationTier
+              : Math.max(1, opponent.desperationTier + 1)
+          }
           isSpectator={true}
         />
       )}
@@ -2104,16 +2423,16 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             <div className="flex flex-col items-center transition-all duration-500">
                {opponent?.desperationTier > 0 && (
                  <div className="absolute top-0 flex flex-col items-center gap-1 bg-purple-950/40 border border-purple-800/50 px-4 py-1.5 rounded-full mb-4">
-                    <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest">OPPONENT WHEEL STEP</span>
+                    <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest">Opponent desperation</span>
                     <span className="text-[10px] font-black text-white uppercase">{room.settings.tiers[opponent.desperationTier - 1]}</span>
                  </div>
                )}
 
                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-400 mb-6 h-4 text-center">
                  {room.status === 'powering'
-                   ? powerShowdown
-                     ? 'PLAYS LOCKED — MAJOR SHADOW FALLING…'
-                     : 'RESOLVING POWER CARDS…'
+                     ? powerShowdown
+                     ? 'Cards locked — choose power effects next'
+                     : 'Resolving power cards…'
                    : isWheelSpinning
                      ? 'DRAWING THIS ROUND’S TABLE SUIT…'
                      : 'TABLE SUIT FOR THIS ROUND'}
@@ -2134,7 +2453,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                          {powerShowdown && me.currentPowerCard !== null && (
                            <div className="relative -mt-1 flex flex-col items-center gap-0.5">
                              <PowerCardVisual cardId={0} small revealed={false} />
-                             <span className="text-[6px] font-black uppercase tracking-widest text-slate-500">Major</span>
+                             <span className="text-[6px] font-black uppercase tracking-widest text-slate-500">Power</span>
                            </div>
                          )}
                        </div>
@@ -2144,7 +2463,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                          {powerShowdown && opponent.currentPowerCard !== null && (
                            <div className="relative -mt-1 flex flex-col items-center gap-0.5">
                              <PowerCardVisual cardId={0} small revealed={false} />
-                             <span className="text-[6px] font-black uppercase tracking-widest text-slate-500">Major</span>
+                             <span className="text-[6px] font-black uppercase tracking-widest text-slate-500">Power</span>
                            </div>
                          )}
                        </div>
@@ -2190,7 +2509,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           const color = ts ? SUIT_COLORS[ts] : '';
                           return ts ? (
                             <div className={`drop-shadow-2xl ${color}`}>
-                              <SuitGlyph suit={ts} className="w-[4.25rem] h-[4.25rem] sm:w-[7rem] sm:h-[7rem]" />
+                              <SuitGlyph suit={ts} className="w-[8rem] h-[8rem] sm:w-[13rem] sm:h-[13rem]" />
                             </div>
                           ) : (
                             <span className="text-5xl font-black text-yellow-950">?</span>
@@ -2266,11 +2585,20 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       <div className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-slate-900 border border-slate-700 mb-1 ${room.players[uid].role === 'Predator' ? 'text-red-400' : (room.players[uid].role === 'Preydator' ? 'text-purple-400' : 'text-blue-400')}`}>
                         {room.players[uid].name}
                       </div>
-                      <CardVisual card={room.lastOutcome!.cardsPlayed[uid]} revealed />
+                      <CardVisual
+                        card={room.lastOutcome!.cardsPlayed[uid]}
+                        revealed
+                        presentation="none"
+                        noAnimate
+                      />
                       <div className="flex gap-1 h-6">
                          {room.lastOutcome?.powerCardIdsPlayed[uid] !== null && (
-                           <div className="scale-75 origin-top">
-                             <PowerCardVisual cardId={room.lastOutcome!.powerCardIdsPlayed[uid]!} small />
+                           <div className="scale-75 origin-top group relative">
+                             <PowerCardVisual
+                               cardId={room.lastOutcome!.powerCardIdsPlayed[uid]!}
+                               small
+                               destroyed={Boolean(room.lastOutcome.powerCardTowerBlocked?.[uid])}
+                             />
                            </div>
                          )}
                       </div>
@@ -2294,9 +2622,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            className={
                              evt.type === 'POWER_TRIGGER'
                                ? 'text-yellow-400'
-                               : evt.type === 'COIN_FLIP'
-                                 ? 'text-amber-300'
-                                 : 'text-slate-400'
+                               : evt.type === 'POWER_DESTROYED'
+                                 ? 'text-orange-400'
+                                 : evt.type === 'COIN_FLIP'
+                                   ? 'text-amber-300'
+                                   : 'text-slate-400'
                            }
                          >
                            {evt.message}
@@ -2352,7 +2682,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     <div className="absolute inset-0 bg-gradient-to-t from-purple-500/20 to-transparent group-hover:from-purple-500/40 transition-all" />
                     <Skull className="w-8 h-8 relative z-10 animate-pulse" /> 
                     <span className="relative z-10">Last-chance desperation spin</span>
-                    <span className="text-[10px] opacity-60 relative z-10">{room.settings.tiers[me.desperationTier]}</span>
+                    <span className="text-[10px] opacity-60 relative z-10">
+                      {room.settings.tiers[Math.max(0, me.desperationTier)]}
+                    </span>
                   </button>
                 </motion.div>
              )}

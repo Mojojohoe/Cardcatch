@@ -21,14 +21,14 @@ export const OpponentDecisionStrip: React.FC<{
         : `${opponentName} is spinning fate`;
 
   if (decision.powerCardId === 2) {
-    const youUsedMajor = Boolean(decision.priestessOpponentUsesPower);
+    const oppPlayedPower = Boolean(decision.priestessOpponentUsesPower);
     return (
       <div className="mt-2 flex flex-col items-center gap-1 max-w-[min(100%,18rem)] text-center px-2">
         <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300">{headline}</span>
         <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500 leading-snug normal-case">
-          {youUsedMajor
-            ? 'They see draft decoys—and may swap their suit card before resolution.'
-            : 'They skim one spare Major from your pile (no swap shell game).'}</span>
+          {oppPlayedPower
+            ? 'Three draft picks plus optional suit swap.'
+            : 'Seeing one spare power card from your hand — no swap grid.'}</span>
       </div>
     );
   }
