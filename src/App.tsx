@@ -52,10 +52,26 @@ import {
 } from 'lucide-react';
 import { GameService, parseCard, DESPERATION_SLICES, desperationSpinAllowed } from './services/gameService';
 import { usePowerTooltipPosition } from './hooks/usePowerTooltipPosition';
-import { RoomData, PlayerData, Suit, CARD_UNICODE, SUITS, PlayerRole, Difficulty, GameSettings, MAJOR_ARCANA, ResolutionEvent, ResolutionEventType } from './types';
+import {
+  RoomData,
+  PlayerData,
+  Suit,
+  CARD_UNICODE,
+  SUITS,
+  PlayerRole,
+  Difficulty,
+  GameSettings,
+  MAJOR_ARCANA,
+  ResolutionEvent,
+  ResolutionEventType,
+  DesperationTierRow,
+  desperationTierRowsForDisplay,
+  effectiveActiveDesperationTierCount,
+} from './types';
 import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerInteraction';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { SuitGlyph, SuitWheelMarkerG } from './components/SuitGlyphs';
+import { CssCoinEmbed, CssCoinFlipDegrees } from './coinflip/CssCoinEmbed';
 
 const SUIT_COLORS: Record<string, string> = {
   Hearts: 'text-red-500',
@@ -90,6 +106,30 @@ function preySideLabel(role: PlayerRole): string {
   return 'Either player';
 }
 
+/** Sidebar dot: emphasize upcoming ladder idx while spinning / awaiting resolve; else current ladder position. */
+function desperationSidebarHighlightLadderIdx(
+  desperationTier: number,
+  isSpinning: boolean,
+  unresolvedResult: string | null | undefined,
+): number | null {
+  if (isSpinning || (unresolvedResult != null && unresolvedResult !== '')) {
+    return desperationTier < 0 ? 1 : desperationTier + 1;
+  }
+  return desperationTier >= 0 ? desperationTier : null;
+}
+
+function desperationLadderLabel(tiers: string[], ladderIdx: number): string | null {
+  if (ladderIdx < 0 || ladderIdx >= tiers.length) return null;
+  return tiers[ladderIdx];
+}
+
+function opponentDesperationUiRelevant(room: RoomData, opp: PlayerData): boolean {
+  if (!room.settings.enableDesperation || room.winner) return false;
+  if (opp.desperationSpinning || opp.desperationResult != null) return true;
+  if (!desperationSpinAllowed(room, opp.uid, opp)) return false;
+  return opp.desperationTier >= 0;
+}
+
 const DesperationVignette: React.FC<{ tier: number, totalTiers: number }> = ({ tier, totalTiers }) => {
   if (tier <= 0 || totalTiers === 0) return null;
   const intensity = Math.min(tier / totalTiers, 1);
@@ -110,18 +150,37 @@ const DesperationWheel: React.FC<{
   isSpinning: boolean;
   result: string | null;
   offset: number;
-  tiers: string[];
-  currentTier: number;
+  /** Ladder indices + labels omitting inactive tier slot when tier-0-from-deal is off. */
+  tierRows: DesperationTierRow[];
+  /** Full tiers text for footer “next step” lookups (indexed by desperationTier). */
+  allTierLabels: string[];
+  desperationTier: number;
   isSpectator?: boolean;
-}> = ({ onSpin, onClose, onResolve, isSpinning, result, offset, tiers, currentTier, isSpectator = false }) => {
+  /** Compact wheel over the opposing-hand mockups (spectator sizing). */
+  opposingHandOverlay?: boolean;
+}> = ({
+  onSpin,
+  onClose,
+  onResolve,
+  isSpinning,
+  result,
+  offset,
+  tierRows,
+  allTierLabels,
+  desperationTier,
+  isSpectator = false,
+  opposingHandOverlay = false,
+}) => {
   const [showResult, setShowResult] = useState(false);
-  
+
   const totalWeight = DESPERATION_SLICES.reduce((acc, s) => acc + s.weight, 0);
 
   const rotation = useMemo(() => {
     const extraSpins = 360 * 15; // 15 full spins for tension
     return -(extraSpins + (offset * 360));
   }, [offset]);
+
+  const highlightIdx = desperationSidebarHighlightLadderIdx(desperationTier, isSpinning, result);
 
   useEffect(() => {
     if (isSpinning) {
@@ -135,38 +194,57 @@ const DesperationWheel: React.FC<{
     }
   }, [isSpinning, result]);
 
+  const nextLadderIdx = desperationTier < 0 ? 1 : desperationTier + 1;
+
+  const rootTone = opposingHandOverlay
+    ? 'bg-gradient-to-b from-purple-950/75 via-purple-950/25 to-transparent'
+    : isSpectator
+      ? 'bg-black/40 backdrop-blur-sm'
+      : 'bg-black/95 backdrop-blur-2xl';
+
+  const layoutClass = opposingHandOverlay
+    ? 'relative z-[24] mx-auto mt-14 flex max-h-[min(52vw,240px)] w-full flex-col items-center justify-center overflow-hidden rounded-xl px-1 py-2'
+    : 'absolute inset-0 z-[200] flex flex-col items-center justify-center p-4 overflow-hidden rounded-3xl transition-all duration-1000';
+
   return (
-    <div className={`
-      absolute inset-0 z-[200] flex flex-col items-center justify-center p-4 overflow-hidden rounded-3xl transition-all duration-1000
-      ${isSpectator ? "bg-black/40 backdrop-blur-sm" : "bg-black/95 backdrop-blur-2xl"}
-    `}>
-      {!isSpectator && (
-        <div className="absolute top-8 left-8 space-y-4 hidden sm:block">
-          <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest border-l-4 border-purple-400 pl-3">Desperation</h3>
+    <div className={`${layoutClass} ${rootTone}`}>
+      {!isSpectator && !opposingHandOverlay && (
+        <div className="absolute top-8 left-8 hidden space-y-4 sm:block">
+          <h3 className="text-[10px] font-black uppercase tracking-widest border-l-4 border-purple-400 pl-3 text-purple-400">
+            Desperation
+          </h3>
           <div className="space-y-4">
-            {tiers.map((tier, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${i + 1 === currentTier ? "bg-purple-500 shadow-[0_0_10px_purple]" : "bg-emerald-900/40"}`} />
-                <span className={`text-[9px] font-black uppercase transition-colors ${i + 1 === currentTier ? "text-white" : "text-emerald-800"}`}>
-                  {tier}
+            {tierRows.map(({ ladderIdx, label }) => (
+              <div key={ladderIdx} className="flex items-center gap-3">
+                <div
+                  className={`h-2 w-2 rounded-full ${ladderIdx === highlightIdx ? 'bg-purple-500 shadow-[0_0_10px_purple]' : 'bg-emerald-900/40'}`}
+                />
+                <span
+                  className={`text-[9px] font-black uppercase transition-colors ${ladderIdx === highlightIdx ? 'text-white' : 'text-emerald-800'}`}
+                >
+                  {label}
                 </span>
-                {i + 1 === currentTier && <ChevronRight className="w-3 h-3 text-purple-500" />}
+                {ladderIdx === highlightIdx && <ChevronRight className="h-3 w-3 text-purple-500" />}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {isSpectator && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-30">
-          <Skull className="w-8 h-8 text-purple-500 animate-pulse" />
-          <span className="text-[11px] font-black text-purple-400 uppercase tracking-[0.4em] drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]">
+      {isSpectator && !opposingHandOverlay && (
+        <div className="pointer-events-none absolute top-8 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-2">
+          <Skull className="h-8 w-8 animate-pulse text-purple-500" />
+          <span className="text-[11px] font-black uppercase tracking-[0.4em] text-purple-400 drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]">
             OPPONENT SPINNING
           </span>
         </div>
       )}
 
-      <div className={`relative transition-all duration-1000 ${isSpectator ? "scale-50 sm:scale-75 -translate-y-12" : "scale-100"} mb-8`}>
+      <div
+        className={`relative mb-2 transition-all duration-1000 ${
+          opposingHandOverlay ? 'scale-[0.42] sm:scale-[0.48]' : isSpectator ? 'scale-50 sm:scale-75 -translate-y-12' : 'mb-8 scale-100'
+        } `}
+      >
         <div className="relative w-72 h-72 sm:w-[480px] sm:h-[480px]">
           {/* External Rings */}
           <div className="absolute -inset-4 border border-purple-500/10 rounded-full animate-[spin_20s_linear_infinite]" />
@@ -269,56 +347,78 @@ const DesperationWheel: React.FC<{
         </div>
       </div>
 
-      <div className="text-center h-48 flex flex-col justify-center max-w-lg w-full">
+      {!opposingHandOverlay && (
+      <div className="flex h-48 w-full max-w-lg flex-col justify-center text-center">
         {isSpinning && !showResult && (
-          <div className="flex flex-col items-center gap-4">
-            <div className="text-[14px] font-black text-purple-400 animate-pulse uppercase tracking-[0.5em] italic">SIMULATING OUTCOME</div>
-            <div className="w-64 h-1 bg-emerald-950 rounded-full overflow-hidden border border-purple-500/20">
-               <motion.div 
-                 className="h-full bg-purple-500"
-                 initial={{ width: "0%" }}
-                 animate={{ width: "100%" }}
-                 transition={{ duration: 12, ease: "linear" }}
-               />
+          <div className={`flex flex-col items-center gap-4 ${opposingHandOverlay ? 'scale-75' : ''}`}>
+            <div className="text-[14px] font-black italic uppercase tracking-[0.5em] text-purple-400 animate-pulse">
+              SIMULATING OUTCOME
             </div>
-            {isSpectator && <span className="text-[10px] text-emerald-800 uppercase font-black tracking-widest mt-2 animate-pulse">Monitoring Live Feed...</span>}
+            <div className="h-1 w-64 overflow-hidden rounded-full border border-purple-500/20 bg-emerald-950">
+              <motion.div
+                className="h-full bg-purple-500"
+                initial={{ width: '0%' }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 12, ease: 'linear' }}
+              />
+            </div>
+            {isSpectator && !opposingHandOverlay && (
+              <span className="mt-2 animate-pulse text-[10px] font-black uppercase tracking-widest text-emerald-800">
+                Monitoring Live Feed...
+              </span>
+            )}
           </div>
         )}
 
         {showResult && result && (
-          <motion.div initial={{ scale: 0.8, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} className="flex flex-col items-center gap-6">
-             <div className="flex flex-col items-center">
-               <span className="text-[11px] font-black text-purple-500 uppercase tracking-[0.5em] mb-2">{isSpectator ? 'Opponent spun' : 'Result'}</span>
-               <div className={`text-5xl sm:text-7xl font-black uppercase tracking-tighter ${result === "GAME OVER" ? "text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.5)]" : "text-yellow-400 drop-shadow-[0_0_30px_rgba(250,204,21,0.5)]"}`}>
-                 {result.toUpperCase().replace("GAIN", "DRAW")}
-               </div>
-             </div>
-             
-             {!isSpectator && (
-               <button 
-                 onClick={onResolve}
-                 className="bg-white text-emerald-950 px-20 py-4 rounded-full font-black uppercase tracking-[0.1em] text-[15px] transition-all hover:bg-yellow-400 active:scale-95 shadow-[0_0_60px_rgba(255,255,255,0.3)] animate-pulse"
-               >
-                 {result === 'GAME OVER' ? 'End game' : 'Continue'}
-               </button>
-             )}
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0, y: 12 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className={`flex flex-col items-center gap-6 ${opposingHandOverlay ? 'scale-[0.82]' : ''}`}
+          >
+            <div className="flex flex-col items-center">
+              <span className="mb-2 text-[11px] font-black uppercase tracking-[0.5em] text-purple-500">
+                {isSpectator ? 'Opponent spun' : 'Result'}
+              </span>
+              <div
+                className={`text-5xl font-black uppercase tracking-tighter sm:text-7xl ${result === 'GAME OVER' ? 'text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.5)]' : 'text-yellow-400 drop-shadow-[0_0_30px_rgba(250,204,21,0.5)]'}`}
+              >
+                {result.toUpperCase().replace('GAIN', 'DRAW')}
+              </div>
+            </div>
+
+            {!isSpectator && (
+              <button
+                onClick={onResolve}
+                className="animate-pulse rounded-full bg-white px-20 py-4 font-black uppercase tracking-[0.1em] text-[15px] text-emerald-950 shadow-[0_0_60px_rgba(255,255,255,0.3)] transition-all hover:bg-yellow-400 active:scale-95"
+              >
+                {result === 'GAME OVER' ? 'End game' : 'Continue'}
+              </button>
+            )}
           </motion.div>
         )}
 
         {!isSpinning && !result && !isSpectator && (
-          <div className="flex flex-col items-center gap-4">
-            <div className="px-6 py-2 bg-purple-900/30 rounded-full border border-purple-500/20">
-              <span className="text-[12px] font-black text-purple-400 uppercase tracking-[0.2em]">
-                Desperation {currentTier} / {tiers.length}
+          <div className={`flex flex-col items-center gap-4 ${opposingHandOverlay ? 'hidden' : ''}`}>
+            <div className="rounded-full border border-purple-500/20 bg-purple-900/30 px-6 py-2">
+              <span className="text-[12px] font-black uppercase tracking-[0.2em] text-purple-400">
+                Next ladder index {nextLadderIdx} · {tierRows.length} rungs configured
               </span>
             </div>
-            <p className="text-[11px] text-emerald-600 font-bold uppercase tracking-widest">{tiers[currentTier - 1]}</p>
-            <button onClick={onClose} className="text-[10px] font-black text-emerald-800 uppercase hover:text-white transition-all flex items-center gap-2 group">
-              <RotateCcw className="w-4 h-4 group-hover:rotate-[-90deg] transition-transform" /> ABORT
+            <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600">
+              {desperationLadderLabel(allTierLabels, nextLadderIdx) ?? '—'}
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="group flex items-center gap-2 text-[10px] font-black uppercase text-emerald-800 transition-all hover:text-white"
+            >
+              <RotateCcw className="h-4 w-4 transition-transform group-hover:rotate-[-90deg]" /> ABORT
             </button>
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };
@@ -896,6 +996,7 @@ const RulesSheet: React.FC<{ settings: GameSettings; onClose: () => void }> = ({
       : (settings.preydatorDesperationSeats ?? 'guest') === 'host'
         ? 'the host seat'
         : 'the guest seat';
+  const desperationDisplayRows = desperationTierRowsForDisplay(settings);
 
   return (
     <motion.div
@@ -993,10 +1094,12 @@ const RulesSheet: React.FC<{ settings: GameSettings; onClose: () => void }> = ({
                 <li>Starter tier may be off—your first desperation spin pulls you onto the ladder.</li>
               )}
             </ul>
-            {settings.tiers.length > 0 && (
+            {desperationDisplayRows.length > 0 && (
               <p className="text-[11px] text-emerald-300/95 pl-4">
-                Labels this match uses:{' '}
-                <span className="font-semibold text-emerald-100">{settings.tiers.join(', ')}</span>
+                Ladder labels in play this match:{' '}
+                <span className="font-semibold text-emerald-100">
+                  {desperationDisplayRows.map((r) => r.label).join(', ')}
+                </span>
               </p>
             )}
           </div>
@@ -1227,53 +1330,36 @@ function inferCoinFlipWinnerUid(message: string, room: RoomData): string | null 
   return null;
 }
 
-/** Priority coin: identical ⚖ faces while spinning, then a clear predator / prey / preydator panel (no mirrored “backwards wolf”). */
+/** Cosmetic-only: matches bundled coinflip (720deg vs 900deg) outcome so the landed face aligns with resolved priority. */
+function priorityFlipLandingDegrees(winnerUid: string | null, room: RoomData): CssCoinFlipDegrees {
+  if (!winnerUid || !room.players[winnerUid]) return '720deg';
+  const role = room.players[winnerUid].role;
+  if (role === 'Predator') return '900deg';
+  if (role === 'Prey') return '720deg';
+  const k = winnerUid.charCodeAt(Math.min(7, winnerUid.length - 1));
+  return k % 2 === 0 ? '720deg' : '900deg';
+}
+
+/** Priority coin from /coinflip (CSS 3D O/I coin), then predator / prey / preydator readout (unchanged). */
 const PriorityFlipCard: React.FC<{
   winnerUid: string | null;
   room: RoomData;
 }> = ({ winnerUid, room }) => {
   const role = winnerUid ? room.players[winnerUid]?.role : null;
   const [landed, setLanded] = useState(false);
-
-  useEffect(() => {
-    const ms = winnerUid ? 4150 : 3400;
-    const t = window.setTimeout(() => setLanded(true), ms);
-    return () => window.clearTimeout(t);
-  }, [winnerUid]);
+  const landingFlip = priorityFlipLandingDegrees(winnerUid, room);
 
   return (
     <div className="mb-6 flex flex-col items-center gap-4 [perspective:1400px]">
-      <div className="relative h-[8rem] w-[12.5rem] sm:h-[8.5rem] sm:w-[13.25rem]">
+      <div className="relative flex min-h-[12.75rem] w-full max-w-[22rem] items-center justify-center overflow-hidden rounded-2xl shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)] ring-2 ring-black/40">
         {!landed && (
-          <motion.div
-            initial={{ rotateY: -14, scale: 0.92, opacity: 0.88 }}
-            animate={{ rotateY: [-14, 360 * 14], scale: 1, opacity: 1 }}
-            transition={{ duration: 4.05, ease: [0.18, 0.72, 0.16, 0.99] }}
-            className="absolute inset-0 origin-center [transform-style:preserve-3d]"
-          >
-            <div
-              className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-amber-500/65 bg-gradient-to-br from-amber-950 via-slate-900 to-slate-950 text-amber-100 shadow-[0_12px_40px_rgba(245,158,11,0.28)]"
-              style={{
-                backfaceVisibility: 'hidden',
-                WebkitBackfaceVisibility: 'hidden',
-                transform: 'rotateY(0deg) translateZ(5px)',
-              }}
-            >
-              <span className="text-4xl sm:text-5xl font-black text-amber-200/95 drop-shadow-lg">⚖</span>
-              <span className="mt-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.32em] text-amber-300/90">Priority</span>
-            </div>
-            <div
-              className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-amber-500/60 bg-gradient-to-br from-slate-950 via-amber-950/85 to-black text-amber-50 shadow-[0_12px_40px_rgba(251,191,36,0.22)]"
-              style={{
-                backfaceVisibility: 'hidden',
-                WebkitBackfaceVisibility: 'hidden',
-                transform: 'rotateY(180deg) translateZ(5px)',
-              }}
-            >
-              <span className="text-4xl sm:text-5xl font-black text-amber-200/95 drop-shadow-lg">⚖</span>
-              <span className="mt-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.32em] text-amber-200/88">Priority</span>
-            </div>
-          </motion.div>
+          <CssCoinEmbed
+            key={`flip-${winnerUid ?? 'neutral'}-${landingFlip}`}
+            flipDegrees={landingFlip}
+            autoPlay
+            onAnimationEnd={() => setLanded(true)}
+            className="w-full rounded-2xl"
+          />
         )}
 
         {landed && (
@@ -1281,7 +1367,7 @@ const PriorityFlipCard: React.FC<{
             initial={{ opacity: 0, scale: 0.9, rotateY: -6 }}
             animate={{ opacity: 1, scale: 1, rotateY: 0 }}
             transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 overflow-hidden shadow-[0_16px_52px_rgba(0,0,0,0.5)]"
+            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 overflow-hidden bg-emerald-950/10 shadow-[0_16px_52px_rgba(0,0,0,0.5)]"
           >
             {winnerUid ? (
               role === 'Predator' ? (
@@ -1876,46 +1962,88 @@ const DraftingPhase: React.FC<{
 
 const OpposingHandOverlayStack: React.FC<{
   opponent: PlayerData;
+  roomSettings: GameSettings;
+  roomSnapshot: RoomData;
   roomStatus: RoomData['status'];
-  roomHasWinner: boolean;
   powerShowdown: boolean;
   opponentPendingDecision: any;
   opponentWheelDecisionSpinning: boolean;
 }> = ({
   opponent,
+  roomSettings,
+  roomSnapshot,
   roomStatus,
-  roomHasWinner,
   powerShowdown,
   opponentPendingDecision,
   opponentWheelDecisionSpinning,
 }) => {
+  const oppTierRows = desperationTierRowsForDisplay(roomSettings);
+  const showOppTierBanner = opponentDesperationUiRelevant(roomSnapshot, opponent);
+
+  const oppLadderLabel =
+    opponent.desperationTier >= 0
+      ? desperationLadderLabel(roomSettings.tiers, opponent.desperationTier)
+      : null;
+
   return (
     <>
       {!powerShowdown && roomStatus === 'powering' && opponentPendingDecision && (
         <OpponentDecisionStrip opponentName={opponent.name} decision={opponentPendingDecision} />
       )}
 
-      {(opponent.desperationSpinning || opponent.desperationResult) && !roomHasWinner && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center pt-1">
-          <div className="rounded-xl border border-purple-500/45 bg-black/55 px-3 py-2.5 backdrop-blur-sm text-center max-w-[min(100%,18rem)]">
-            <div className="flex items-center justify-center gap-2">
-              <Skull className={`w-4 h-4 text-purple-400 ${opponent.desperationSpinning ? 'animate-pulse' : ''}`} />
-              <span className="text-[9px] font-black uppercase tracking-widest text-purple-300">{opponent.name} desperation</span>
+      {showOppTierBanner && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[26] flex justify-center px-2">
+          <div className="flex w-[min(100%,21rem)] max-w-none items-start gap-2 rounded-b-lg border-x border-b border-purple-500/45 bg-purple-950/94 px-2 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+            <Skull
+              className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-400 ${opponent.desperationSpinning ? 'animate-pulse' : ''}`}
+            />
+            <div className="min-w-0 flex-1 text-left leading-snug">
+              <span className="block truncate text-[8px] font-black uppercase tracking-wider text-purple-200/95">
+                {opponent.name} · desperation
+              </span>
+              {opponent.desperationSpinning ? (
+                <span className="mt-0.5 block text-[9px] font-black uppercase tracking-wide text-emerald-300/95">
+                  Wheel spinning…
+                </span>
+              ) : opponent.desperationResult ? (
+                <span
+                  className={`mt-0.5 block truncate text-[9px] font-black uppercase tracking-wide ${opponent.desperationResult === 'GAME OVER' ? 'text-red-400' : 'text-yellow-200/95'}`}
+                >
+                  {opponent.desperationResult.replace('GAIN', 'DRAW')}
+                </span>
+              ) : oppLadderLabel ? (
+                <span className="mt-0.5 block truncate text-[9px] font-bold uppercase tracking-wide text-white/95">
+                  {oppLadderLabel}
+                </span>
+              ) : (
+                <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                  Off ladder until first spin
+                </span>
+              )}
             </div>
-            {opponent.desperationSpinning ? (
-              <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-emerald-300/90">Spinning outcome...</p>
-            ) : opponent.desperationResult ? (
-              <p className={`mt-1 text-[10px] font-black uppercase tracking-wider ${opponent.desperationResult === 'GAME OVER' ? 'text-red-400' : 'text-yellow-300'}`}>
-                {opponent.desperationResult.replace('GAIN', 'DRAW')}
-              </p>
-            ) : null}
           </div>
         </div>
       )}
 
+      {(opponent.desperationSpinning || opponent.desperationResult != null) && showOppTierBanner && (
+        <DesperationWheel
+          opposingHandOverlay
+          allTierLabels={roomSettings.tiers}
+          desperationTier={opponent.desperationTier}
+          tierRows={oppTierRows}
+          isSpectator
+          isSpinning={opponent.desperationSpinning}
+          offset={opponent.desperationOffset}
+          result={opponent.desperationResult}
+          onClose={() => {}}
+          onResolve={() => {}}
+          onSpin={() => {}}
+        />
+      )}
+
       {roomStatus === 'powering' && opponentWheelDecisionSpinning && (
         <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center">
-          <div className="rounded-xl border border-amber-500/45 bg-black/55 px-3 py-2 mb-2 backdrop-blur-sm">
+          <div className="mb-2 rounded-xl border border-amber-500/45 bg-black/55 px-3 py-2 backdrop-blur-sm">
             <span className="text-[9px] font-black uppercase tracking-widest text-amber-300">
               Wheel spinning for {opponent.name}
             </span>
@@ -2465,7 +2593,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         ))}
                       </div>
                     </div>
-                    {room.settings.tiers.map((tier, idx) => (
+                    {room.settings.tiers.map((tier, idx) => {
+                      if (!room.settings.desperationStarterTierEnabled && idx === 0) return null;
+                      return (
                       <div key={idx} className="flex gap-2">
                         <div className="bg-purple-900/50 border border-purple-800 rounded px-2 py-1 flex items-center justify-center min-w-[60px]">
                           <span className="text-[8px] font-black text-purple-300">TIER {idx}</span>
@@ -2491,7 +2621,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           <Hash className="w-4 h-4" />
                         </button>
                       </div>
-                    ))}
+                    );
+                    })}
                     <button 
                       onClick={() => handleUpdateSettings({...room.settings, tiers: [...room.settings.tiers, `TIER ${room.settings.tiers.length}`]})}
                       className="w-full text-center py-2 border border-dashed border-purple-800 rounded text-[8px] font-black text-purple-400 uppercase hover:bg-purple-900/20"
@@ -2639,12 +2770,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     <div className="pt-1 border-t border-purple-900/35 space-y-2">
                       <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest block">Tier labels</span>
                       <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                        {room.settings.tiers.map((tier, idx) => (
+                        {room.settings.tiers.map((tier, idx) => {
+                          if (!room.settings.desperationStarterTierEnabled && idx === 0) return null;
+                          return (
                           <li key={idx} className="text-[11px] text-purple-50/95 flex gap-2">
                             <span className="font-mono text-[9px] text-purple-500 w-14 shrink-0">Tier {idx}</span>
                             <span className="leading-snug">{tier}</span>
                           </li>
-                        ))}
+                        );
+                        })}
                       </ul>
                     </div>
                   </>
@@ -2722,7 +2856,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
         </>
       )}
-      <DesperationVignette tier={me.desperationTier} totalTiers={room.settings.tiers.length} />
+      <DesperationVignette
+        tier={me.desperationTier}
+        totalTiers={effectiveActiveDesperationTierCount(room.settings)}
+      />
 
       {!powerShowdown && room.status === 'powering' && myPendingDecision && myPendingDecision.selectedOption === null && (
         <PowerDecisionModal
@@ -2759,18 +2896,16 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {(showDesperationWheel || me.desperationSpinning || me.desperationResult) && !room.winner && (
-        <DesperationWheel 
+        <DesperationWheel
           onSpin={handleSpinDesperation}
           onClose={() => setShowDesperationWheel(false)}
           onResolve={handleResolveDesperation}
           isSpinning={me.desperationSpinning}
           result={me.desperationResult}
           offset={me.desperationOffset}
-          tiers={room.settings.tiers}
-          currentTier={
-            me.desperationResult ? me.desperationTier : Math.max(1, me.desperationTier + 1)
-          }
-          isSpectator={false}
+          tierRows={desperationTierRowsForDisplay(room.settings)}
+          allTierLabels={room.settings.tiers}
+          desperationTier={me.desperationTier}
         />
       )}
 
@@ -2822,7 +2957,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
       {/* Opposing hand area (top mockup cards + opponent-only context overlays) */}
       {opponent && (
-        <div className="relative mb-4">
+        <div
+          className={`relative mb-4 ${room.settings.enableDesperation ? 'min-h-[11.5rem]' : ''}`}
+        >
           <div className="text-center mb-1">
             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Cards: {opponent.hand.length}</span>
           </div>
@@ -2839,8 +2976,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
           <OpposingHandOverlayStack
             opponent={opponent}
+            roomSettings={room.settings}
+            roomSnapshot={room}
             roomStatus={room.status}
-            roomHasWinner={Boolean(room.winner)}
             powerShowdown={powerShowdown}
             opponentPendingDecision={opponentPendingDecision}
             opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
@@ -2895,13 +3033,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
           {room.status === 'playing' || room.status === 'powering' ? (
             <div className="flex flex-col items-center transition-all duration-500">
-               {opponent?.desperationTier > 0 && (
-                 <div className="absolute top-0 flex flex-col items-center gap-1 bg-purple-950/40 border border-purple-800/50 px-4 py-1.5 rounded-full mb-4">
-                    <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest">Opponent desperation</span>
-                    <span className="text-[10px] font-black text-white uppercase">{room.settings.tiers[opponent.desperationTier - 1]}</span>
-                 </div>
-               )}
-
                <span className="text-base sm:text-2xl md:text-3xl font-black uppercase tracking-[0.18em] sm:tracking-[0.22em] text-yellow-400 mb-8 sm:mb-10 text-center px-2 leading-tight max-w-[min(100%,28rem)]">
                  {room.status === 'powering'
                      ? powerShowdown
@@ -3148,10 +3279,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
       {/* Hand Small */}
       <div className="mt-auto px-4 pb-4">
-        {me.desperationTier > 0 && (
+        {room.settings.enableDesperation &&
+          desperationSpinAllowed(room, myUid, me) &&
+          me.desperationTier >= 0 && (
           <div className="flex flex-col items-center mb-2">
             <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest animate-pulse">
-              Desperation Tier: {room.settings.tiers[me.desperationTier - 1]}
+              Desperation: {desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`}
             </span>
           </div>
         )}
@@ -3179,7 +3312,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     <Skull className="w-8 h-8 relative z-10 animate-pulse" /> 
                     <span className="relative z-10">Last-chance desperation spin</span>
                     <span className="text-[10px] opacity-60 relative z-10">
-                      {room.settings.tiers[Math.max(0, me.desperationTier)]}
+                      {desperationLadderLabel(
+                        room.settings.tiers,
+                        me.desperationTier < 0 ? 1 : me.desperationTier + 1,
+                      ) ?? 'Next rung'}
                     </span>
                   </button>
                 </motion.div>
@@ -3261,7 +3397,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   <div className="flex flex-col items-center">
                     <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Your desperation tier</span>
                     <span className="text-xs text-white font-black uppercase text-center">
-                       {room.settings.tiers[me.desperationTier - 1]} 
+                       {desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? ''} 
                        {me.desperationResult && <span className="text-purple-400 ml-2">[{me.desperationResult}]</span>}
                     </span>
                   </div>
@@ -3270,7 +3406,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   <div className="flex flex-col items-center opacity-60">
                     <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Opponent&apos;s desperation tier</span>
                     <span className="text-xs text-purple-300 font-bold uppercase text-center">
-                       {room.settings.tiers[opponent.desperationTier - 1]}
+                       {desperationLadderLabel(room.settings.tiers, opponent.desperationTier) ?? ''}
                        {opponent.desperationResult && <span className="text-purple-500 ml-2">[{opponent.desperationResult}]</span>}
                     </span>
                   </div>
