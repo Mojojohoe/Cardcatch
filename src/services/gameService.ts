@@ -42,6 +42,111 @@ export const parseCard = (cardStr: string): { suit: string, value: string, isJok
   return { suit, value, isJoker: false };
 };
 
+const RANK_WORDS: Record<string, string> = {
+  A: 'Ace',
+  K: 'King',
+  Q: 'Queen',
+  J: 'Jack',
+};
+
+/** Mid-sentence card label: "the Ace of Hearts", "a Joker". */
+export const describeCardPlain = (cardStr: string): string => {
+  const p = parseCard(cardStr);
+  if (p.isJoker) return 'a Joker';
+  const rk = RANK_WORDS[p.value] ?? p.value;
+  return `the ${rk} of ${p.suit}`;
+};
+
+function sentenceCard(cardStr: string): string {
+  const mid = describeCardPlain(cardStr);
+  return mid.replace(/^the /, 'The ').replace(/^a /, 'A ');
+}
+
+function isOnTargetField(cardStr: string, targetSuit: Suit): boolean {
+  const p = parseCard(cardStr);
+  if (p.isJoker) return false;
+  if (p.suit === targetSuit) return true;
+  if (targetSuit === 'Stars') return true;
+  return false;
+}
+
+/** Main trick winner when p1 plays `cr1` and p2 plays `cr2` (Hermit swaps = p1 Hermit candidate). */
+export function evaluateTrickClash(cr1: string, cr2: string, targetSuit: Suit): 'p1' | 'p2' | 'draw' {
+  const pr1 = parseCard(cr1);
+  const pr2 = parseCard(cr2);
+  if (pr1.isJoker && pr2.isJoker) return 'draw';
+
+  if (pr1.isJoker && !pr2.isJoker) {
+    if (targetSuit === 'Stars') return 'p1';
+    if (targetSuit === 'Moons') return pr2.suit === 'Moons' ? 'p1' : 'p2';
+    return pr2.suit === targetSuit ? 'p1' : 'p2';
+  }
+  if (pr2.isJoker && !pr1.isJoker) {
+    if (targetSuit === 'Stars') return 'p2';
+    if (targetSuit === 'Moons') return pr1.suit === 'Moons' ? 'p2' : 'p1';
+    return pr1.suit === targetSuit ? 'p2' : 'p1';
+  }
+
+  const p1Target = pr1.suit === targetSuit || (targetSuit === 'Stars' && !pr1.isJoker);
+  const p2Target = pr2.suit === targetSuit || (targetSuit === 'Stars' && !pr2.isJoker);
+
+  if (p1Target && !p2Target) return 'p1';
+  if (!p1Target && p2Target) return 'p2';
+
+  const v1 = getCardValue(cr1);
+  const v2 = getCardValue(cr2);
+  if (v1 > v2) return 'p1';
+  if (v2 > v1) return 'p2';
+  return 'draw';
+}
+
+/**
+ * One-line reason the winning card beats the losing card (winner card first), aligned with evaluateTrickClash.
+ */
+export function explainPlainClash(winningCardStr: string, losingCardStr: string, targetSuit: Suit): string {
+  const prW = parseCard(winningCardStr);
+  const prL = parseCard(losingCardStr);
+  const targ = targetSuit;
+  const lMid = describeCardPlain(losingCardStr);
+  const wMid = describeCardPlain(winningCardStr);
+
+  if (prW.isJoker && prL.isJoker) return 'Both played a Joker — tie.';
+
+  if (prW.isJoker && !prL.isJoker) {
+    if (targ === 'Stars') {
+      return `A Joker wins on Stars — normal cards take the Star field, but a Joker never becomes a Star.`;
+    }
+    if (targ === 'Moons') {
+      return `A Joker wins — ${sentenceCard(losingCardStr)} is Moons on a Moons table.`;
+    }
+    return `A Joker wins over ${sentenceCard(losingCardStr)} — it matched table suit (${targ}).`;
+  }
+
+  if (!prW.isJoker && prL.isJoker) {
+    if (targ === 'Stars') {
+      return `On Stars, a suited card should not outrank a lone Joker — if you see this, report a bug.`;
+    }
+    if (targ === 'Moons') {
+      return `${sentenceCard(winningCardStr)} is not Moons on a Moons table — that beats a Joker.`;
+    }
+    return `${sentenceCard(winningCardStr)} did not match table suit (${targ}); that beats a Joker (Frogs, Coins, Bones never count as trump).`;
+  }
+
+  const wField = isOnTargetField(winningCardStr, targ);
+  const lField = isOnTargetField(losingCardStr, targ);
+  const wv = getCardValue(winningCardStr);
+  const lv = getCardValue(losingCardStr);
+
+  if (wField && !lField)
+    return `${sentenceCard(winningCardStr)} matched table suit (${targ}); ${lMid} did not — table suit wins.`;
+  if (wv !== lv) {
+    const scope = wField ? `both on table suit (${targ})` : `neither matched table suit (${targ}), so ranks decide`;
+    return `${sentenceCard(winningCardStr)} (${wv}) beats ${lMid} (${lv}) — ${scope}.`;
+  }
+  const tieScope = wField ? `both on (${targ})` : `neither matched (${targ})`;
+  return `${sentenceCard(winningCardStr)} and ${lMid} tie — ${tieScope}.`;
+}
+
 type GameEvent = 
   | { type: 'STATE_UPDATE', state: RoomData }
   | { type: 'PLAYER_JOIN', name: string, uid: string }
@@ -52,6 +157,8 @@ type GameEvent =
   | { type: 'RESOLVE_DESPERATION', uid: string }
   | { type: 'SELECT_DRAFT', uid: string, powerCardId: number }
   | { type: 'CHEAT_POWER', uid: string, powerCardId: number }
+  | { type: 'CHEAT_TRIM_DECK', uid: string, removeCount: number }
+  | { type: 'CHEAT_DISCARD_HAND_CARD', uid: string, cardId: string }
   | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null }
   | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number; priestessSwapToCard?: string | null }
   | { type: 'SET_LOBBY_READY', uid: string, ready: boolean };
@@ -332,6 +439,14 @@ export class GameService {
       } else if (event.type === 'CHEAT_POWER') {
         if (remoteUid) {
           this.handleCheatPower(remoteUid, event.powerCardId);
+        }
+      } else if (event.type === 'CHEAT_TRIM_DECK') {
+        if (remoteUid) {
+          this.handleCheatTrimDeck(event.removeCount);
+        }
+      } else if (event.type === 'CHEAT_DISCARD_HAND_CARD') {
+        if (remoteUid) {
+          this.handleCheatDiscardHandCard(remoteUid, event.cardId);
         }
       } else if (event.type === 'PLAY_POWER_CARD') {
         if (remoteUid) {
@@ -704,6 +819,22 @@ export class GameService {
     }
   }
 
+  async cheatTrimDeck(removeCount: number) {
+    if (this.isHost) {
+      this.handleCheatTrimDeck(removeCount);
+    } else {
+      this.sendEvent({ type: 'CHEAT_TRIM_DECK', uid: this.myUid, removeCount });
+    }
+  }
+
+  async cheatDiscardFromHand(cardId: string) {
+    if (this.isHost) {
+      this.handleCheatDiscardHandCard(this.myUid, cardId);
+    } else {
+      this.sendEvent({ type: 'CHEAT_DISCARD_HAND_CARD', uid: this.myUid, cardId });
+    }
+  }
+
   async submitPowerDecision(option: string, wheelOffset?: number, priestessSwapToCard?: string | null) {
     if (this.isHost) {
       this.handleSubmitPowerDecision(this.myUid, option, wheelOffset, priestessSwapToCard);
@@ -782,6 +913,45 @@ export class GameService {
       ...this.state,
       players: updatedPlayers,
       updatedAt: Date.now()
+    };
+    this.broadcastState();
+  }
+
+  private handleCheatTrimDeck(removeCount: number) {
+    if (!this.state || !this.isHost) return;
+    const ok = ['playing', 'powering', 'results'].includes(this.state.status);
+    if (!ok) return;
+    const n = Math.max(0, Math.floor(removeCount));
+    const deck = [...this.state.deck];
+    const take = Math.min(n, deck.length);
+    if (take === 0) return;
+    deck.splice(0, take);
+    const famineActive = deck.length === 0 ? true : Boolean(this.state.famineActive);
+    this.state = {
+      ...this.state,
+      deck,
+      famineActive,
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
+  private handleCheatDiscardHandCard(uid: string, cardId: string) {
+    if (!this.state || !this.isHost || !this.state.players[uid]) return;
+    if (!['playing', 'powering', 'results'].includes(this.state.status)) return;
+    const p = this.state.players[uid];
+    const ix = p.hand.indexOf(cardId);
+    if (ix < 0) return;
+    const hand = [...p.hand];
+    hand.splice(ix, 1);
+    const updatedPlayers = {
+      ...this.state.players,
+      [uid]: { ...p, hand },
+    };
+    this.state = {
+      ...this.state,
+      players: updatedPlayers,
+      updatedAt: Date.now(),
     };
     this.broadcastState();
   }
@@ -1420,30 +1590,28 @@ export class GameService {
 
     const hermitSwap = (pUid: string, oCard: string) => {
       const p = players[pUid];
-      const winningCard = p.hand.find(card => {
-        const pCard = parseCard(card);
-        const oCardP = parseCard(oCard);
-        if (pCard.isJoker) return true;
-        if (oCardP.isJoker) return false;
-        if (pCard.suit === targetSuit && oCardP.suit !== targetSuit) return true;
-        if (pCard.suit !== targetSuit && oCardP.suit === targetSuit) return false;
-        return getCardValue(card) > getCardValue(oCard);
-      });
-      if (winningCard) {
-        return { card: winningCard, reason: 'win' as const };
+      const pool = p.hand.filter(card => card !== p.currentMove);
+
+      const pickPreferNonJoker = (cands: string[]): string | null => {
+        if (cands.length === 0) return null;
+        const nonJoker = cands.find(c => !parseCard(c).isJoker);
+        return nonJoker ?? cands[0];
+      };
+
+      const winCandidates = pool.filter(
+        card => evaluateTrickClash(card, oCard, targetSuit) === 'p1'
+      );
+      const winPick = pickPreferNonJoker(winCandidates);
+      if (winPick) {
+        return { card: winPick, reason: 'win' as const };
       }
-      const drawingCard = p.hand.find(card => {
-        const pCard = parseCard(card);
-        const oCardP = parseCard(oCard);
-        if (pCard.isJoker && oCardP.isJoker) return true;
-        if (pCard.isJoker || oCardP.isJoker) return false;
-        const pTarget = pCard.suit === targetSuit;
-        const oTarget = oCardP.suit === targetSuit;
-        if (pTarget !== oTarget) return false;
-        return getCardValue(card) === getCardValue(oCard);
-      });
-      if (drawingCard) {
-        return { card: drawingCard, reason: 'draw' as const };
+
+      const drawCandidates = pool.filter(
+        card => evaluateTrickClash(card, oCard, targetSuit) === 'draw'
+      );
+      const drawPick = pickPreferNonJoker(drawCandidates);
+      if (drawPick) {
+        return { card: drawPick, reason: 'draw' as const };
       }
       return { card: null, reason: 'none' as const };
     };
@@ -1486,43 +1654,23 @@ export class GameService {
           message: 'Temperance forced transparency and balance.',
         });
     } else {
-        const evalClash = (cr1: string, cr2: string) => {
-          const pr1 = parseCard(cr1);
-          const pr2 = parseCard(cr2);
-          if (pr1.isJoker && pr2.isJoker) return 'draw';
-          if (pr1.isJoker && !pr2.isJoker) return pr2.suit === targetSuit ? 'p1' : 'p2';
-          if (pr2.isJoker && !pr1.isJoker) return pr1.suit === targetSuit ? 'p2' : 'p1';
-          
-          const p1Target = pr1.suit === targetSuit || (targetSuit === 'Stars' && !pr1.isJoker);
-          const p2Target = pr2.suit === targetSuit || (targetSuit === 'Stars' && !pr2.isJoker);
-          
-          if (p1Target && !p2Target) return 'p1';
-          if (!p1Target && p2Target) return 'p2';
-          
-          const v1 = getCardValue(cr1);
-          const v2 = getCardValue(cr2);
-          if (v1 > v2) return 'p1';
-          if (v2 > v1) return 'p2';
-          return 'draw';
-        };
-
-        const res = evalClash(c1, c2);
+        const res = evaluateTrickClash(c1, c2, targetSuit);
         const s1 = summonedCards[p1Uid];
         const s2 = summonedCards[p2Uid];
 
         if (s1 && s2) {
-          const r1 = evalClash(s1, s2);
+          const r1 = evaluateTrickClash(s1, s2, targetSuit);
           const rMain = res;
           if (rMain === 'p1' || r1 === 'p1') winnerUid = p1Uid;
           else if (rMain === 'p2' || r1 === 'p2') winnerUid = p2Uid;
           else winnerUid = 'draw';
         } else if (s1) {
-          const resSummon = evalClash(s1, c2);
+          const resSummon = evaluateTrickClash(s1, c2, targetSuit);
           if (res === 'p1' || resSummon === 'p1') winnerUid = p1Uid;
           else if (res === 'p2' && resSummon === 'p2') winnerUid = p2Uid;
           else winnerUid = 'draw';
         } else if (s2) {
-          const resSummon = evalClash(s2, c1);
+          const resSummon = evaluateTrickClash(s2, c1, targetSuit);
           if (res === 'p2' || resSummon === 'p2') winnerUid = p2Uid;
           else if (res === 'p1' && resSummon === 'p1') winnerUid = p1Uid;
           else winnerUid = 'draw';
@@ -1753,29 +1901,15 @@ export class GameService {
        else finalMessage = "A perfect deadlock. Zero sum.";
     } else {
        const wName = players[winnerUid].name;
-       const p1 = parseCard(c1);
-       const p2 = parseCard(c2);
-       const wCard = winnerUid === p1Uid ? p1 : p2;
-       const lCard = winnerUid === p1Uid ? p2 : p1;
-       const wVal = getCardValue(winnerUid === p1Uid ? c1 : c2);
-       const lVal = getCardValue(winnerUid === p1Uid ? c2 : c1);
 
        const hanged1 = committedPower1 === 12 && !blockedPowers[p1Uid];
        const hanged2 = committedPower2 === 12 && !blockedPowers[p2Uid];
-       if (hanged1 || hanged2) finalMessage = `${wName} takes the round (Hanged Man).`;
-       else if (power1 === 20 || power2 === 20) finalMessage = `Judgement declares ${wName} the survivor!`;
-       else if (wCard.isJoker && !lCard.isJoker) {
-         if (lCard.suit === targetSuit) finalMessage = `${wName}'s Joker was caught by the Target Suit!`;
-         else finalMessage = `${wName}'s Joker overrides the field!`;
-       }
-       else if (wCard.suit === targetSuit && lCard.suit !== targetSuit) {
-         finalMessage = `Target Suit advantage: ${wName} wins!`;
-       }
-       else if (wVal > lVal) {
-         finalMessage = `${wName} wins with higher power (${wVal} vs ${lVal}).`;
-       }
+       if (hanged1 || hanged2) finalMessage = `${wName} takes the round — The Hanged Man.`;
+       else if (power1 === 20 || power2 === 20) finalMessage = `Judgement names ${wName} as the survivor.`;
        else {
-         finalMessage = `${wName} wins the round!`;
+          const winnerCardStr = winnerUid === p1Uid ? c1 : c2;
+          const loserCardStr = winnerUid === p1Uid ? c2 : c1;
+          finalMessage = `${wName} wins — ${explainPlainClash(winnerCardStr, loserCardStr, targetSuit)}`;
        }
     }
 

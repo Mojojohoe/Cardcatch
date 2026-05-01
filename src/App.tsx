@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
   Trophy, 
-  ArrowLeft, 
   Copy, 
   Check, 
   Shield, 
@@ -51,7 +50,8 @@ import {
   Plus,
 } from 'lucide-react';
 import { GameService, parseCard, DESPERATION_SLICES, desperationSpinAllowed } from './services/gameService';
-import { RoomData, PlayerData, Suit, CARD_UNICODE, SUITS, PlayerRole, Difficulty, GameSettings, MAJOR_ARCANA, PowerCard, ResolutionEvent, ResolutionEventType } from './types';
+import { usePowerTooltipPosition } from './hooks/usePowerTooltipPosition';
+import { RoomData, PlayerData, Suit, CARD_UNICODE, SUITS, PlayerRole, Difficulty, GameSettings, MAJOR_ARCANA, ResolutionEvent, ResolutionEventType } from './types';
 import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerInteraction';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { SuitGlyph, SuitWheelMarkerG } from './components/SuitGlyphs';
@@ -458,6 +458,10 @@ const PowerCardVisual: React.FC<{
 }> = ({ cardId, revealed = true, onClick, selected, disabled, small = false, destroyed = false }) => {
   const card = MAJOR_ARCANA[cardId];
   const tip = card ? `${card.name}: ${card.description}` : '';
+  const rootRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [tipOpen, setTipOpen] = useState(false);
+  const tooltipStyle = usePowerTooltipPosition(tipOpen && !disabled, rootRef, popRef);
   
   const IconComponent = useMemo(() => {
     const iconName = card.icon;
@@ -491,6 +495,7 @@ const PowerCardVisual: React.FC<{
 
   return (
     <motion.div 
+      ref={rootRef}
       layout
       title={tip}
       whileHover={!disabled ? { 
@@ -498,6 +503,10 @@ const PowerCardVisual: React.FC<{
         zIndex: 200,
         transition: { type: 'spring', stiffness: 380, damping: 28 }
       } : {}}
+      onMouseEnter={() => !disabled && setTipOpen(true)}
+      onMouseLeave={() => setTipOpen(false)}
+      onFocus={() => !disabled && setTipOpen(true)}
+      onBlur={() => setTipOpen(false)}
       onClick={onClick}
       className={`
         ${small ? 'w-18 h-28 text-[9px]' : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px]'}
@@ -531,7 +540,10 @@ const PowerCardVisual: React.FC<{
 
       {!disabled && (
         <div
-          className={`absolute left-1/2 top-full z-[300] mt-2 w-[min(22rem,calc(100vw-1.25rem))] max-w-[calc(100vw-1.25rem)] -translate-x-1/2 rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md pointer-events-none opacity-0 translate-y-1 scale-[0.98] group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 transition-all duration-200 ease-out ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+          ref={popRef}
+          style={tooltipStyle}
+          className={`rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+          aria-hidden={!tipOpen}
         >
           <div className="flex gap-3 items-start text-left">
             <div className="shrink-0 rounded-lg bg-slate-900 p-2 border border-slate-700">
@@ -669,7 +681,7 @@ const InsightModal: React.FC<{
   
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl">
-      <div className="w-full max-w-4xl bg-gradient-to-br from-slate-900 to-black p-8 rounded-3xl border-4 border-yellow-500/30 shadow-2xl flex flex-col items-center gap-8 relative overflow-hidden">
+      <div className="w-full max-w-4xl bg-gradient-to-br from-slate-900 to-black p-8 rounded-3xl border-4 border-yellow-500/30 shadow-2xl flex flex-col items-center gap-8 relative overflow-visible">
         <div className="absolute top-0 left-0 w-full h-1 bg-yellow-500/50 shadow-[0_0_20px_yellow]" />
         <div className="text-center space-y-2">
           <h2 className="text-4xl sm:text-7xl font-black text-yellow-400 uppercase tracking-tight italic">
@@ -686,7 +698,7 @@ const InsightModal: React.FC<{
             <h3 className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mb-4 text-center border-b border-slate-800 pb-2">
                {intel.type === 'Priestess' ? 'Opponent lineup snapshot' : 'Hierophant reveal order'}
             </h3>
-            <div className="flex flex-wrap gap-4 items-center justify-center">
+            <div className="flex flex-wrap gap-4 items-center justify-center overflow-visible py-2">
               {revealPool.map((entry, i) => (
                 <div key={`${entry.kind}-${i}`}>
                   {revealOrder.slice(0, revealedCount).includes(i) ? (
@@ -829,10 +841,140 @@ const AcquiredAssets: React.FC<{
   );
 };
 
+const RulesSheet: React.FC<{ settings: GameSettings; onClose: () => void }> = ({ settings, onClose }) => {
+  const isPreydatorLobby = settings.hostRole === 'Preydator';
+  const despairSeatPhrase =
+    (settings.preydatorDesperationSeats ?? 'guest') === 'both'
+      ? 'either seat'
+      : (settings.preydatorDesperationSeats ?? 'guest') === 'host'
+        ? 'the host seat'
+        : 'the guest seat';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="absolute inset-0 z-[60] bg-emerald-950/98 backdrop-blur-md p-4 sm:p-6 overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="max-w-lg mx-auto space-y-5 pb-10"
+      >
+        <div className="flex justify-between items-center border-b border-emerald-800 pb-3">
+          <h3 className="font-black uppercase text-yellow-400 tracking-tight text-sm sm:text-base">Rules</h3>
+          <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-emerald-900/80 transition-colors">
+            <X className="w-5 h-5 text-emerald-200" />
+          </button>
+        </div>
+
+        <div className="space-y-2 text-xs sm:text-sm text-emerald-100/95 leading-snug font-medium">
+          <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Basics</p>
+          <ul className="list-disc pl-4 space-y-1.5">
+            <li>Each round there is one <strong>table suit</strong>. It acts as trump—cards in that suit outrank plays that stay off-suit.</li>
+            <li>If both plays are trump or both are off-suit, you compare rank (Ace highest, then King, Queen, Jack, numbers).</li>
+            <li>Round winner draws from the shared deck.</li>
+            <li>
+              Predator trims the prey to an empty hand. Prey tries to drain the predator or the deck before that happens (details follow your role badge).
+              {isPreydatorLobby ? ' In Preydator mode the table hunts until one side survives.' : ''}
+            </li>
+          </ul>
+        </div>
+
+        {!settings.disableJokers && (
+          <div className="space-y-2 text-xs sm:text-sm text-emerald-100/95 leading-snug font-medium">
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Jokers</p>
+            <ul className="list-disc pl-4 space-y-1.5">
+              <li>
+                <strong>Stars table:</strong> a Joker always wins against a single non-Joker — other cards join the Star field,
+                but a Joker never becomes a Star.
+              </li>
+              <li>
+                <strong>Moons table:</strong> if the opponent played <strong>Moons</strong>, the Joker wins; if they did not play
+                Moons, the Joker loses.
+              </li>
+              <li>
+                <strong>Normal trump (Hearts, Clubs, Diamonds, Spades):</strong> the Joker wins only if the opponent&apos;s card
+                matched that table suit; any off-trump card wins against the Joker.
+              </li>
+              <li>
+                Suits like <strong>Frogs, Coins, Bones</strong> are never chosen as table trump, so they never &quot;match&quot; the
+                table suit — the Joker loses to them.
+              </li>
+              <li>Two Jokers tie unless another effect breaks the stalemate.</li>
+            </ul>
+          </div>
+        )}
+
+        {!settings.disablePowerCards && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Power cards</p>
+            <p className="text-xs text-emerald-200/90 leading-snug mb-2">
+              One-shot majors you draft at the start. Tap a row to read its effect—only what applies in this lobby is enforced.
+            </p>
+            <div className="space-y-1.5 rounded-xl border border-emerald-800/60 bg-emerald-950/40 p-2 max-h-[42vh] overflow-y-auto">
+              {MAJOR_ARCANA.map((p) => (
+                <details key={p.id} className="group rounded-lg border border-emerald-900/70 bg-black/25 open:bg-black/35">
+                  <summary className="cursor-pointer select-none px-3 py-2 text-left text-[11px] sm:text-xs font-black uppercase tracking-wide text-yellow-400/95 list-none [&::-webkit-details-marker]:hidden flex justify-between gap-2 items-center">
+                    <span>{p.name}</span>
+                    <ChevronRight className="w-4 h-4 shrink-0 text-emerald-500 transition-transform group-open:rotate-90" />
+                  </summary>
+                  <div className="px-3 pb-2.5 pt-0 text-[11px] sm:text-xs text-emerald-100/90 leading-snug font-normal normal-case border-t border-emerald-900/40">
+                    {p.description}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {settings.enableDesperation && (
+          <div className="space-y-2 text-xs sm:text-sm text-emerald-100/95 leading-snug font-medium">
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Desperation</p>
+            <ul className="list-disc pl-4 space-y-1.5">
+              <li>When desperation is allowed, prey-side players can spin a dangerous wheel instead of conceding—or to fight back.</li>
+              {!isPreydatorLobby ? (
+                <li>Normally only the prey seat may desperation-spin; predator cannot.</li>
+              ) : (
+                <li>In Preydator mode the host chooses which seat may spin ({despairSeatPhrase}).</li>
+              )}
+              <li>Worst wedge can instantly end your game—good wedges add cards.</li>
+              {settings.desperationStarterTierEnabled ? (
+                <li>Starter tier is on—you begin on the desperation ladder sooner.</li>
+              ) : (
+                <li>Starter tier may be off—your first desperation spin pulls you onto the ladder.</li>
+              )}
+            </ul>
+            {settings.tiers.length > 0 && (
+              <p className="text-[11px] text-emerald-300/95 pl-4">
+                Labels this match uses:{' '}
+                <span className="font-semibold text-emerald-100">{settings.tiers.join(', ')}</span>
+              </p>
+            )}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full bg-emerald-800 hover:bg-emerald-700 py-3 rounded-xl font-black uppercase text-xs tracking-wider text-emerald-50 transition-colors"
+        >
+          Close
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
 const DevPowerMenu: React.FC<{
   onSelect: (id: number) => void;
   onClose: () => void;
-}> = ({ onSelect, onClose }) => {
+  deckCount?: number;
+  handCards?: string[];
+  onTrimDeck?: (removeCount: number) => void;
+  onDiscardHandCard?: (cardId: string) => void;
+}> = ({ onSelect, onClose, deckCount, handCards, onTrimDeck, onDiscardHandCard }) => {
   const icons: Record<string, any> = {
     Sparkles, Wand2, Eye, Crown, Shield, BookOpen, Heart, RefreshCw, Scale,
     Anchor, Skull, Waves, Flame, ZapOff, Star, Moon, Sun, Globe,
@@ -846,7 +988,7 @@ const DevPowerMenu: React.FC<{
           <h3 className="text-yellow-400 font-black uppercase text-sm tracking-[0.2em] flex items-center gap-2">
             <Sparkles className="w-4 h-4" /> Architect Mode
           </h3>
-          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Force a power card (dev)</span>
+          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Deck / hand testing + forcing powers</span>
         </div>
         <button 
           onClick={onClose} 
@@ -855,6 +997,63 @@ const DevPowerMenu: React.FC<{
           <X className="w-6 h-6" />
         </button>
       </div>
+
+      {typeof deckCount === 'number' && onTrimDeck && (
+        <div className="mb-5 p-4 rounded-2xl border border-cyan-500/35 bg-cyan-950/30 space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Thin the deck</p>
+          <p className="text-[10px] text-slate-400 leading-snug">
+            Removes from the draw pile ({deckCount} left). Hits famine faster—host executes.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[5, 10, 25, 50].map((n) => (
+              <button
+                key={n}
+                type="button"
+                disabled={deckCount <= 0}
+                onClick={() => onTrimDeck(Math.min(n, deckCount))}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase bg-cyan-900/70 border border-cyan-700/60 text-cyan-100 disabled:opacity-30 hover:bg-cyan-800/90 transition-colors"
+              >
+                −{n}
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={deckCount <= 0}
+              onClick={() => onTrimDeck(Math.max(0, deckCount - 5))}
+              className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase bg-cyan-900/40 border border-cyan-800/40 text-cyan-200 disabled:opacity-30 hover:bg-cyan-800/70 transition-colors"
+            >
+              Leave 5
+            </button>
+            <button
+              type="button"
+              disabled={deckCount <= 0}
+              onClick={() => onTrimDeck(deckCount)}
+              className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase bg-cyan-900/40 border border-cyan-800/40 text-cyan-200 disabled:opacity-30 hover:bg-cyan-800/70 transition-colors"
+            >
+              Drain all
+            </button>
+          </div>
+        </div>
+      )}
+
+      {handCards && onDiscardHandCard && handCards.length > 0 && (
+        <div className="mb-5 p-4 rounded-2xl border border-rose-500/35 bg-rose-950/20 space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-rose-300">Discard from my hand</p>
+          <p className="text-[10px] text-slate-400 leading-snug">Tap a card to drop it immediately (still obeys host sync).</p>
+          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+            {[...handCards].sort().map((cid) => (
+              <button
+                key={cid}
+                type="button"
+                onClick={() => onDiscardHandCard(cid)}
+                className="px-2 py-1 rounded-md text-[9px] font-mono font-bold uppercase bg-slate-900 border border-slate-700 text-slate-200 hover:border-rose-400/70 hover:bg-slate-800 transition-colors"
+              >
+                {cid.replace('-', ' ')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-8">
         {MAJOR_ARCANA.map((card, i) => {
@@ -964,6 +1163,132 @@ function resolutionColumnMotion(fx: ResolutionFx, uid: string) {
   return {};
 }
 
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function inferCoinFlipWinnerUid(message: string, room: RoomData): string | null {
+  const uids = Object.keys(room.players).sort(
+    (a, b) => room.players[b].name.length - room.players[a].name.length
+  );
+  for (const uid of uids) {
+    const raw = room.players[uid].name.trim();
+    if (raw.length < 2) continue;
+    const re = new RegExp(`${escapeRegex(raw)}(?:'s)?\\s+wins\\b`, 'i');
+    if (re.test(message)) return uid;
+  }
+  return null;
+}
+
+/** 3D “priority poker” riff: predator (red wolf) vs prey (blue rabbit), CodePen-style rotateY tumble. */
+const PriorityFlipCard: React.FC<{
+  winnerUid: string | null;
+  room: RoomData;
+}> = ({ winnerUid, room }) => {
+  const role = winnerUid ? room.players[winnerUid]?.role : null;
+
+  const endRotateY = useMemo(() => {
+    if (!winnerUid) return 1080 + 90;
+    if (role === 'Prey') return 1440 + 180;
+    if (role === 'Predator') return 1440;
+    if (role === 'Preydator') return 1440;
+    return 1080 + 90;
+  }, [winnerUid, role]);
+
+  const showPreydatorFinish = Boolean(winnerUid && role === 'Preydator');
+  const showUnknown = !winnerUid;
+
+  return (
+    <div className="mb-6 flex flex-col items-center gap-3 [perspective:1400px]">
+      <div className="relative h-[7.25rem] w-[11.25rem] sm:h-[7.75rem] sm:w-[12rem]">
+        <motion.div
+          initial={{ rotateY: -22, scale: 0.88, opacity: 0.75 }}
+          animate={{ rotateY: endRotateY, scale: 1, opacity: 1 }}
+          transition={{
+            duration: 4.45,
+            ease: [0.15, 0.65, 0.18, 0.99],
+          }}
+          className="relative h-full w-full origin-center [transform-style:preserve-3d]"
+        >
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-red-500/70 bg-gradient-to-br from-red-950 via-red-900 to-black text-red-100 shadow-[0_12px_40px_rgba(220,38,38,0.35)]"
+            style={{
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'rotateY(0deg) translateZ(3px)',
+            }}
+          >
+            <div className="h-14 w-14 sm:h-16 sm:w-16">
+              <WolfIcon />
+            </div>
+            <span className="mt-1 text-[9px] font-black uppercase tracking-[0.28em] text-red-200/95">Predator</span>
+          </div>
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-sky-500/70 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-sky-100 shadow-[0_12px_40px_rgba(56,189,248,0.28)]"
+            style={{
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'rotateY(180deg) translateZ(3px)',
+            }}
+          >
+            <Rabbit className="h-14 w-14 sm:h-16 sm:w-16 opacity-90" strokeWidth={1.5} />
+            <span className="mt-1 text-[9px] font-black uppercase tracking-[0.28em] text-sky-200/95">Prey</span>
+          </div>
+        </motion.div>
+
+        {showPreydatorFinish && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 3.85, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-2xl border-2 border-purple-500/80 bg-gradient-to-br from-purple-950/95 via-fuchsia-950/90 to-slate-950 shadow-[0_0_36px_rgba(168,85,247,0.45)]"
+          >
+            <div className="flex items-center gap-3 opacity-95">
+              <div className="h-10 w-10 text-red-200">
+                <WolfIcon />
+              </div>
+              <Rabbit className="h-10 w-10 text-sky-200" strokeWidth={1.5} />
+            </div>
+            <span className="mt-1.5 text-[9px] font-black uppercase tracking-[0.22em] text-purple-100/95">Preydator</span>
+          </motion.div>
+        )}
+
+        {showUnknown && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.92 }}
+            transition={{ delay: 3.6, duration: 0.5 }}
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-2xl border border-amber-400/40 bg-black/55 backdrop-blur-[2px]"
+          >
+            <span className="text-3xl text-amber-200/90 drop-shadow-lg">⚖</span>
+            <span className="mt-2 text-[8px] font-black uppercase tracking-widest text-amber-100/85">Seat order only</span>
+          </motion.div>
+        )}
+      </div>
+
+      <div className="flex flex-col items-center gap-0.5 text-center px-4">
+        <span className="text-[7px] font-black uppercase tracking-[0.35em] text-amber-200/95">Priority flip</span>
+        {winnerUid && (
+          <motion.span
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 3.9, duration: 0.45 }}
+            className="max-w-[18rem] text-[10px] font-bold uppercase italic tracking-wide text-yellow-300/95"
+          >
+            {room.players[winnerUid].name} — leads (
+            {room.players[winnerUid].role === 'Preydator'
+              ? 'Preydator'
+              : room.players[winnerUid].role === 'Predator'
+                ? 'Predator'
+                : 'Prey'}
+            )
+          </motion.span>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ResolutionSequence: React.FC<{ 
   room: RoomData, 
   myUid: string, 
@@ -976,7 +1301,7 @@ const ResolutionSequence: React.FC<{
   const [summoned, setSummoned] = useState<Record<string, string>>({});
   const [devilStolen, setDevilStolen] = useState<Record<string, number>>({});
   const [visibleEvents, setVisibleEvents] = useState<
-    { id: number; message: string; eventType?: ResolutionEventType }
+    { id: number; message: string; eventType?: ResolutionEventType; coinWinnerUid?: string | null }
   >([]);
   const [isDone, setIsDone] = useState(false);
   const [towerScorch, setTowerScorch] = useState<Record<string, boolean>>({});
@@ -1010,7 +1335,13 @@ const ResolutionSequence: React.FC<{
         setEventIndex(i);
         setVisibleEvents(prev => [
           ...prev,
-          { id: Date.now() + i, message: event.message, eventType: event.type }
+          {
+            id: Date.now() + i,
+            message: event.message,
+            eventType: event.type,
+            coinWinnerUid:
+              event.type === 'COIN_FLIP' ? inferCoinFlipWinnerUid(event.message, room) : undefined,
+          },
         ]);
         
         switch (event.type) {
@@ -1073,7 +1404,7 @@ const ResolutionSequence: React.FC<{
         }
         let pauseMs =
           event.type === 'COIN_FLIP'
-            ? 2200
+            ? 5200
             : event.type === 'POWER_DESTROYED'
               ? 1500
               : event.type === 'CARD_EMPOWER' || event.type === 'TARGET_CHANGE'
@@ -1176,9 +1507,9 @@ const ResolutionSequence: React.FC<{
               initial={{ scale: 0.75, opacity: 0.4, filter: 'drop-shadow(0 0 0 rgba(251,191,36,0))' }}
               animate={{ scale: 1.06, opacity: 1, filter: 'drop-shadow(0 0 18px rgba(251,191,36,0.45))' }}
               transition={{ type: 'spring', stiffness: 280, damping: 18 }}
-              className={`w-11 h-11 flex items-center justify-center rounded-full bg-slate-900 border border-slate-700 shadow-2xl ${SUIT_COLORS[currentTarget || 'Hearts']}`}
+              className={`w-[3.35rem] h-[3.35rem] sm:w-16 sm:h-16 flex items-center justify-center rounded-full bg-slate-900 border-2 border-slate-600 shadow-2xl ${SUIT_COLORS[currentTarget || 'Hearts']}`}
             >
-              <SuitGlyph suit={currentTarget || 'Hearts'} className="w-7 h-7" />
+              <SuitGlyph suit={currentTarget || 'Hearts'} className="w-[2.35rem] h-[2.35rem] sm:w-11 sm:h-11 drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]" />
             </motion.div>
             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">this round</span>
           </div>
@@ -1347,31 +1678,20 @@ const ResolutionSequence: React.FC<{
 
       <div className="flex-none w-full max-w-xl mt-6 flex flex-col items-center">
         <div className="min-h-[64px] flex flex-col items-center justify-center relative overflow-visible w-full">
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             {(() => {
               const lastEcho = visibleEvents[visibleEvents.length - 1];
               if (!lastEcho || lastEcho.eventType !== 'COIN_FLIP') return null;
               return (
                 <motion.div
                   key={lastEcho.id}
-                  initial={{ opacity: 0, scale: 0.35, rotateY: -140 }}
-                  animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-                  exit={{ opacity: 0, scale: 0.6 }}
-                  transition={{ type: 'spring', stiffness: 220, damping: 16 }}
-                  className="mb-6 flex flex-col items-center gap-2"
+                  initial={{ opacity: 0, y: 28 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -16, scale: 0.96 }}
+                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                  className="mb-2 flex w-full justify-center"
                 >
-                  <div className="relative w-[4.75rem] h-[4.75rem] rounded-full shadow-[0_0_42px_rgba(245,158,11,0.45)] border-[3px] border-amber-200 bg-linear-to-br from-amber-200 via-yellow-400 to-amber-600 flex items-center justify-center">
-                    <motion.div
-                      initial={{ rotateY: 0 }}
-                      animate={{ rotateY: 360 }}
-                      transition={{ repeat: Infinity, duration: 1.85, ease: 'linear' }}
-                      className="text-[13px] font-black uppercase text-amber-950 tracking-tighter italic"
-                      style={{ transformStyle: 'preserve-3d' }}
-                    >
-                      ⚖
-                    </motion.div>
-                  </div>
-                  <span className="text-[7px] font-black uppercase tracking-[0.35em] text-amber-200/95">Priority flip</span>
+                  <PriorityFlipCard winnerUid={lastEcho.coinWinnerUid ?? null} room={room} />
                 </motion.div>
               );
             })()}
@@ -2252,6 +2572,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           decision={myPendingDecision}
           priestessLockedCard={myPendingDecision.powerCardId === 2 ? (room.engageMoves?.[myUid] ?? me.currentMove ?? null) : null}
           priestessHand={myPendingDecision.powerCardId === 2 ? me.hand : []}
+          tableSuit={room.targetSuit ?? null}
           onSubmit={handleSubmitPowerDecision}
         />
       )}
@@ -2259,7 +2580,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       {isDevMenuOpen && (
         <DevPowerMenu 
           onSelect={(id) => serviceRef.current.cheatPowerCard(id)} 
-          onClose={() => setIsDevMenuOpen(false)} 
+          onClose={() => setIsDevMenuOpen(false)}
+          {...(room.status === 'playing' || room.status === 'powering' || room.status === 'results'
+            ? {
+                deckCount: room.deck.length,
+                handCards: me.hand,
+                onTrimDeck: (n: number) => serviceRef.current.cheatTrimDeck(n),
+                onDiscardHandCard: (cid: string) => serviceRef.current.cheatDiscardFromHand(cid),
+              }
+            : {})}
         />
       )}
 
@@ -2446,6 +2775,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      animate={{ opacity: 1, y: 0 }}
                      className="flex flex-col items-center gap-4"
                    >
+                     {room.targetSuit && (
+                       <div className="flex flex-col items-center gap-1.5 -mt-2 mb-1">
+                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Table suit</span>
+                         <div className={`flex items-center gap-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)] ${SUIT_COLORS[room.targetSuit]}`}>
+                           <SuitGlyph suit={room.targetSuit} className="w-10 h-10 sm:w-12 sm:h-12" />
+                           <span className="text-sm sm:text-base font-black uppercase tracking-wider">{room.targetSuit}</span>
+                         </div>
+                       </div>
+                     )}
                      <div className="flex items-center gap-8">
                        <div className="flex flex-col items-center gap-2">
                          <span className="text-[9px] uppercase font-black text-emerald-400">{me.name}</span>
@@ -2499,20 +2837,24 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      className="flex flex-col items-center gap-3"
                    >
                      {/* The Target Card */}
-                     <div className={`
-                       w-24 h-36 sm:w-32 sm:h-48 bg-yellow-400 rounded-2xl shadow-[0_0_40px_rgba(250,204,21,0.3)]
-                       flex flex-col items-center justify-center border-4 border-yellow-200 relative overflow-hidden
-                     `}>
-                        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px]" />
+                     <div
+                       className={`
+                         w-[7.25rem] h-[10.75rem] sm:w-[8.75rem] sm:h-[13.25rem] bg-yellow-400 rounded-2xl shadow-[0_0_40px_rgba(250,204,21,0.3)]
+                         flex flex-col items-center justify-center border-4 border-yellow-200 relative
+                       `}
+                     >
+                        <div className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden">
+                          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px]" />
+                        </div>
                         {(() => {
                           const ts = (room.status === 'results' ? (room.lastOutcome?.targetSuit || room.targetSuit) : room.targetSuit) as Suit | null;
                           const color = ts ? SUIT_COLORS[ts] : '';
                           return ts ? (
-                            <div className={`drop-shadow-2xl ${color}`}>
-                              <SuitGlyph suit={ts} className="w-[8rem] h-[8rem] sm:w-[13rem] sm:h-[13rem]" />
+                            <div className={`relative z-10 flex items-center justify-center ${color} drop-shadow-[0_6px_22px_rgba(0,0,0,0.35)]`}>
+                              <SuitGlyph suit={ts} className="w-[4.75rem] h-[4.75rem] sm:w-[7.25rem] sm:h-[7.25rem]" />
                             </div>
                           ) : (
-                            <span className="text-5xl font-black text-yellow-950">?</span>
+                            <span className="relative z-10 text-5xl font-black text-yellow-950">?</span>
                           );
                         })()}
                      </div>
@@ -2760,32 +3102,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
       {/* Rules Modal */}
       <AnimatePresence>
-        {showRules && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowRules(false)}
-            className="absolute inset-0 z-[60] bg-emerald-950/98 backdrop-blur p-6 overflow-y-auto"
-          >
-            <div className="max-w-xs mx-auto space-y-6">
-              <div className="flex justify-between items-center border-b border-emerald-800 pb-2">
-                <h3 className="font-black uppercase text-yellow-400 tracking-tighter">How to play</h3>
-                <button onClick={() => setShowRules(false)}><ArrowLeft className="w-4 h-4" /></button>
-              </div>
-              
-              <div className="space-y-4 text-[10px] leading-relaxed font-bold text-emerald-100 uppercase tracking-tight">
-                <p><span className="text-yellow-400">01. Table suit:</span> Each round the table picks a trump suit—the “money” suit for that trick.</p>
-                <p><span className="text-yellow-400">02. Ranking:</span> Cards in the table suit beat everything else. If both match (both in suit or both not), <span className="text-white">high card wins (Ace tops)</span>.</p>
-                <p><span className="text-yellow-400">03. Jokers:</span> A Joker wins only if your opponent stayed on-table-suit; it loses against any off-suit play.</p>
-                <p><span className="text-yellow-400">04. Payoff:</span> The round winner draws from the shared deck.</p>
-                <p><span className="text-yellow-400">05. Winning the game:</span> Predator trims the prey hand to zero. Prey wins by emptying the predator’s hand—or the deck—first.</p>
-              </div>
-
-              <button className="w-full bg-emerald-800 py-3 rounded-lg font-black uppercase text-[10px]">Close Dossier</button>
-            </div>
-          </motion.div>
-        )}
+        {showRules && <RulesSheet key="rules-modal" settings={room.settings} onClose={() => setShowRules(false)} />}
       </AnimatePresence>
     </div>
   );

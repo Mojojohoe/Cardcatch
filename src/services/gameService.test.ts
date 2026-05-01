@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GameService, getCardValue, parseCard } from './gameService';
+import { GameService, evaluateTrickClash, explainPlainClash, getCardValue, parseCard } from './gameService';
 import { createFixturePlayers, createFixtureRoom } from './gameService.fixtures';
 
 test('parseCard and getCardValue preserve card parsing semantics', () => {
@@ -10,6 +10,26 @@ test('parseCard and getCardValue preserve card parsing semantics', () => {
   assert.equal(ace.suit, 'Hearts');
   assert.equal(getCardValue('Joker-1'), 20);
   assert.equal(getCardValue('Hearts-A'), 14);
+});
+
+test('explainPlainClash states joker beats on-suit play', () => {
+  const msg = explainPlainClash('Joker-1', 'Hearts-7', 'Hearts');
+  assert.match(msg, /joker/i);
+  assert.match(msg, /Hearts/);
+});
+
+test('Joker vs non-Joker on Stars always favors Joker', () => {
+  assert.equal(evaluateTrickClash('Joker-1', 'Stars-9', 'Stars'), 'p1');
+  assert.equal(evaluateTrickClash('Hearts-A', 'Joker-1', 'Stars'), 'p2');
+});
+
+test('Moons table joker beats Moons play only', () => {
+  assert.equal(evaluateTrickClash('Joker-1', 'Moons-4', 'Moons'), 'p1');
+  assert.equal(evaluateTrickClash('Joker-1', 'Hearts-A', 'Moons'), 'p2');
+});
+
+test('Frogs never match Hearts target — Joker loses to Frog', () => {
+  assert.equal(evaluateTrickClash('Joker-1', 'Frogs-1', 'Hearts'), 'p2');
 });
 
 test('calculateOutcome deterministic baseline without powers', () => {

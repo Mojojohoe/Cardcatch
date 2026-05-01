@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { MAJOR_ARCANA } from '../types';
-import { CardVisual, PowerCardVisual } from './GameVisuals';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { MAJOR_ARCANA, Suit } from '../types';
+import { CardVisual, PowerCardVisual, SUIT_COLORS } from './GameVisuals';
+import { SuitGlyph } from './SuitGlyphs';
 
 export interface PendingDecisionView {
   powerCardId: number;
@@ -100,10 +102,13 @@ export const PowerDecisionModal: React.FC<{
   priestessLockedCard?: string | null;
   /** Full hand (includes locked card): swap target must exist here. */
   priestessHand?: string[];
+  /** Table suit for this round — shown in modal header during resolution */
+  tableSuit?: Suit | null;
   onSubmit: (option: string, wheelOffset?: number, priestessSwapToCard?: string | null) => void;
-}> = ({ decision, priestessLockedCard = null, priestessHand = [], onSubmit }) => {
+}> = ({ decision, priestessLockedCard = null, priestessHand = [], tableSuit = null, onSubmit }) => {
   const [wheelOffset] = useState(0.25);
   const [priestessPickIndex, setPriestessPickIndex] = useState<number | null>(null);
+  const [panelDockedBottom, setPanelDockedBottom] = useState(false);
   const isWheel = decision.powerCardId === 10;
   const isPriestess = decision.powerCardId === 2;
 
@@ -134,14 +139,45 @@ export const PowerDecisionModal: React.FC<{
     swapCard !== null && swapCard !== locked && priestessHand.some((c) => c === swapCard);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[260] flex flex-col justify-end p-0">
-      <div className="pointer-events-auto w-full max-h-[min(52vh,480px)] sm:max-h-[min(58vh,560px)] flex flex-col rounded-t-3xl border border-yellow-500/45 border-b-0 bg-slate-950/96 backdrop-blur-xl shadow-[0_-20px_60px_rgba(0,0,0,0.55)] mx-auto sm:max-w-2xl lg:max-w-4xl overflow-hidden">
-        <div className="shrink-0 flex justify-center pt-2 pb-1">
-          <div className="h-1 w-14 rounded-full bg-slate-600/70" aria-hidden />
+    <div
+      className={`pointer-events-none absolute inset-0 z-[260] flex flex-col px-2 sm:px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] ${panelDockedBottom ? 'justify-end' : 'justify-center'}`}
+    >
+      <div
+        className={`pointer-events-auto w-full mx-auto flex flex-col bg-slate-950/96 backdrop-blur-xl border border-yellow-500/45 shadow-[0_24px_70px_rgba(0,0,0,0.55)] overflow-hidden sm:max-w-2xl lg:max-w-4xl ${
+          panelDockedBottom
+            ? 'max-h-[min(52vh,520px)] sm:max-h-[min(58vh,600px)] rounded-t-3xl rounded-b-none border-b-0'
+            : 'max-h-[min(85vh,760px)] rounded-3xl'
+        }`}
+      >
+        <div className="relative shrink-0 flex flex-col gap-2 border-b border-yellow-500/20 pt-2 pb-2.5 px-14">
+          <div className="flex justify-center pt-1">
+            <div className="h-1 w-14 rounded-full bg-slate-600/70" aria-hidden />
+          </div>
+          {tableSuit ? (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center px-2 min-h-[2.25rem]">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Table suit</span>
+              <span className={`inline-flex items-center gap-2 font-black uppercase tracking-wider text-xs sm:text-sm ${SUIT_COLORS[tableSuit] ?? ''}`}>
+                <SuitGlyph suit={tableSuit} className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]" />
+                {tableSuit}
+              </span>
+            </div>
+          ) : (
+            <div className="min-h-[0.25rem]" aria-hidden />
+          )}
+          <button
+            type="button"
+            onClick={() => setPanelDockedBottom((v) => !v)}
+            className="absolute right-2 top-2 flex items-center justify-center min-w-[2.75rem] min-h-[2.75rem] rounded-xl bg-slate-800/95 border border-slate-600 text-yellow-400 hover:bg-slate-700/95 hover:text-yellow-300 shadow-lg z-10"
+            aria-label={panelDockedBottom ? 'Move power menu to center' : 'Dock power menu to bottom'}
+          >
+            {panelDockedBottom ? (
+              <ChevronUp strokeWidth={2.75} className="w-8 h-8" />
+            ) : (
+              <ChevronDown strokeWidth={2.75} className="w-8 h-8" />
+            )}
+          </button>
         </div>
-        <div
-          className={`overflow-y-auto px-4 pb-6 pt-1 space-y-4 flex-1 min-h-0 ${isPriestess ? '' : ''}`}
-        >
+        <div className={`overflow-y-auto px-4 pb-6 pt-3 space-y-4 flex-1 min-h-0 ${isPriestess ? '' : ''}`}>
         <h3 className="text-lg sm:text-xl font-black uppercase text-yellow-400">
           {decision.powerCardId === 1
             ? 'Magician'
@@ -173,13 +209,12 @@ export const PowerDecisionModal: React.FC<{
             {oppUsesPower && decision.priestessPowerCandidates && decision.priestessPowerCandidates.length >= 3 && (
               <div className="space-y-3 rounded-xl border border-amber-500/35 bg-black/35 px-3 py-4">
                 <p className="text-center text-[10px] font-bold text-amber-200/95 normal-case px-2">
-                  Three candidates from the draft — one is their power card (order is scrambled).
+                  Their active power card is one of these three — the order shown does not imply which one they played.
                 </p>
-                <div className="flex flex-wrap justify-center gap-3 sm:gap-5">
+                <div className="grid grid-cols-3 gap-3 sm:gap-5 w-full max-w-md mx-auto place-items-center justify-items-center">
                   {decision.priestessPowerCandidates.slice(0, 3).map((id, idx) => (
-                    <div key={`${id}-${idx}`} className="flex flex-col items-center gap-1">
-                      <PowerCardVisual cardId={id} small revealed />
-                      <span className="text-[8px] font-black uppercase tracking-wider text-slate-500">{MAJOR_ARCANA[id]?.name ?? id}</span>
+                    <div key={`${id}-${idx}`} className="flex justify-center w-full">
+                      <PowerCardVisual cardId={id} panel revealed />
                     </div>
                   ))}
                 </div>
