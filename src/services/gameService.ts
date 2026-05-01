@@ -1,5 +1,6 @@
 import Peer, { DataConnection } from 'peerjs';
 import { RoomData, PlayerData, Suit, SUITS, VALUES, GameSettings, PlayerRole, MAJOR_ARCANA, ResolutionEvent, PendingPowerDecision } from '../types';
+import { DESPERATION_GAME_SLICES, FORTUNE_GAME_SLICES } from '../wheels/presets';
 
 export const createDeck = (disableJokers: boolean): string[] => {
   const deck: string[] = [];
@@ -209,23 +210,8 @@ const saveSettings = (settings: GameSettings) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 };
 
-export const DESPERATION_SLICES = [
-  { label: 'GAME OVER', weight: 1 },
-  { label: 'Gain 3 Cards', weight: 15 },
-  { label: 'Gain 2 Cards', weight: 6 },
-  { label: 'Gain 4 Cards', weight: 6 },
-  { label: 'Gain 1 Cards', weight: 3 },
-  { label: 'Gain 3 Cards', weight: 15 },
-  { label: 'Gain 2 Cards', weight: 6 },
-  { label: 'Gain 4 Cards', weight: 6 },
-  { label: 'Gain 1 Cards', weight: 3 },
-  { label: 'Gain 3 Cards', weight: 15 },
-  { label: 'Gain 2 Cards', weight: 6 },
-  { label: 'Gain 4 Cards', weight: 6 },
-  { label: 'Gain 1 Cards', weight: 3 },
-  { label: 'Gain 5 Cards', weight: 5 },
-  { label: 'Gain 6 Cards', weight: 4 },
-];
+/** Same slice weights as wheels module / UI */
+export const DESPERATION_SLICES = DESPERATION_GAME_SLICES;
 
 /** Whether `uid` may start a desperation spin under current role + Preydator seat rules. */
 export function desperationSpinAllowed(room: RoomData, uid: string, player: PlayerData): boolean {
@@ -962,15 +948,7 @@ export class GameService {
   }
 
   private getWheelOutcome(offset: number): string {
-    const slices = [
-      { label: 'LOSE_ROUND', weight: 3 },
-      { label: 'WIN_ROUND', weight: 3 },
-      { label: 'WIN_2_CARDS', weight: 5 },
-      { label: 'DOUBLE_JOKER', weight: 1 },
-      { label: 'JACKPOT', weight: 2 },
-      { label: 'POWER_CARD', weight: 1 },
-      { label: 'LOSE_2_CARDS', weight: 5 }
-    ];
+    const slices = FORTUNE_GAME_SLICES;
     const total = slices.reduce((acc, s) => acc + s.weight, 0);
     const target = Math.max(0, Math.min(0.999999, offset)) * total;
     let running = 0;

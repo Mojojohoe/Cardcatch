@@ -312,7 +312,12 @@ export const PowerCardVisual: React.FC<{
   );
 };
 
-export const TargetSuitWheel: React.FC<{ suit: Suit | null; isSpinning: boolean; offset?: number; availableSuits?: Suit[] }> = ({ suit, isSpinning, offset = 0.5, availableSuits = SUITS as unknown as Suit[] }) => {
+export const TargetSuitWheel: React.FC<{
+  suit: Suit | null;
+  isSpinning: boolean;
+  offset?: number;
+  availableSuits?: readonly Suit[];
+}> = ({ suit, isSpinning, offset = 0.5, availableSuits = SUITS }) => {
   const rotation = useMemo(() => {
     const suitIndex = availableSuits.indexOf(suit || availableSuits[0]);
     const sliceAngle = 360 / availableSuits.length;

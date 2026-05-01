@@ -50,7 +50,7 @@ import {
   RotateCcw,
   Plus,
 } from 'lucide-react';
-import { GameService, parseCard, DESPERATION_SLICES, desperationSpinAllowed } from './services/gameService';
+import { GameService, parseCard, desperationSpinAllowed } from './services/gameService';
 import { usePowerTooltipPosition } from './hooks/usePowerTooltipPosition';
 import {
   RoomData,
@@ -70,8 +70,16 @@ import {
 } from './types';
 import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerInteraction';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
-import { SuitGlyph, SuitWheelMarkerG } from './components/SuitGlyphs';
+import { SuitGlyph } from './components/SuitGlyphs';
 import { CssCoinEmbed, CssCoinFlipDegrees } from './coinflip/CssCoinEmbed';
+import {
+  ConfigurableWheel,
+  resolveWheelSegments,
+  desperationWheelDefinition,
+  buildTargetSuitWheelDefinition,
+} from './wheels';
+
+const DESPERATION_WHEEL_SEGMENTS = resolveWheelSegments(desperationWheelDefinition);
 
 const SUIT_COLORS: Record<string, string> = {
   Hearts: 'text-red-500',
@@ -173,12 +181,7 @@ const DesperationWheel: React.FC<{
 }) => {
   const [showResult, setShowResult] = useState(false);
 
-  const totalWeight = DESPERATION_SLICES.reduce((acc, s) => acc + s.weight, 0);
-
-  const rotation = useMemo(() => {
-    const extraSpins = 360 * 15; // 15 full spins for tension
-    return -(extraSpins + (offset * 360));
-  }, [offset]);
+  const spinSeconds = desperationWheelDefinition.spinDurationSeconds;
 
   const highlightIdx = desperationSidebarHighlightLadderIdx(desperationTier, isSpinning, result);
 
@@ -187,12 +190,12 @@ const DesperationWheel: React.FC<{
       setShowResult(false);
       const timer = setTimeout(() => {
         setShowResult(true);
-      }, 12000);
+      }, spinSeconds * 1000);
       return () => clearTimeout(timer);
     } else if (result) {
       setShowResult(true);
     }
-  }, [isSpinning, result]);
+  }, [isSpinning, result, spinSeconds]);
 
   const nextLadderIdx = desperationTier < 0 ? 1 : desperationTier + 1;
 
@@ -245,105 +248,41 @@ const DesperationWheel: React.FC<{
           opposingHandOverlay ? 'scale-[0.42] sm:scale-[0.48]' : isSpectator ? 'scale-50 sm:scale-75 -translate-y-12' : 'mb-8 scale-100'
         } `}
       >
-        <div className="relative w-72 h-72 sm:w-[480px] sm:h-[480px]">
-          {/* External Rings */}
-          <div className="absolute -inset-4 border border-purple-500/10 rounded-full animate-[spin_20s_linear_infinite]" />
-          <div className="absolute -inset-8 border border-purple-500/5 rounded-full animate-[spin_30s_linear_infinite_reverse]" />
-          
-          <motion.div 
-            initial={{ rotate: 0 }}
-            animate={{ rotate: isSpinning ? rotation : -(offset * 360) }}
-            transition={{ duration: isSpinning ? 12 : 0.5, ease: [0.12, 0, 0, 1] }}
-            className="w-full h-full rounded-full border-[10px] border-purple-900/40 relative shadow-[0_0_80px_rgba(168,85,247,0.2)] overflow-hidden"
-          >
-            {/* Background Slices */}
-            <div className="absolute inset-0" 
-                 style={{ 
-                   background: `conic-gradient(${
-                     (() => {
-                        let currentW = 0;
-                        return DESPERATION_SLICES.map((slice, i) => {
-                          const start = (currentW / totalWeight) * 100;
-                          currentW += slice.weight;
-                          const end = (currentW / totalWeight) * 100;
-                          const color = slice.label === "GAME OVER" ? "#2d0606" : i % 2 === 0 ? "#1e1b4b" : "#110e2d";
-                          return `${color} ${start}% ${end}%`;
-                        }).join(", ");
-                     })()
-                   })`
-                 }} 
-            />
-            
-            {/* Divider Lines */}
-            <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full opacity-20 pointer-events-none">
-              {(() => {
-                let divW = 0;
-                return DESPERATION_SLICES.map((_, i) => {
-                   divW += DESPERATION_SLICES[i].weight;
-                   const angle = (divW / totalWeight) * 360;
-                   const x2 = 50 + 50 * Math.cos(((angle - 90) * Math.PI) / 180);
-                   const y2 = 50 + 50 * Math.sin(((angle - 90) * Math.PI) / 180);
-                   return <line key={i} x1="50" y1="50" x2={x2} y2={y2} stroke="white" strokeWidth="0.2" />;
-                });
-              })()}
-            </svg>
-
-            {/* Precision Labels */}
-            {(() => {
-              let textWeight = 0;
-              return DESPERATION_SLICES.map((slice, i) => {
-    const angle = (slice.weight / totalWeight) * 360;
-    const startAngle = (textWeight / totalWeight) * 360;
-    textWeight += slice.weight;
-    const midAngle = startAngle + angle / 2;
-    return (
-      <div 
-        key={i}
-        className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        style={{ transform: `rotate(${midAngle - 90}deg)` }}
-      >
-        <div className="absolute right-[4%] w-[28%] flex items-center justify-center text-center">
-          <span 
-            className={`
-              text-white font-black uppercase tracking-widest leading-none whitespace-nowrap
-              ${slice.label === 'GAME OVER' ? 'text-[11px] sm:text-[15px] text-red-500' : 'text-[8px] sm:text-[11px] opacity-70'}
-            `}
-            style={{ textShadow: "0 2px 10px rgba(0,0,0,0.9)" }}
-          >
-            {slice.label === "GAME OVER" ? "SYSTEM FAIL" : slice.label.toUpperCase().replace("GAIN", "DRAW")}
-          </span>
-        </div>
-      </div>
-    );
-  });
-})()}
-          </motion.div>
-
-          <div className="absolute inset-0 flex items-center justify-center z-20">
-            {!isSpectator ? (
-              <button 
-                onClick={() => !isSpinning && !result && onSpin(Math.random())}
-                disabled={isSpinning || !!result}
-                className={`
-                  w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white/10 bg-purple-600 shadow-2xl flex items-center justify-center
-                  transition-all active:scale-95 group relative
-                  ${(isSpinning || !!result) ? "opacity-50 grayscale cursor-not-allowed" : "hover:scale-110 hover:bg-purple-500 shadow-[0_0_50px_rgba(168,85,247,0.5)]"}
+        <div
+          className={`relative mx-auto shadow-[0_0_80px_rgba(168,85,247,0.2)] ${
+            opposingHandOverlay ? 'h-52 w-52 max-w-full' : 'h-72 w-72 sm:h-[480px] sm:w-[480px]'
+          }`}
+        >
+          <ConfigurableWheel
+            definition={desperationWheelDefinition}
+            segments={DESPERATION_WHEEL_SEGMENTS}
+            offset={offset}
+            spinning={isSpinning}
+            decorativeRings={!opposingHandOverlay && !isSpectator}
+            className="shadow-[0_0_80px_rgba(168,85,247,0.2)]"
+            sizeClass="h-full w-full"
+            renderCenter={
+              !isSpectator ? (
+                <button
+                  type="button"
+                  onClick={() => !isSpinning && !result && onSpin(Math.random())}
+                  disabled={isSpinning || !!result}
+                  className={`
+                  relative z-20 flex h-24 w-24 sm:h-32 sm:w-32 shrink-0 cursor-pointer items-center justify-center rounded-full border-4 border-white/10 bg-purple-600 shadow-2xl transition-all active:scale-95
+                  ${isSpinning || !!result ? 'cursor-not-allowed opacity-50 grayscale' : 'hover:scale-110 hover:bg-purple-500 hover:shadow-[0_0_50px_rgba(168,85,247,0.5)]'}
                 `}
-              >
-                <div className="bg-emerald-950 px-4 py-1.5 rotate-[-8deg] shadow-xl group-hover:rotate-0 transition-transform">
-                  <span className="text-white text-xl sm:text-2xl font-black uppercase tracking-[0.1em] italic">SPIN</span>
+                >
+                  <div className="rotate-[-8deg] bg-emerald-950 px-4 py-1.5 shadow-xl transition-transform group-hover:rotate-0">
+                    <span className="text-xl font-black uppercase italic tracking-[0.1em] text-white sm:text-2xl">SPIN</span>
+                  </div>
+                </button>
+              ) : (
+                <div className="z-20 flex h-24 w-24 shrink-0 items-center justify-center rounded-full border-4 border-purple-500/20 bg-purple-950 sm:h-32 sm:w-32">
+                  <Skull className="h-10 w-10 animate-pulse text-purple-700" />
                 </div>
-              </button>
-            ) : (
-              <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-purple-500/20 bg-purple-950 flex items-center justify-center">
-                <Skull className="w-10 h-10 text-purple-700 animate-pulse" />
-              </div>
-            )}
-          </div>
-
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex flex-col items-center">
-            <div className="w-10 h-12 bg-yellow-400 shadow-[0_0_30px_rgba(250,204,21,0.5)]" style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }} />
-          </div>
+              )
+            }
+          />
         </div>
       </div>
 
@@ -359,7 +298,7 @@ const DesperationWheel: React.FC<{
                 className="h-full bg-purple-500"
                 initial={{ width: '0%' }}
                 animate={{ width: '100%' }}
-                transition={{ duration: 12, ease: 'linear' }}
+                transition={{ duration: spinSeconds, ease: 'linear' }}
               />
             </div>
             {isSpectator && !opposingHandOverlay && (
@@ -683,72 +622,41 @@ interface TargetSuitWheelProps {
   suit: Suit | null;
   isSpinning: boolean;
   offset?: number;
-  availableSuits?: Suit[];
+  /** Read-only: callers may pass duplicate suits per slice or any `Suit` union member. */
+  availableSuits?: readonly Suit[];
 }
 
-const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({ suit, isSpinning, offset = 0.5, availableSuits = SUITS as any }) => {
-  const rotation = useMemo(() => {
-    const suitIndex = availableSuits.indexOf(suit || availableSuits[0]);
+const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
+  suit,
+  isSpinning,
+  offset = 0.5,
+  availableSuits = SUITS,
+}) => {
+  const wheelDef = useMemo(() => buildTargetSuitWheelDefinition(availableSuits), [availableSuits]);
+  const segments = useMemo(() => resolveWheelSegments(wheelDef), [wheelDef]);
+
+  const discRotationDeg = useMemo(() => {
+    const suitIndex = availableSuits.indexOf(suit ?? availableSuits[0]);
     const sliceAngle = 360 / availableSuits.length;
-    const baseRotation = -(sliceAngle / 2); 
-    const suitOffset = suitIndex * sliceAngle;
-    const extraSpins = 360 * 8; 
-    const sliceOffset = (offset * (sliceAngle - 10)) - (sliceAngle / 2 - 5);
-    return baseRotation - suitOffset - extraSpins + sliceOffset;
-  }, [suit, offset, availableSuits]);
+    const centerOffset = sliceAngle / 2;
+    const jitter = (offset - 0.5) * (sliceAngle * 0.8);
+    return -(360 * wheelDef.extraSpinsWhileSpinning + suitIndex * sliceAngle + centerOffset - jitter);
+  }, [suit, offset, availableSuits, wheelDef.extraSpinsWhileSpinning]);
 
   return (
-    <div className="relative w-48 h-48 flex items-center justify-center">
-      <div className="absolute -top-6 z-40 text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.6)]">
-        <div className="w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[14px] border-t-yellow-500" />
+    <div className="relative flex flex-col items-center pt-5">
+      <div className="relative z-10 h-48 w-48 shrink-0">
+        <div className="pointer-events-none absolute inset-0 z-[5] rounded-full bg-linear-to-tr from-white/10 to-transparent" />
+        <ConfigurableWheel
+          definition={wheelDef}
+          segments={segments}
+          offset={0}
+          spinning={isSpinning}
+          discRotationDeg={discRotationDeg}
+          sizeClass="h-full w-full"
+          className="shadow-[0_0_52px_rgba(0,0,0,0.88)]"
+        />
       </div>
-
-      <motion.div
-        animate={{ rotate: rotation }}
-        transition={isSpinning ? { duration: 5, ease: [0.22, 1, 0.36, 1] } : { duration: 0 }}
-        className="w-full h-full rounded-full border-8 border-emerald-950 overflow-hidden bg-emerald-950 relative shadow-[0_0_60px_rgba(0,0,0,0.9)]"
-      >
-        <svg viewBox="0 0 100 100" className="w-full h-full">
-          {availableSuits.map((s, i) => {
-            const angle = 360 / availableSuits.length;
-            const startAngle = i * angle;
-            const endAngle = (i + 1) * angle;
-            const centerAngle = startAngle + angle / 2;
-            
-            const x1 = 50 + 50 * Math.cos((startAngle - 90) * Math.PI / 180);
-            const y1 = 50 + 50 * Math.sin((startAngle - 90) * Math.PI / 180);
-            const x2 = 50 + 50 * Math.cos((endAngle - 90) * Math.PI / 180);
-            const y2 = 50 + 50 * Math.sin((endAngle - 90) * Math.PI / 180);
-            
-            const largeArcFlag = angle > 180 ? 1 : 0;
-            const path = `M 50 50 L ${x1} ${y1} A 50 50 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
-            const fillColor = s === 'Moons' ? '#000000' : (s === 'Stars' ? '#1e1b4b' : (s === 'Diamonds' || s === 'Hearts' ? '#0f172a' : '#f8fafc'));
-            const markFill =
-              s === 'Moons'
-                ? '#ffffff'
-                : s === 'Stars'
-                  ? '#facc15'
-                  : s === 'Diamonds' || s === 'Hearts'
-                    ? '#ef4444'
-                    : '#0f172a';
-
-            return (
-              <g key={s}>
-                <path d={path} fill={fillColor} stroke="#1e293b" strokeWidth="0.5" />
-                <g transform={`rotate(${centerAngle} 50 50)`}>
-                  <SuitWheelMarkerG suit={s} size={11} x={50} y={19} fill={markFill} />
-                </g>
-              </g>
-            );
-          })}
-        </svg>
-
-        <div className="absolute inset-0 m-auto w-12 h-12 bg-emerald-900 rounded-full border-4 border-emerald-800 flex items-center justify-center z-20 shadow-inner">
-          <Skull className="w-5 h-5 text-emerald-400" />
-        </div>
-      </motion.div>
-
-      <div className="absolute inset-0 rounded-full bg-linear-to-tr from-white/10 to-transparent pointer-events-none z-30" />
     </div>
   );
 };
