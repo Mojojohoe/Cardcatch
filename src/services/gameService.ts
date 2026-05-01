@@ -1443,14 +1443,22 @@ export class GameService {
     const applyMagicianFrog = (uid: string, oppUid: string, decision?: PendingPowerDecision | null) => {
       if (!decision || decision.powerCardId !== 1 || blockedPowers[uid]) return;
       if (decision.selectedOption === 'FROGIFY') {
-        if (uid === p1Uid) c2 = 'Frogs-1';
-        else c1 = 'Frogs-1';
+        const targetCard = uid === p1Uid ? c2 : c1;
+        const targetParsed = parseCard(targetCard);
+        let frogged = 'Frogs-1';
+        if (!targetParsed.isJoker && targetParsed.suit === 'Frogs') {
+          const idx = VALUES.indexOf(targetParsed.value as any);
+          const nextVal = VALUES[Math.min(idx + 1, VALUES.length - 1)];
+          frogged = `Frogs-${nextVal}`;
+        }
+        if (uid === p1Uid) c2 = frogged;
+        else c1 = frogged;
         events.push({
           type: 'TRANSFORM',
           uid: oppUid,
-          cardId: 'Frogs-1',
+          cardId: frogged,
           powerCardId: 1,
-          message: `${players[uid].name} casts Frogs and warps the opposing card!`,
+          message: `${players[uid].name} casts Frogs and warps the opposing card to ${frogged.replace('-', ' of ')}!`,
         });
       }
     };
@@ -1915,7 +1923,17 @@ export class GameService {
 
     // Phase 4: Post-Resolution Gains Determination
     if (winnerUid !== 'draw' && winnerUid) {
-      gains[winnerUid].push({ type: 'draw', id: 'standard' });
+      if (roomData.famineActive) {
+        const loserUid = winnerUid === p1Uid ? p2Uid : p1Uid;
+        gains[loserUid].push({ type: 'draw', id: -1 });
+        events.push({
+          type: 'POWER_TRIGGER',
+          uid: loserUid,
+          message: `${players[loserUid].name} loses 1 random card (Famine rule).`,
+        });
+      } else {
+        gains[winnerUid].push({ type: 'draw', id: 'standard' });
+      }
     }
 
     if (power1 === 3) {
@@ -1953,6 +1971,47 @@ export class GameService {
     if (power2 === 21) {
       gains[p2Uid].push({ type: 'draw', id: 'random-power' });
       gains[p2Uid].push({ type: 'draw', id: 'new-card' });
+    }
+
+    // Precompute famine spillover for the results log: if draw requests exceed deck, mark those gains as famine-bone draws.
+    const hostUid = roomData.hostUid;
+    const guestUid = hostUid === p1Uid ? p2Uid : p1Uid;
+    const drawBudget: Record<string, number> = { [p1Uid]: 0, [p2Uid]: 0 };
+    [p1Uid, p2Uid].forEach((uid) => {
+      for (const g of gains[uid]) {
+        if (g.type !== 'draw') continue;
+        if (g.id === 'standard') drawBudget[uid] += 1;
+        else if (typeof g.id === 'number' && g.id > 0) drawBudget[uid] += g.id;
+      }
+    });
+    let projectedDeck = roomData.deck.length;
+    const projectedFamineBones: Record<string, number> = { [p1Uid]: 0, [p2Uid]: 0 };
+    const order = [hostUid, guestUid];
+    while ((drawBudget[p1Uid] ?? 0) > 0 || (drawBudget[p2Uid] ?? 0) > 0) {
+      let moved = false;
+      for (const uid of order) {
+        if ((drawBudget[uid] ?? 0) <= 0) continue;
+        drawBudget[uid] -= 1;
+        if (projectedDeck > 0) projectedDeck -= 1;
+        else projectedFamineBones[uid] += 1;
+        moved = true;
+        break;
+      }
+      if (!moved) break;
+    }
+    const totalProjectedBones = projectedFamineBones[p1Uid] + projectedFamineBones[p2Uid];
+    if (totalProjectedBones > 0) {
+      events.push({ type: 'POWER_TRIGGER', message: 'Famine has begun.' });
+      [p1Uid, p2Uid].forEach((uid) => {
+        const n = projectedFamineBones[uid];
+        if (n <= 0) return;
+        events.push({
+          type: 'POWER_TRIGGER',
+          uid,
+          message: `${players[uid].name} got ${n} bone${n === 1 ? '' : 's'} to balance hands.`,
+        });
+        for (let i = 0; i < n; i++) gains[uid].push({ type: 'draw', id: 'famine-bone' });
+      });
     }
 
     return {
@@ -2024,44 +2083,31 @@ export class GameService {
     const winnerUid = outcome.winnerUid;
     const temperanceActive = Object.values(outcome.powerCardIdsPlayed).includes(14);
     
-    // Special power cards after round (gains[] handles draw counts incl. Hanged Man +3)
-    uids.forEach(uid => {
-      const power = outcome.powerCardIdsPlayed[uid];
-      const oUid = uids.find(id => id !== uid)!;
-      void oUid;
-
-      if (outcome.powerCardTowerBlocked?.[uid]) return;
-
-      // Empress: Collect Both
-      if (power === 3) {
-        // We use outcome.cardsPlayed (transformed cards) or initial? 
-        // User said "The opponents suit card, and the players suit card"
-        // Usually means the cards as they were played.
-        updatedPlayers[uid].hand.push(outcome.cardsPlayed[p1Uid]);
-        updatedPlayers[uid].hand.push(outcome.cardsPlayed[p2Uid]);
-      }
-
-      if (power === 7 && winnerUid === oUid) { // Chariot: Keep and upgrade
-         const played = outcome.cardsPlayed[uid];
-         const pc = parseCard(played);
-         const newVal = VALUES[Math.min(VALUES.indexOf(pc.value as any) + 1, VALUES.length - 1)];
-         updatedPlayers[uid].hand.push(`${pc.suit}-${newVal}`);
-      }
-      
-      if (power === 19) { // Sun: Copy played card (the final resolved card)
-        const played = outcome.cardsPlayed[uid];
-        updatedPlayers[uid].hand.push(played);
-      }
-    });
+    // NOTE: Power-card post-round gains are authored in `calculateOutcome(...).gains`
+    // and applied below in the generic gains pass. Keep this section side-effect free
+    // to avoid duplicate grants (e.g. Chariot, Empress, Sun).
 
     const hostUid = roomData.hostUid;
     const guestUid = uids.find(id => id !== hostUid)!;
 
-    /** Deck pulls from numbered draws + winner “standard”; host and guest alternate so neither eats the deck first. Shortfall deals random Bones-* cards. */
+    /** Deck pulls from numbered draws + winner “standard”; host and guest alternate so neither eats the deck first. */
     const deckPullBudget: Record<string, number> = {};
     uids.forEach((uid) => {
       deckPullBudget[uid] = 0;
     });
+    const famineBoneBudget: Record<string, number> = {};
+    uids.forEach((uid) => {
+      famineBoneBudget[uid] = 0;
+    });
+    const boneCursorByUid: Record<string, number> = {};
+    uids.forEach((uid) => {
+      boneCursorByUid[uid] = 0;
+    });
+    const nextBoneCard = (uid: string) => {
+      const rank = VALUES[boneCursorByUid[uid] % VALUES.length];
+      boneCursorByUid[uid] += 1;
+      return `Bones-${rank}`;
+    };
 
     // Generic outcome gains application (deck pulls aggregated into deckPullBudget and resolved below).
     uids.forEach(uid => {
@@ -2076,6 +2122,8 @@ export class GameService {
             if (powerDeck.length > 0) updatedPlayers[uid].powerCards.push(powerDeck.splice(0, 1)[0]);
           } else if (gain.id === 'standard') {
             deckPullBudget[uid] += 1;
+          } else if (gain.id === 'famine-bone') {
+            famineBoneBudget[uid] += 1;
           } else if (gain.id === 'new-card') {
             const s = SUITS[Math.floor(Math.random() * SUITS.length)];
             const v = VALUES[Math.floor(Math.random() * VALUES.length)];
@@ -2094,30 +2142,26 @@ export class GameService {
       });
     });
 
-    const boneSubstitutionGains: { uid: string; id: string }[] = [];
-    const dealOneDeckOrBone = (targetUid: string) => {
-      if (newDeck.length > 0) {
-        updatedPlayers[targetUid].hand.push(newDeck.shift()!);
-        return;
-      }
-      const val = VALUES[Math.floor(Math.random() * VALUES.length)];
-      const cid = `Bones-${val}`;
-      updatedPlayers[targetUid].hand.push(cid);
-      boneSubstitutionGains.push({ uid: targetUid, id: cid });
-    };
-
     const turnOrder = [hostUid, guestUid];
     while ((deckPullBudget[hostUid] ?? 0) > 0 || (deckPullBudget[guestUid] ?? 0) > 0) {
       let moved = false;
       for (const uid of turnOrder) {
         if ((deckPullBudget[uid] ?? 0) <= 0) continue;
         deckPullBudget[uid] -= 1;
-        dealOneDeckOrBone(uid);
+        if (newDeck.length > 0) {
+          updatedPlayers[uid].hand.push(newDeck.shift()!);
+        }
         moved = true;
         break;
       }
       if (!moved) break;
     }
+    uids.forEach((uid) => {
+      const count = famineBoneBudget[uid] ?? 0;
+      for (let i = 0; i < count; i++) {
+        updatedPlayers[uid].hand.push(nextBoneCard(uid));
+      }
+    });
 
     const availableSuits = [...(roomData.availableSuits || SUITS)];
     uids.forEach(uid => {
@@ -2156,8 +2200,7 @@ export class GameService {
         const targetUid = diff < 0 ? p1Uid : p2Uid;
         const needed = Math.abs(diff);
         for (let i = 0; i < needed; i++) {
-          const val = VALUES[Math.floor(Math.random() * VALUES.length)];
-          updatedPlayers[targetUid].hand.push(`Bones-${val}`);
+          updatedPlayers[targetUid].hand.push(nextBoneCard(targetUid));
         }
       }
     }
@@ -2171,22 +2214,10 @@ export class GameService {
       else if (updatedPlayers[p1Uid].hand.length === 0 && updatedPlayers[p2Uid].hand.length === 0 && outcome.winnerUid !== 'draw') winner = outcome.winnerUid;
     }
 
-    let nextOutcome = outcome;
-    if (boneSubstitutionGains.length > 0 && outcome.gains) {
-      const gainsClone = Object.fromEntries(
-        Object.entries(outcome.gains).map(([uid, arr]) => [uid, [...arr]])
-      ) as typeof outcome.gains;
-      boneSubstitutionGains.forEach(({ uid, id }) => {
-        if (!gainsClone[uid]) gainsClone[uid] = [];
-        gainsClone[uid].push({ type: 'card', id });
-      });
-      nextOutcome = { ...outcome, gains: gainsClone };
-    }
-
     return {
       ...roomData,
       players: updatedPlayers,
-      lastOutcome: nextOutcome,
+      lastOutcome: outcome,
       status: nextStatus,
       winner,
       currentTurn: roomData.currentTurn + 1,

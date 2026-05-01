@@ -433,7 +433,7 @@ const CardVisual: React.FC<CardVisualProps> = (props) => {
         ${presentation === 'deckPull' ? 'perspective-[900px] origin-bottom' : ''}
         ${isMoonSuit ? 'bg-black' : 'bg-white'}
         ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : 'border-gray-200'}
-        ${disabled ? 'opacity-60 grayscale cursor-not-allowed' : ''}
+        ${disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : ''}
       `}
     >
       <div className={`flex flex-col items-start leading-[0.7] ${SUIT_COLORS[suit]}`}>
@@ -493,7 +493,7 @@ const PowerCardVisual: React.FC<{
           bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px]
           perspective-1000
           ${selected ? 'ring-4 ring-yellow-400' : ''}
-          ${disabled ? 'opacity-50 grayscale' : 'cursor-pointer'}
+          ${disabled ? 'opacity-75 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'}
         `}
       >
         <div className="absolute inset-0 bg-linear-to-br from-slate-400/20 to-transparent" />
@@ -521,7 +521,7 @@ const PowerCardVisual: React.FC<{
         ${small ? 'w-18 h-28 text-[9px]' : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px]'}
         group relative bg-slate-50 border-4 border-slate-800 rounded-2xl shadow-2xl p-3 flex flex-col items-center text-center justify-between overflow-visible
         ${selected ? 'ring-4 ring-yellow-400 border-yellow-500' : ''}
-        ${disabled ? 'opacity-50 grayscale' : 'cursor-pointer'}
+        ${disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'}
         ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''}
         transition-shadow origin-center
       `}
@@ -808,10 +808,13 @@ const AcquiredAssets: React.FC<{
                 const isLose = typeof gain.id === 'number' && gain.id < 0;
                 const isPowerGain = gain.id === 'random-power';
                 const isNewCard = gain.id === 'new-card';
+                const isFamineBone = gain.id === 'famine-bone';
                 const hologramClasses = isLose
                   ? 'bg-red-900/25 border-red-400/45 shadow-[0_0_24px_rgba(239,68,68,0.2)]'
                   : isPowerGain
                     ? 'bg-white/[0.08] border-white/35 shadow-[0_0_22px_rgba(255,255,255,0.12)]'
+                    : isFamineBone
+                      ? 'bg-emerald-900/24 border-emerald-500/35 shadow-[0_0_22px_rgba(16,185,129,0.14)]'
                     : isNewCard
                       ? 'bg-blue-900/25 border-blue-400/45 shadow-[0_0_22px_rgba(59,130,246,0.18)]'
                       : 'bg-emerald-900/20 border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.1)]';
@@ -819,6 +822,8 @@ const AcquiredAssets: React.FC<{
                   ? 'bg-red-500/20 border-red-500/55 text-red-300'
                   : isPowerGain
                     ? 'bg-white/15 border-white/50 text-white'
+                    : isFamineBone
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
                     : isNewCard
                       ? 'bg-blue-500/20 border-blue-400/55 text-blue-200'
                       : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400';
@@ -827,6 +832,8 @@ const AcquiredAssets: React.FC<{
                     ? 'LOSE'
                     : gain.id === 'random-power'
                       ? 'POWER'
+                      : isFamineBone
+                        ? 'BONE'
                       : gain.id === 'new-card'
                         ? 'NEW CARD'
                         : 'DRAW';
@@ -839,6 +846,8 @@ const AcquiredAssets: React.FC<{
                 >
                   {gain.id === 'standard' ? (
                     <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                  ) : isFamineBone ? (
+                    <SuitGlyph suit="Bones" className="w-3 h-3 sm:w-4 sm:h-4" />
                   ) : isNewCard ? (
                     <Plus className="w-3 h-3 sm:w-4 sm:h-4 text-blue-200" />
                   ) : typeof gain.id === 'number' && gain.id > 0 ? (
@@ -860,6 +869,8 @@ const AcquiredAssets: React.FC<{
                       ? 'text-red-200'
                       : isPowerGain
                         ? 'text-white/95'
+                        : isFamineBone
+                          ? 'text-emerald-200'
                         : isNewCard
                           ? 'text-blue-100'
                           : 'text-emerald-300'
@@ -1863,6 +1874,63 @@ const DraftingPhase: React.FC<{
   );
 };
 
+const OpposingHandOverlayStack: React.FC<{
+  opponent: PlayerData;
+  roomStatus: RoomData['status'];
+  roomHasWinner: boolean;
+  powerShowdown: boolean;
+  opponentPendingDecision: any;
+  opponentWheelDecisionSpinning: boolean;
+}> = ({
+  opponent,
+  roomStatus,
+  roomHasWinner,
+  powerShowdown,
+  opponentPendingDecision,
+  opponentWheelDecisionSpinning,
+}) => {
+  return (
+    <>
+      {!powerShowdown && roomStatus === 'powering' && opponentPendingDecision && (
+        <OpponentDecisionStrip opponentName={opponent.name} decision={opponentPendingDecision} />
+      )}
+
+      {(opponent.desperationSpinning || opponent.desperationResult) && !roomHasWinner && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center pt-1">
+          <div className="rounded-xl border border-purple-500/45 bg-black/55 px-3 py-2.5 backdrop-blur-sm text-center max-w-[min(100%,18rem)]">
+            <div className="flex items-center justify-center gap-2">
+              <Skull className={`w-4 h-4 text-purple-400 ${opponent.desperationSpinning ? 'animate-pulse' : ''}`} />
+              <span className="text-[9px] font-black uppercase tracking-widest text-purple-300">{opponent.name} desperation</span>
+            </div>
+            {opponent.desperationSpinning ? (
+              <p className="mt-1 text-[8px] font-black uppercase tracking-wider text-emerald-300/90">Spinning outcome...</p>
+            ) : opponent.desperationResult ? (
+              <p className={`mt-1 text-[10px] font-black uppercase tracking-wider ${opponent.desperationResult === 'GAME OVER' ? 'text-red-400' : 'text-yellow-300'}`}>
+                {opponent.desperationResult.replace('GAIN', 'DRAW')}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {roomStatus === 'powering' && opponentWheelDecisionSpinning && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center">
+          <div className="rounded-xl border border-amber-500/45 bg-black/55 px-3 py-2 mb-2 backdrop-blur-sm">
+            <span className="text-[9px] font-black uppercase tracking-widest text-amber-300">
+              Wheel spinning for {opponent.name}
+            </span>
+          </div>
+          <FortuneWheelVisual
+            spinning
+            offset={opponentPendingDecision?.wheelOffset ?? 0}
+            sizeClass="w-40 h-40 sm:w-52 sm:h-52"
+          />
+        </div>
+      )}
+    </>
+  );
+};
+
 interface GameInstanceProps {
   instanceId: string;
   isDual?: boolean;
@@ -2471,78 +2539,66 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             )}
 
             <div className="space-y-4">
-              <h3 className="text-xs font-black text-yellow-400 uppercase tracking-widest border-l-4 border-yellow-400 pl-3">Joining table (read-only)</h3>
+              <h3 className="text-xs font-black text-yellow-400 uppercase tracking-widest border-l-4 border-yellow-400 pl-3">Host confirmed setup</h3>
 
-              <div className="grid gap-4">
-                <div className="rounded-xl bg-emerald-900/35 border border-emerald-800 p-4 space-y-3">
-                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Seat / role picker (host chose)</span>
-                  <div className="flex flex-wrap gap-2">
-                    {(['Predator', 'Prey', 'Preydator'] as const).map(r => (
-                      <div
-                        key={r}
-                        className={`flex-1 min-w-[5.5rem] py-2.5 px-2 text-[10px] font-black uppercase text-center rounded-lg border ${
-                          room.settings.hostRole === r
-                            ? 'bg-yellow-400 text-emerald-950 border-yellow-300'
-                            : 'bg-emerald-950/50 text-emerald-600 border-emerald-800'
-                        }`}
-                      >
-                        {r}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-emerald-900/35 border border-emerald-800 p-4 space-y-2">
-                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Handicap tier</span>
-                  <div className="flex flex-wrap gap-2">
-                    {(['Fair', 'Normal', 'Hard', 'Impossible'] as const).map(d => {
-                      let ratio = '';
-                      if (d === 'Fair') ratio = '10 vs 10';
-                      if (d === 'Normal') ratio = '10 vs 6';
-                      if (d === 'Hard') ratio = '10 vs 4';
-                      if (d === 'Impossible') ratio = '10 vs 2';
-                      const active = room.settings.difficulty === d;
-                      return (
-                        <div
-                          key={d}
-                          className={`flex-1 py-3 px-1 text-[8px] font-black uppercase rounded-lg border text-center flex flex-col gap-1 ${
-                            active
-                              ? 'bg-yellow-400/95 text-emerald-950 border-yellow-300'
-                              : 'bg-emerald-950/40 text-emerald-600 border-emerald-800'
-                          }`}
-                        >
-                          <span>{d}</span>
-                          <span className="opacity-75 text-[7px]">{ratio}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[11px] text-yellow-200/90 font-bold leading-snug normal-case pt-2">
-                    {room.settings.difficulty === 'Fair' && 'Fair: both seats start with ten cards.'}
-                    {room.settings.difficulty === 'Normal' &&
-                      `Normal: predator ten cards vs prey (${preyLab}) ${preyStarter} cards.`}
-                    {room.settings.difficulty === 'Hard' &&
-                      `Hard: predator ten vs prey (${preyLab}) ${preyStarter} cards.`}
-                    {room.settings.difficulty === 'Impossible' &&
-                      `Impossible: predator ten vs prey (${preyLab}) ${preyStarter} cards.`}
-                  </p>
+              <div className="rounded-xl border border-emerald-800/80 bg-emerald-950/45 p-4 space-y-3">
+                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Role focus</span>
+                <div className="flex flex-wrap gap-2">
+                  {(['Predator', 'Prey', 'Preydator'] as const).map(r => (
+                    <div
+                      key={r}
+                      className={`min-w-[5.5rem] py-2 px-3 text-[10px] font-black uppercase rounded-full border ${
+                        room.settings.hostRole === r
+                          ? 'bg-yellow-400/95 text-emerald-950 border-yellow-300 shadow-[0_0_16px_rgba(250,204,21,0.26)]'
+                          : 'bg-emerald-900/30 text-emerald-400 border-emerald-800/70'
+                      }`}
+                    >
+                      {r}
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div
-                  className={`p-4 rounded-xl border-2 flex flex-col items-center gap-1 ${room.settings.disableJokers ? 'border-red-900/50 bg-red-950/20 text-red-400' : 'border-emerald-800 bg-emerald-900/35 text-emerald-300'}`}
-                >
-                  <Skull className="w-5 h-5 mb-1" />
-                  <span className="text-[10px] font-black uppercase">Jokers</span>
-                  <span className="text-[8px] font-bold">{room.settings.disableJokers ? 'Removed' : 'In deck'}</span>
+              <div className="rounded-xl border border-emerald-800/70 bg-emerald-950/35 p-4 space-y-2.5">
+                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Handicap selected</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['Fair', 'Normal', 'Hard', 'Impossible'] as const).map(d => {
+                    let ratio = '';
+                    if (d === 'Fair') ratio = '10 vs 10';
+                    if (d === 'Normal') ratio = '10 vs 6';
+                    if (d === 'Hard') ratio = '10 vs 4';
+                    if (d === 'Impossible') ratio = '10 vs 2';
+                    const active = room.settings.difficulty === d;
+                    return (
+                      <div key={d} className={`rounded-lg border px-2 py-2 ${active ? 'border-yellow-300 bg-yellow-400/90 text-emerald-950' : 'border-emerald-800 bg-emerald-950/40 text-emerald-500'}`}>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-center">{d}</p>
+                        <p className="mt-0.5 text-[8px] font-bold uppercase tracking-wide text-center opacity-80">{ratio}</p>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div
-                  className={`p-4 rounded-xl border-2 flex flex-col items-center gap-1 ${room.settings.disablePowerCards ? 'border-red-900/50 bg-red-950/20 text-red-400' : 'border-emerald-800 bg-emerald-900/35 text-emerald-300'}`}
-                >
-                  <Zap className="w-5 h-5 mb-1" />
-                  <span className="text-[10px] font-black uppercase">Power cards</span>
-                  <span className="text-[8px] font-bold">{room.settings.disablePowerCards ? 'Off' : 'Draft picks'}</span>
+                <p className="text-[11px] text-yellow-200/90 font-bold leading-snug normal-case pt-1">
+                  {room.settings.difficulty === 'Fair' && 'Fair: both seats start with ten cards.'}
+                  {room.settings.difficulty === 'Normal' &&
+                    `Normal: predator ten cards vs prey (${preyLab}) ${preyStarter} cards.`}
+                  {room.settings.difficulty === 'Hard' &&
+                    `Hard: predator ten vs prey (${preyLab}) ${preyStarter} cards.`}
+                  {room.settings.difficulty === 'Impossible' &&
+                    `Impossible: predator ten vs prey (${preyLab}) ${preyStarter} cards.`}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-emerald-800/70 bg-emerald-950/30 p-4">
+                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider block mb-2">Deck options</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className={`rounded-lg border px-3 py-2.5 ${room.settings.disableJokers ? 'border-red-900/60 bg-red-950/20 text-red-300' : 'border-emerald-800 bg-emerald-900/35 text-emerald-200'}`}>
+                    <p className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Skull className="w-3.5 h-3.5" /> Jokers</p>
+                    <p className="mt-1 text-[8px] font-bold uppercase">{room.settings.disableJokers ? 'Removed' : 'In deck'}</p>
+                  </div>
+                  <div className={`rounded-lg border px-3 py-2.5 ${room.settings.disablePowerCards ? 'border-red-900/60 bg-red-950/20 text-red-300' : 'border-emerald-800 bg-emerald-900/35 text-emerald-200'}`}>
+                    <p className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Zap className="w-3.5 h-3.5" /> Power cards</p>
+                    <p className="mt-1 text-[8px] font-bold uppercase">{room.settings.disablePowerCards ? 'Off' : 'Draft picks'}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2636,6 +2692,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const myPendingDecision = room.pendingPowerDecisions?.[myUid] || null;
   const opponentPendingDecision = opponentUid ? room.pendingPowerDecisions?.[opponentUid] || null : null;
   const powerShowdown = room.status === 'powering' && room.awaitingPowerShowdown === true;
+  const myWheelDecisionSpinning =
+    myPendingDecision?.powerCardId === 10 && myPendingDecision.selectedOption === 'SPIN_WHEEL';
+  const opponentWheelDecisionSpinning =
+    opponentPendingDecision?.powerCardId === 10 && opponentPendingDecision.selectedOption === 'SPIN_WHEEL';
 
   return (
     <div className="h-full bg-emerald-950/40 relative flex flex-col p-4 overflow-hidden border-x border-emerald-900/50">
@@ -2649,7 +2709,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       {room.famineActive && famineBannerPhase === 'famine_title' && (
         <>
           <div
-            className="pointer-events-none absolute inset-0 z-[233] bg-[radial-gradient(ellipse_85%_65%_at_50%_45%,rgba(120,53,15,0.52),rgba(41,37,36,0.78)_45%,rgba(12,10,9,0.92)_100%)]"
+            className="pointer-events-none absolute inset-0 z-[233] bg-[radial-gradient(ellipse_95%_75%_at_50%_50%,rgba(120,53,15,0.10)_0%,rgba(120,53,15,0.16)_44%,rgba(41,37,36,0.52)_72%,rgba(12,10,9,0.82)_100%)]"
             aria-hidden
           />
           <div className="pointer-events-none absolute top-8 sm:top-10 left-1/2 -translate-x-1/2 z-[239] text-center">
@@ -2714,24 +2774,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         />
       )}
 
-      {/* Opponent Desperation Sync */}
-      {opponent && (opponent.desperationSpinning || opponent.desperationResult) && !room.winner && (
-        <DesperationWheel 
-          onSpin={() => {}}
-          onClose={() => {}}
-          onResolve={() => {}}
-          isSpinning={opponent.desperationSpinning}
-          result={opponent.desperationResult}
-          offset={opponent.desperationOffset}
-          tiers={room.settings.tiers}
-          currentTier={
-            opponent.desperationResult
-              ? opponent.desperationTier
-              : Math.max(1, opponent.desperationTier + 1)
-          }
-          isSpectator={true}
-        />
-      )}
+      {/* Opponent desperation context is rendered in the opposing hand area. */}
       {/* HUD Small */}
       <div className="flex justify-between items-center mb-4">
         <div className="flex flex-col">
@@ -2777,7 +2820,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         />
       )}
 
-      {/* Opponent Hand Backs */}
+      {/* Opposing hand area (top mockup cards + opponent-only context overlays) */}
       {opponent && (
         <div className="relative mb-4">
           <div className="text-center mb-1">
@@ -2794,9 +2837,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                <PowerCardVisual key={`opp-p-${i}`} cardId={0} revealed={false} small />
             ))}
           </div>
-          {!powerShowdown && room.status === 'powering' && opponentPendingDecision && (
-            <OpponentDecisionStrip opponentName={opponent.name} decision={opponentPendingDecision} />
-          )}
+          <OpposingHandOverlayStack
+            opponent={opponent}
+            roomStatus={room.status}
+            roomHasWinner={Boolean(room.winner)}
+            powerShowdown={powerShowdown}
+            opponentPendingDecision={opponentPendingDecision}
+            opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
+          />
         </div>
       )}
 
@@ -2903,15 +2951,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                          )}
                        </div>
                      </div>
-                     {((myPendingDecision?.powerCardId === 10 && myPendingDecision.selectedOption === 'SPIN_WHEEL') ||
-                       (opponentPendingDecision?.powerCardId === 10 && opponentPendingDecision.selectedOption === 'SPIN_WHEEL')) && (
+                    {myWheelDecisionSpinning && (
                        <div className="flex flex-col items-center gap-2">
                          <span className="text-[9px] font-black uppercase tracking-widest text-amber-300">
-                           Wheel spinning for {(myPendingDecision?.powerCardId === 10 && myPendingDecision.selectedOption === 'SPIN_WHEEL') ? me.name : opponent?.name}
+                          Wheel spinning for {me.name}
                          </span>
                          <FortuneWheelVisual
                            spinning
-                           offset={(myPendingDecision?.wheelOffset ?? opponentPendingDecision?.wheelOffset ?? 0)}
+                          offset={myPendingDecision?.wheelOffset ?? 0}
                            sizeClass="w-56 h-56 sm:w-72 sm:h-72"
                          />
                        </div>
@@ -3143,10 +3190,37 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
              {me.confirmed && <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">Locked in — waiting</span>}
            </div>
         </div>
-        <div className="flex justify-center -space-x-8 sm:-space-x-12 flex-nowrap h-40 items-end">
-           {me.hand.map((card, i) => (
-             <CardVisual key={`${card}-${i}`} card={card} selected={selectedCardIndex === i} disabled={me.confirmed} onClick={() => !me.confirmed && setSelectedCardIndex(i)} role={me.role} delay={i * 0.08} />
-           ))}
+        <div className={`flex justify-center -space-x-8 sm:-space-x-12 flex-nowrap h-44 items-end transition-[filter,opacity] duration-300 ${me.confirmed ? 'saturate-[0.68] brightness-95 opacity-[0.92]' : ''}`}>
+           {me.hand.map((card, i) => {
+             const selected = selectedCardIndex === i;
+             return (
+               <motion.div
+                 key={`${card}-${i}`}
+                 animate={selected ? { y: -26, scale: 1.04 } : { y: 0, scale: 1 }}
+                 transition={{ type: 'spring', stiffness: 310, damping: 24 }}
+                 className="relative"
+               >
+                 {selected && !me.confirmed && (
+                   <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.65)]">
+                     choosing
+                   </span>
+                 )}
+                 {selected && me.confirmed && (
+                   <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,0.55)]">
+                     committed
+                   </span>
+                 )}
+                 <CardVisual
+                   card={card}
+                   selected={selected}
+                   disabled={me.confirmed}
+                   onClick={() => !me.confirmed && setSelectedCardIndex(i)}
+                   role={me.role}
+                   delay={i * 0.08}
+                 />
+               </motion.div>
+             );
+           })}
         </div>
       </div>
 

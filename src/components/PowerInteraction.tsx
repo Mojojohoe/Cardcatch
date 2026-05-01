@@ -140,12 +140,14 @@ export const PowerDecisionModal: React.FC<{
 
   return (
     <div
-      className={`pointer-events-none absolute inset-0 z-[260] flex flex-col px-2 sm:px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] ${panelDockedBottom ? 'justify-end' : 'justify-center'}`}
+      className={`pointer-events-none absolute inset-0 z-[260] flex flex-col px-2 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.35rem,env(safe-area-inset-bottom))] transition-all duration-500 ${panelDockedBottom ? 'justify-end' : 'justify-center'}`}
     >
-      <div
-        className={`pointer-events-auto w-full mx-auto flex flex-col bg-slate-950/96 backdrop-blur-xl border border-yellow-500/45 shadow-[0_24px_70px_rgba(0,0,0,0.55)] overflow-hidden sm:max-w-2xl lg:max-w-4xl ${
+      <motion.div
+        layout
+        transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+        className={`pointer-events-auto w-full mx-auto flex flex-col bg-slate-950/96 backdrop-blur-xl border border-yellow-500/45 shadow-[0_24px_70px_rgba(0,0,0,0.55)] overflow-hidden sm:max-w-2xl lg:max-w-4xl transition-[max-height,border-radius] duration-500 ${
           panelDockedBottom
-            ? 'max-h-[min(52vh,520px)] sm:max-h-[min(58vh,600px)] rounded-t-3xl rounded-b-none border-b-0'
+            ? 'max-h-[4.75rem] sm:max-h-[5.25rem] rounded-2xl border-b'
             : 'max-h-[min(85vh,760px)] rounded-3xl'
         }`}
       >
@@ -177,7 +179,11 @@ export const PowerDecisionModal: React.FC<{
             )}
           </button>
         </div>
-        <div className={`overflow-y-auto px-4 pb-6 pt-3 space-y-4 flex-1 min-h-0 ${isPriestess ? '' : ''}`}>
+        <div
+          className={`overflow-y-auto px-4 pt-3 space-y-4 flex-1 min-h-0 transition-all duration-350 ${
+            panelDockedBottom ? 'opacity-0 max-h-0 pb-0 pointer-events-none' : 'opacity-100 pb-6'
+          } ${isPriestess ? '' : ''}`}
+        >
         <h3 className="text-lg sm:text-xl font-black uppercase text-yellow-400">
           {decision.powerCardId === 1
             ? 'Magician'
@@ -347,7 +353,7 @@ export const PowerDecisionModal: React.FC<{
           </div>
         ) : null}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

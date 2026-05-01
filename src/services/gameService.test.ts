@@ -99,3 +99,57 @@ test('host accepts valid draft selection from current set only', () => {
   service.handleSelectDraft('guest', 2, 0);
   assert.equal(service.state.players.guest.powerCards.includes(2), true);
 });
+
+test('applyRoundResults does not duplicate Chariot saved card', () => {
+  const service = new GameService() as any;
+  service.myUid = 'host';
+
+  const room = createFixtureRoom();
+  room.status = 'results';
+  room.deck = [];
+  room.players.host.hand = ['Frogs-1', 'Spades-K'];
+  room.players.guest.hand = ['Hearts-5', 'Clubs-A'];
+  room.players.host.powerCards = [7];
+  room.players.guest.powerCards = [1];
+  room.lastOutcome = {
+    targetSuit: 'Hearts',
+    winnerUid: 'guest',
+    message: 'Guest wins.',
+    cardsPlayed: { host: 'Frogs-1', guest: 'Hearts-5' },
+    initialCardsPlayed: { host: 'Frogs-1', guest: 'Hearts-5' },
+    powerCardsPlayed: { host: 'The Chariot', guest: 'The Magician' },
+    powerCardIdsPlayed: { host: 7, guest: 1 },
+    powerCardTowerBlocked: { host: false, guest: false },
+    coinFlip: 'Host',
+    events: [],
+    gains: {
+      host: [{ type: 'card', id: 'Frogs-2' }],
+      guest: [{ type: 'draw', id: 'standard' }],
+    },
+  } as any;
+
+  const next = service.applyRoundResults(room, room.players);
+  const frogs2 = next.players.host.hand.filter((c: string) => c === 'Frogs-2');
+  assert.equal(frogs2.length, 1);
+});
+
+test('Magician frogify on Frog card increments Frog value by 1', () => {
+  const service = new GameService() as any;
+  service.myUid = 'host';
+
+  const room = createFixtureRoom();
+  room.targetSuit = 'Hearts';
+  room.pendingPowerDecisions = {
+    host: { powerCardId: 1, selectedOption: 'FROGIFY' } as any,
+    guest: null,
+  };
+
+  const players = createFixturePlayers();
+  players.host.currentMove = 'Hearts-7';
+  players.guest.currentMove = 'Frogs-4';
+  players.host.currentPowerCard = 1;
+  players.guest.currentPowerCard = null;
+
+  const outcome = service.calculateOutcome(room, players);
+  assert.equal(outcome.cardsPlayed.guest, 'Frogs-5');
+});
