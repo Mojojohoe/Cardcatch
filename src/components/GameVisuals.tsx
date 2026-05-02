@@ -326,7 +326,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const allowHoverMotion =
     (!disabled && !muted) || Boolean(detailTooltip) || Boolean(!detailTooltip && holdCaption);
 
-  const HOVER_HOLD_MS = 1700;
+  const HOVER_HOLD_MS = 700;
 
   /** Static hit target: inner face translates on hover so pointer stays inside this box — avoids timer resets + neighbor stealing hover. */
   const syncHoldTip = () => {
@@ -516,11 +516,23 @@ export const PowerCardVisual: React.FC<{
   selected?: boolean;
   disabled?: boolean;
   small?: boolean;
+  /** Outer size matches playing-card footprint in the bottom hand row (overlap-friendly). */
+  matchHandCard?: boolean;
   /** Wide min-width + centered title clamp for Priestess-style pick rows */
   panel?: boolean;
   /** Tower blocked — greyed but hover still shows text */
   destroyed?: boolean;
-}> = ({ cardId, revealed = true, onClick, selected, disabled, small = false, panel = false, destroyed = false }) => {
+}> = ({
+  cardId,
+  revealed = true,
+  onClick,
+  selected,
+  disabled,
+  small = false,
+  matchHandCard = false,
+  panel = false,
+  destroyed = false,
+}) => {
   const curseDef = isCurseCardId(cardId) ? CURSES[cardId] : undefined;
   const card = curseDef ? null : MAJOR_ARCANA[cardId];
   const tip = curseDef
@@ -535,27 +547,37 @@ export const PowerCardVisual: React.FC<{
 
   const dimClass = panel
     ? 'w-[6.875rem] sm:w-[7.5rem] min-h-[10rem] max-w-[8rem] text-[10px] p-2.5 pt-3 justify-start gap-2'
-    : small
-      ? 'w-18 h-28 text-[9px] p-3'
-      : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px] p-3';
+    : matchHandCard
+      ? 'w-12 h-18 sm:w-24 sm:h-36 text-[6px] sm:text-[7px] p-1 sm:p-1.5 justify-between gap-0 min-h-0'
+      : small
+        ? 'w-18 h-28 text-[9px] p-3'
+        : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px] p-3';
   const titleClassPanel =
     'text-[7px] sm:text-[8px] leading-tight line-clamp-3 break-words hyphens-auto text-center normal-case px-0.5 w-full min-h-[2.75rem] flex items-center justify-center border-b pb-1.5 font-bold tracking-tight';
   const titleClassPanelStd = `${titleClassPanel} border-slate-800/70 text-slate-800`;
   const titleClassPanelCurse = `${titleClassPanel} border-red-800/70 text-red-200`;
-  const titleClassDefault = `font-black border-b-2 w-full pb-1 px-1 uppercase tracking-tighter leading-[0.9] ${small ? 'text-[8px]' : 'text-[18px] sm:text-[32px]'}`;
+  const titleClassDefault = `font-black border-b-2 w-full pb-1 px-1 uppercase tracking-tighter leading-[0.9] ${matchHandCard ? 'text-[6px] sm:text-[7px] border-b border-slate-700/60 pb-0.5' : small ? 'text-[8px]' : 'text-[18px] sm:text-[32px]'}`;
   const titleClassDefaultStd = `${titleClassDefault} border-slate-800 text-slate-800`;
   const titleClassDefaultCurse = `${titleClassDefault} border-red-800 text-red-300`;
 
   if (!curseDef && !card) {
     return (
-      <div className={`${small ? 'w-14 h-22' : 'w-32 h-52'} rounded-lg border border-slate-700 bg-slate-900 text-[10px] text-slate-500 flex items-center justify-center`}>
+      <div
+        className={`${matchHandCard ? 'w-12 h-18 sm:w-24 sm:h-36' : small ? 'w-14 h-22' : 'w-32 h-52'} rounded-lg border border-slate-700 bg-slate-900 text-[10px] text-slate-500 flex items-center justify-center`}
+      >
         ?
       </div>
     );
   }
 
   if (!revealed) {
-    const backW = panel ? 'w-[7rem] sm:w-[7.75rem] h-36' : small ? 'w-14 h-22' : 'w-32 h-52 sm:w-40 sm:h-64';
+    const backW = matchHandCard
+      ? 'w-12 h-18 sm:w-24 sm:h-36'
+      : panel
+        ? 'w-[7rem] sm:w-[7.75rem] h-36'
+        : small
+          ? 'w-14 h-22'
+          : 'w-32 h-52 sm:w-40 sm:h-64';
     const backCurse = curseDef
       ? 'bg-zinc-950 border-2 border-red-900/70 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:9px_9px]'
       : 'bg-slate-300 border-2 border-slate-400 bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px]';
@@ -570,10 +592,12 @@ export const PowerCardVisual: React.FC<{
           {curseDef ? (
             <CursePowerIcon
               curseId={cardId}
-              className={`${small ? 'h-7 w-7' : 'h-11 w-11 sm:h-12 sm:w-12'} ${cursePowerIconClass(cardId)}`}
+              className={`${matchHandCard ? 'h-5 w-5 sm:h-7 sm:w-7' : small ? 'h-7 w-7' : 'h-11 w-11 sm:h-12 sm:w-12'} ${cursePowerIconClass(cardId)}`}
             />
           ) : (
-            <span className={`font-black tabular-nums text-slate-500 ${small ? 'text-lg leading-none' : 'text-3xl sm:text-[2.65rem]'}`}>
+            <span
+              className={`font-black tabular-nums text-slate-500 ${matchHandCard ? 'text-sm sm:text-xl leading-none' : small ? 'text-lg leading-none' : 'text-3xl sm:text-[2.65rem]'}`}
+            >
               ?
             </span>
           )}
@@ -582,9 +606,10 @@ export const PowerCardVisual: React.FC<{
     );
   }
 
+  const faceBorder = matchHandCard ? 'border-2' : 'border-4';
   const faceShell = curseDef
-    ? 'bg-zinc-950 border-4 border-red-900 text-red-400 shadow-[0_0_40px_rgba(127,29,29,0.35)]'
-    : 'bg-slate-50 border-4 border-slate-800 text-slate-800';
+    ? `bg-zinc-950 ${faceBorder} border-red-900 text-red-400 ${matchHandCard ? 'shadow-lg' : 'shadow-[0_0_40px_rgba(127,29,29,0.35)]'}`
+    : `bg-slate-50 ${faceBorder} border-slate-800 text-slate-800`;
   const gloss = curseDef
     ? 'from-red-950/30 to-transparent'
     : 'from-white/20 to-slate-900/5';
@@ -596,7 +621,9 @@ export const PowerCardVisual: React.FC<{
       title={tip}
       whileHover={
         !disabled
-          ? { scale: panel ? 1.05 : small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } }
+          ? matchHandCard
+            ? { y: -6, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
+            : { scale: panel ? 1.05 : small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } }
           : {}
       }
       onMouseEnter={() => !disabled && setTipOpen(true)}
@@ -604,15 +631,19 @@ export const PowerCardVisual: React.FC<{
       onFocus={() => !disabled && setTipOpen(true)}
       onBlur={() => setTipOpen(false)}
       onClick={onClick}
-      className={`${dimClass} group relative rounded-2xl shadow-2xl flex flex-col items-center text-center justify-between overflow-visible ${faceShell} ${selected ? 'ring-4 ring-yellow-400 border-yellow-500' : ''} ${disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow origin-center`}
+      className={`${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between ${matchHandCard ? 'overflow-hidden' : 'overflow-visible'} ${faceShell} ${selected ? `${matchHandCard ? 'ring-2 ring-yellow-400' : 'ring-4 ring-yellow-400'} border-yellow-500` : ''} ${disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`}
     >
-      <div className={`absolute top-0 left-0 w-full h-full bg-linear-to-b ${gloss} pointer-events-none rounded-[13px] overflow-hidden`} />
+      <div
+        className={`absolute top-0 left-0 w-full h-full bg-linear-to-b ${gloss} pointer-events-none ${matchHandCard ? 'rounded-md' : 'rounded-[13px]'} overflow-hidden`}
+      />
 
-      <div className={`flex flex-col items-center gap-0.5 z-10 w-full ${panel ? 'mb-0' : 'mb-1'}`}>
-        <span className={curseDef ? (panel ? titleClassPanelCurse : titleClassDefaultCurse) : panel ? titleClassPanelStd : titleClassDefaultStd}>
+      <div className={`flex flex-col items-center gap-0.5 z-10 w-full min-w-0 ${panel ? 'mb-0' : matchHandCard ? 'mb-0' : 'mb-1'}`}>
+        <span
+          className={`line-clamp-2 ${curseDef ? (panel ? titleClassPanelCurse : titleClassDefaultCurse) : panel ? titleClassPanelStd : titleClassDefaultStd}`}
+        >
           {curseDef ? curseDef.name : card!.name}
         </span>
-        {!small && !panel && (
+        {!small && !panel && !matchHandCard && (
           <span
             className={`font-mono font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70 mt-1 ${curseDef ? 'text-red-500' : 'text-slate-400'}`}
           >
@@ -622,29 +653,33 @@ export const PowerCardVisual: React.FC<{
       </div>
 
       <div
-        className={`z-10 shrink-0 rounded-full border-2 shadow-xl group-hover:scale-105 transition-transform ${panel ? 'p-2 my-1' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : 'my-2'} ${curseDef ? 'bg-black border-red-800' : 'bg-slate-900 border-slate-800'}`}
+        className={`z-10 shrink-0 rounded-full border-2 shadow-xl ${matchHandCard ? '' : 'group-hover:scale-105'} transition-transform ${panel ? 'p-2 my-1' : matchHandCard ? 'p-0.5 my-0.5' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : matchHandCard ? '' : 'my-2'} ${curseDef ? 'bg-black border-red-800' : 'bg-slate-900 border-slate-800'}`}
       >
         {curseDef ? (
           <CursePowerIcon
             curseId={cardId}
-            className={`${small ? 'h-4 w-4' : panel ? 'h-[22px] w-[22px]' : 'h-10 w-10'} ${cursePowerIconClass(cardId)}`}
+            className={`${matchHandCard ? 'h-4 w-4 sm:h-5 sm:w-5' : small ? 'h-4 w-4' : panel ? 'h-[22px] w-[22px]' : 'h-10 w-10'} ${cursePowerIconClass(cardId)}`}
           />
         ) : (
           <MajorArcanaIconGlyph
             iconName={card!.icon}
             className="text-yellow-400"
-            size={panel ? 22 : small ? 16 : 40}
+            size={panel ? 22 : matchHandCard ? 14 : small ? 16 : 40}
           />
         )}
       </div>
 
-      <div className={`font-bold leading-snug z-10 w-full px-2 mt-auto ${curseDef ? 'text-red-200' : 'text-slate-700'} ${panel || small ? 'hidden' : 'block'}`}>
+      <div
+        className={`font-bold leading-snug z-10 w-full px-2 mt-auto ${curseDef ? 'text-red-200' : 'text-slate-700'} ${panel || small || matchHandCard ? 'hidden' : 'block'}`}
+      >
         <p className={`font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em] ${curseDef ? 'text-red-300/95' : 'text-slate-500'}`}>
           {curseDef ? curseDef.description : card!.description}
         </p>
       </div>
 
-      <div className={`mt-auto pt-3 font-black uppercase tracking-[0.3em] ${curseDef ? 'text-red-500' : 'text-slate-400'} ${panel || small ? 'hidden' : 'block text-[8px] sm:text-[10px]'}`}>
+      <div
+        className={`mt-auto font-black uppercase tracking-[0.3em] ${curseDef ? 'text-red-500' : 'text-slate-400'} ${panel || small || matchHandCard ? 'hidden' : 'block pt-3 text-[8px] sm:text-[10px]'}`}
+      >
         {curseDef ? 'Curse' : `${cardId} / 21`}
       </div>
 

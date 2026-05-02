@@ -2002,7 +2002,7 @@ const DraftingPhase: React.FC<{
   );
 };
 
-/** Opponent desperation capsule — napkin rails: Predator/host-Preydator ≈ grid 7 (left column); Prey/guest-Preydator ≈ grid 9 (right column). */
+/** Opponent desperation capsule — napkin cell 7: top-center strip (under phase line), both seats. */
 const OpponentDesperationTopStrip: React.FC<{ opponent: PlayerData; room: RoomData; className?: string }> = ({
   opponent,
   room,
@@ -2708,12 +2708,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         : 'Resolving power cards…'
       : null;
 
-  /** Predator/host-Preydator seat → strip in left rail (~napkin cell 7). Prey/guest-Preydator → right rail (~cell 9). */
-  const opponentDesperationOnRightRail =
-    me.role === 'Prey' || (me.role === 'Preydator' && myUid !== room.hostUid);
-  const opponentDesperationOnLeftRail =
-    me.role === 'Predator' || (me.role === 'Preydator' && myUid === room.hostUid);
-
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 bg-emerald-950/40 p-4">
       {room.famineActive && famineBannerPhase === 'bone_deal' && (
@@ -2801,7 +2795,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         />
       )}
 
-      {/* Opponent desperation context is rendered in the opposing hand area. */}
+      {/* Opponent desperation strip: top HUD center (napkin div7). */}
       {/* HUD: room / role · phase strip (center) · dev & rules */}
       <div className="mb-3 grid w-full shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1">
         <div className="min-w-0 justify-self-start">
@@ -2833,6 +2827,18 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               <span className="block truncate text-[8px] font-black uppercase tracking-wider text-amber-200/85">
                 Famine — bones replace draws
               </span>
+            )}
+          {(room.status === 'playing' || room.status === 'powering') &&
+            opponent &&
+            room.settings.enableDesperation &&
+            opponentDesperationUiRelevant(room, opponent) && (
+              <div className="mt-1 flex w-full justify-center">
+                <OpponentDesperationTopStrip
+                  opponent={opponent}
+                  room={room}
+                  className="max-w-[min(100%,20rem)]"
+                />
+              </div>
             )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 justify-self-end sm:gap-4">
@@ -2901,7 +2907,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
               />
             </div>
-            <div className="flex shrink-0 flex-row flex-wrap items-start justify-end gap-1 opacity-80">
+            <div className="flex max-w-full shrink-0 flex-row flex-nowrap items-start justify-end gap-0 overflow-x-auto [-ms-overflow-style:auto] [scrollbar-width:thin] opacity-80 -space-x-2 sm:-space-x-2.5">
               {opponent.powerCards.map((pid, i) => (
                 <PowerCardVisual key={`opp-p-${pid}-${i}`} cardId={pid} revealed={false} small />
               ))}
@@ -2956,32 +2962,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
                 />
               </div>
-              <div className="col-span-full flex min-h-[3.25rem] flex-row flex-wrap content-start justify-center gap-x-1 gap-y-1 self-start pt-1 opacity-90 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:max-w-none sm:justify-end sm:self-stretch sm:pt-1">
+              <div className="col-span-full flex min-h-[3.25rem] flex-row flex-nowrap justify-center gap-0 self-start overflow-x-auto overflow-y-visible pt-1 opacity-95 [scrollbar-width:thin] [-ms-overflow-style:auto] -space-x-2 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-full sm:max-w-none sm:justify-end sm:self-stretch sm:px-0 sm:pt-1 sm:-space-x-2.5 [&::-webkit-scrollbar]:h-1">
                 {opponent.powerCards.map((pid, i) => (
                   <PowerCardVisual key={`ogr-${pid}-${i}`} cardId={pid} revealed={false} small />
                 ))}
               </div>
 
               <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-hidden pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-auto sm:max-w-[min(7.5rem,calc((100vw-2rem)*0.2))] sm:self-stretch sm:pb-2">
-                {me.powerCards.length > 0 && (
-                  <div className="flex w-full min-w-0 flex-col gap-1">
-                    <span className="text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90">
-                      Your powers
-                    </span>
-                    <div className="flex w-full flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden pb-0.5 [scrollbar-width:thin]">
-                      {me.powerCards.map((pId, i) => (
-                        <PowerCardVisual
-                          key={`${pId}-${i}`}
-                          cardId={pId}
-                          small
-                          selected={selectedPowerCard === pId}
-                          onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
-                          disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div className="flex max-h-[min(32vh,12.75rem)] w-full shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden pb-1 [-ms-overflow-style:auto] [scrollbar-gutter:stable]">
                   <CurseZonePanel
                     settings={room.settings}
@@ -2993,15 +2980,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     players={room.players}
                   />
                 </div>
-                {(room.status === 'playing' || room.status === 'powering') &&
-                  opponent &&
-                  room.settings.enableDesperation &&
-                  opponentDesperationOnLeftRail &&
-                  opponentDesperationUiRelevant(room, opponent) && (
-                    <div className="mt-auto w-full shrink-0 pt-1">
-                      <OpponentDesperationTopStrip opponent={opponent} room={room} />
-                    </div>
-                  )}
               </aside>
 
               <div
@@ -3224,15 +3202,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     <div className="text-[8px] font-bold uppercase tracking-widest text-emerald-800">REMAINING</div>
                   </div>
                 </div>
-                {(room.status === 'playing' || room.status === 'powering') &&
-                  opponent &&
-                  room.settings.enableDesperation &&
-                  opponentDesperationOnRightRail &&
-                  opponentDesperationUiRelevant(room, opponent) && (
-                    <div className="mt-auto w-full shrink-0">
-                      <OpponentDesperationTopStrip opponent={opponent} room={room} />
-                    </div>
-                  )}
               </aside>
             </div>
           ) : null}
@@ -3403,8 +3372,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         {(room.status === 'playing' || room.status === 'powering') &&
           room.settings.enableDesperation &&
           desperationSpinAllowed(room, myUid, me) && (
-            <div className="mx-auto mb-2 flex min-h-[2.5rem] max-w-3xl flex-col items-center justify-center rounded-xl border border-purple-800/55 bg-purple-950/55 px-3 py-2 text-center shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
-              <span className="max-w-[min(100%,26rem)] text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
+            <div className="mx-auto mb-2 flex w-full max-w-md min-h-[2.5rem] flex-col items-center justify-center rounded-xl border border-purple-800/55 bg-purple-950/55 px-4 py-2 text-center shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
+              <span className="max-w-full text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
                 Desperation:{' '}
                 {me.desperationTier >= 0
                   ? desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`
@@ -3461,69 +3430,105 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
              {me.confirmed && <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">Locked in — waiting</span>}
            </div>
         </div>
-        <div className={`flex justify-center -space-x-8 sm:-space-x-12 flex-nowrap h-44 items-end transition-[filter,opacity] duration-300 ${me.confirmed ? 'saturate-[0.68] brightness-95 opacity-[0.92]' : ''}`}>
-           {me.hand.map((card, i) => {
-             const selected = selectedCardIndex === i;
-             const prideMuted = prideBlocksCard(room, myUid, card);
-             const envyMuted = envySealBlocksHandIndex(room, myUid, me.hand, i);
-             const envyCovetedHere =
-               Boolean(
-                 room.settings.enableCurseCards &&
-                   envyCurseActive(room.activeCurses ?? []) &&
-                   room.envyCovet?.uid === myUid &&
-                   room.envyCovet.handIndex === i &&
-                   room.envyCovet.cardId === card,
-               );
-             const detailTooltip = prideMuted
-               ? PRIDE_WOUND_TOOLTIP
-               : envyMuted
-                 ? ENVY_SEALED_TOOLTIP
-                 : envyCovetedHere
-                   ? ENVY_COVET_CARD_TOOLTIP
-                   : card === GROVEL_CARD_ID
-                     ? GROVEL_FEED_TOOLTIP
-                     : undefined;
-             const combinedMuted = prideMuted || envyMuted;
-             return (
-               <motion.div
-                 key={`${card}-${i}`}
-                 animate={selected ? { y: -26, scale: 1.04 } : { y: 0, scale: 1 }}
-                 transition={{ type: 'spring', stiffness: 310, damping: 24 }}
-                 className="relative"
-               >
-                 {envyCovetedHere && (
-                   <div
-                     className="pointer-events-none absolute -top-11 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center"
-                     title={ENVY_COVET_CARD_TOOLTIP}
-                   >
-                     <GreenEyedMonsterIcon className="h-9 w-[4.25rem] text-emerald-400 drop-shadow-[0_0_14px_rgba(16,185,129,0.5)]" />
-                   </div>
-                 )}
-                 {selected && !me.confirmed && (
-                   <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.65)]">
-                     choosing
-                   </span>
-                 )}
-                 {selected && me.confirmed && (
-                   <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,0.55)]">
-                     committed
-                   </span>
-                 )}
-                 <CardVisual
-                   card={card}
-                   selected={selected}
-                   disabled={me.confirmed}
-                   muted={combinedMuted}
-                   envyCovetedGlow={Boolean(envyCovetedHere && !envyMuted)}
-                   detailTooltip={detailTooltip}
-                   lustHeartRulesActive={lustHeartUi}
-                   onClick={() => !me.confirmed && !combinedMuted && setSelectedCardIndex(i)}
-                   role={me.role}
-                   delay={i * 0.08}
-                 />
-               </motion.div>
-             );
-           })}
+        <div
+          className={`flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-center xl:flex-nowrap ${
+            (room.status === 'playing' || room.status === 'powering') && me.powerCards.length
+              ? 'sm:gap-x-0 sm:gap-y-1 md:justify-between lg:justify-center xl:justify-center xl:gap-2'
+              : ''
+          }`}
+        >
+          {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
+            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center sm:max-w-[min(46vw,22rem)] sm:items-start md:-mr-3 xl:mr-0">
+              <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
+                Your powers
+              </span>
+              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-x-auto overflow-y-visible pb-0.5 -space-x-7 [scrollbar-width:thin] sm:justify-start sm:-space-x-9">
+                {me.powerCards.map((pId, i) => (
+                  <PowerCardVisual
+                    key={`bottom-pow-${pId}-${i}`}
+                    cardId={pId}
+                    matchHandCard
+                    selected={selectedPowerCard === pId}
+                    onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
+                    disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          <div
+            className={`relative z-[12] flex min-h-[11rem] min-w-0 flex-1 flex-col justify-end sm:min-h-0 xl:flex-initial ${
+              (room.status === 'playing' || room.status === 'powering') && me.powerCards.length ? 'xl:max-w-max' : ''
+            }`}
+          >
+            <div
+              className={`flex h-44 items-end justify-center -space-x-8 flex-nowrap transition-[filter,opacity] duration-300 sm:-space-x-12 ${
+                me.confirmed ? 'saturate-[0.68] brightness-95 opacity-[0.92]' : ''
+              }`}
+            >
+              {me.hand.map((card, i) => {
+                const selected = selectedCardIndex === i;
+                const prideMuted = prideBlocksCard(room, myUid, card);
+                const envyMuted = envySealBlocksHandIndex(room, myUid, me.hand, i);
+                const envyCovetedHere = Boolean(
+                  room.settings.enableCurseCards &&
+                    envyCurseActive(room.activeCurses ?? []) &&
+                    room.envyCovet?.uid === myUid &&
+                    room.envyCovet.handIndex === i &&
+                    room.envyCovet.cardId === card,
+                );
+                const detailTooltip = prideMuted
+                  ? PRIDE_WOUND_TOOLTIP
+                  : envyMuted
+                    ? ENVY_SEALED_TOOLTIP
+                    : envyCovetedHere
+                      ? ENVY_COVET_CARD_TOOLTIP
+                      : card === GROVEL_CARD_ID
+                        ? GROVEL_FEED_TOOLTIP
+                        : undefined;
+                const combinedMuted = prideMuted || envyMuted;
+                return (
+                  <motion.div
+                    key={`${card}-${i}`}
+                    animate={selected ? { y: -26, scale: 1.04 } : { y: 0, scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 310, damping: 24 }}
+                    className="relative"
+                  >
+                    {envyCovetedHere && (
+                      <div
+                        className="pointer-events-none absolute -top-11 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center"
+                        title={ENVY_COVET_CARD_TOOLTIP}
+                      >
+                        <GreenEyedMonsterIcon className="h-9 w-[4.25rem] text-emerald-400 drop-shadow-[0_0_14px_rgba(16,185,129,0.5)]" />
+                      </div>
+                    )}
+                    {selected && !me.confirmed && (
+                      <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.65)]">
+                        choosing
+                      </span>
+                    )}
+                    {selected && me.confirmed && (
+                      <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,0.55)]">
+                        committed
+                      </span>
+                    )}
+                    <CardVisual
+                      card={card}
+                      selected={selected}
+                      disabled={me.confirmed}
+                      muted={combinedMuted}
+                      envyCovetedGlow={Boolean(envyCovetedHere && !envyMuted)}
+                      detailTooltip={detailTooltip}
+                      lustHeartRulesActive={lustHeartUi}
+                      onClick={() => !me.confirmed && !combinedMuted && setSelectedCardIndex(i)}
+                      role={me.role}
+                      delay={i * 0.08}
+                    />
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
