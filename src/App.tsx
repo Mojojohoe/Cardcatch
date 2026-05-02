@@ -2002,10 +2002,11 @@ const DraftingPhase: React.FC<{
   );
 };
 
-/** Pinned below HUD — opponent ladder / spin status (was floating over mock hand). */
-const OpponentDesperationTopStrip: React.FC<{ opponent: PlayerData; room: RoomData }> = ({
+/** Opponent desperation capsule — napkin rails: Predator/host-Preydator ≈ grid 7 (left column); Prey/guest-Preydator ≈ grid 9 (right column). */
+const OpponentDesperationTopStrip: React.FC<{ opponent: PlayerData; room: RoomData; className?: string }> = ({
   opponent,
   room,
+  className = '',
 }) => {
   if (!opponentDesperationUiRelevant(room, opponent)) return null;
   const oppLadderLabel =
@@ -2013,8 +2014,10 @@ const OpponentDesperationTopStrip: React.FC<{ opponent: PlayerData; room: RoomDa
       ? desperationLadderLabel(room.settings.tiers, opponent.desperationTier)
       : null;
   return (
-    <div className="pointer-events-none z-[28] w-full shrink-0 border-b border-purple-800/65 bg-purple-950/93 py-2 shadow-[0_3px_16px_rgba(0,0,0,0.38)]">
-      <div className="mx-auto flex w-[min(100%,26rem)] max-w-none items-start gap-2 px-3">
+    <div
+      className={`pointer-events-none z-[28] w-full max-w-full shrink-0 rounded-lg border border-purple-800/65 bg-purple-950/93 py-1.5 shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)] ${className}`}
+    >
+      <div className="flex w-full max-w-full items-start gap-1.5 px-2">
         <Skull
           className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-400 ${opponent.desperationSpinning ? 'animate-pulse' : ''}`}
         />
@@ -2705,6 +2708,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         : 'Resolving power cards…'
       : null;
 
+  /** Predator/host-Preydator seat → strip in left rail (~napkin cell 7). Prey/guest-Preydator → right rail (~cell 9). */
+  const opponentDesperationOnRightRail =
+    me.role === 'Prey' || (me.role === 'Preydator' && myUid !== room.hostUid);
+  const opponentDesperationOnLeftRail =
+    me.role === 'Predator' || (me.role === 'Preydator' && myUid === room.hostUid);
+
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 bg-emerald-950/40 p-4">
       {room.famineActive && famineBannerPhase === 'bone_deal' && (
@@ -2848,9 +2857,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </div>
       </div>
 
-      {(room.status === 'playing' || room.status === 'powering') && opponent && room.settings.enableDesperation && (
-        <OpponentDesperationTopStrip opponent={opponent} room={room} />
-      )}
       {(room.status === 'playing' || room.status === 'powering') && isWheelSpinning && (
         <div className="pointer-events-none w-full shrink-0 border-b border-amber-800/40 bg-emerald-950/90 py-2 text-center shadow-[inset_0_-1px_0_rgba(251,191,36,0.12)]">
           <span className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-300 sm:text-[11px]">
@@ -2956,22 +2962,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 ))}
               </div>
 
-              <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-x-hidden overflow-y-visible pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:self-stretch sm:pb-2">
-                <div className="flex max-h-[min(44vh,17rem)] w-full flex-col items-center gap-2 overflow-y-auto overscroll-contain pb-1 [-ms-overflow-style:auto] [scrollbar-gutter:stable]">
-                  <CurseZonePanel
-                    settings={room.settings}
-                    activeCurses={room.activeCurses}
-                    prideCeilingCard={room.prideCeilingCard}
-                    wrathMinionCard={room.wrathMinionCard}
-                    wrathTargetUid={room.wrathTargetUid}
-                    hostUid={room.hostUid}
-                    players={room.players}
-                  />
-                </div>
+              <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-hidden pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-auto sm:max-w-[min(7.5rem,calc((100vw-2rem)*0.2))] sm:self-stretch sm:pb-2">
                 {me.powerCards.length > 0 && (
-                  <>
-                    <span className="text-[8px] font-black uppercase tracking-wider text-emerald-500/90">Your powers</span>
-                    <div className="flex w-full max-w-full shrink-0 flex-row flex-wrap items-center justify-center gap-x-1.5 gap-y-2 px-0.5">
+                  <div className="flex w-full min-w-0 flex-col gap-1">
+                    <span className="text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90">
+                      Your powers
+                    </span>
+                    <div className="flex w-full flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden pb-0.5 [scrollbar-width:thin]">
                       {me.powerCards.map((pId, i) => (
                         <PowerCardVisual
                           key={`${pId}-${i}`}
@@ -2983,8 +2980,28 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         />
                       ))}
                     </div>
-                  </>
+                  </div>
                 )}
+                <div className="flex max-h-[min(32vh,12.75rem)] w-full shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden pb-1 [-ms-overflow-style:auto] [scrollbar-gutter:stable]">
+                  <CurseZonePanel
+                    settings={room.settings}
+                    activeCurses={room.activeCurses}
+                    prideCeilingCard={room.prideCeilingCard}
+                    wrathMinionCard={room.wrathMinionCard}
+                    wrathTargetUid={room.wrathTargetUid}
+                    hostUid={room.hostUid}
+                    players={room.players}
+                  />
+                </div>
+                {(room.status === 'playing' || room.status === 'powering') &&
+                  opponent &&
+                  room.settings.enableDesperation &&
+                  opponentDesperationOnLeftRail &&
+                  opponentDesperationUiRelevant(room, opponent) && (
+                    <div className="mt-auto w-full shrink-0 pt-1">
+                      <OpponentDesperationTopStrip opponent={opponent} room={room} />
+                    </div>
+                  )}
               </aside>
 
               <div
@@ -3009,7 +3026,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                  me.currentMove &&
                  opponent?.currentMove
                ) && (
-                 <span className="mb-6 max-w-[min(100%,28rem)] px-2 text-center text-base font-black uppercase leading-tight tracking-[0.18em] text-yellow-400 sm:mb-8 sm:text-2xl md:mb-10 md:text-3xl sm:tracking-[0.22em]">
+                 <span className="mb-2 max-w-[min(100%,22rem)] px-2 text-center text-[10px] font-black uppercase leading-tight tracking-[0.24em] text-yellow-400/95 sm:mb-3 sm:text-[11px] sm:tracking-[0.26em]">
                    {room.status === 'powering'
                      ? powerShowdown
                        ? 'Cards locked — choose power effects next'
@@ -3129,8 +3146,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                    >
                      <div
                        className={`
-                         relative flex h-[10.75rem] w-[7.25rem] flex-col items-center justify-center rounded-2xl border-4 border-yellow-200 bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.3)]
-                         sm:h-[13.25rem] sm:w-[8.75rem]
+                         relative flex h-[9.75rem] w-[6.75rem] flex-col items-center justify-center rounded-2xl border-4 border-yellow-200 bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.28)]
+                         sm:h-[11.75rem] sm:w-[8.125rem]
                        `}
                      >
                        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
@@ -3164,13 +3181,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                        })()}
                      </div>
                      <span
-                       className={`text-center text-3xl font-black uppercase tracking-tight sm:text-5xl md:text-6xl ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''}`}
+                       className={`pointer-events-none text-center text-[11px] font-black uppercase tracking-[0.12em] sm:text-xs ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''} opacity-[0.82]`}
                      >
                        {room.targetSuit === 'Diamonds' &&
                        room.settings.enableCurseCards &&
                        greedCurseActive(room.activeCurses ?? [])
                          ? 'Diamonds / Coins'
-                         : room.targetSuit}
+                         : room.targetSuit ?? ''}
                      </span>
                    </motion.div>
                  )}
@@ -3181,8 +3198,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 </div>
               </div>
 
-              <aside className="relative z-0 hidden min-h-0 w-full min-w-0 flex-col items-center justify-start pt-1 sm:col-span-1 sm:col-start-3 sm:row-start-2 sm:pt-2 lg:flex">
-                <div className="relative group">
+              <aside className="relative z-0 hidden min-h-0 w-full min-w-0 flex-col items-center justify-between gap-2 pt-1 sm:col-span-1 sm:col-start-3 sm:row-start-2 sm:flex sm:max-w-[min(7.5rem,calc((100vw-2rem)*0.2))] sm:pt-2">
+                <div className="relative group shrink-0">
                   <div className="relative h-28 w-20">
                     {Array.from({ length: 4 }).map((_, i) => (
                       <div
@@ -3200,13 +3217,22 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       </div>
                     ))}
                   </div>
-                  <div className="mt-6 flex flex-col items-center">
+                  <div className="mt-4 flex flex-col items-center">
                     <div className="font-mono text-[10px] font-black uppercase tracking-[0.3em] text-emerald-500">
                       {room.deck.length}
                     </div>
                     <div className="text-[8px] font-bold uppercase tracking-widest text-emerald-800">REMAINING</div>
                   </div>
                 </div>
+                {(room.status === 'playing' || room.status === 'powering') &&
+                  opponent &&
+                  room.settings.enableDesperation &&
+                  opponentDesperationOnRightRail &&
+                  opponentDesperationUiRelevant(room, opponent) && (
+                    <div className="mt-auto w-full shrink-0">
+                      <OpponentDesperationTopStrip opponent={opponent} room={room} />
+                    </div>
+                  )}
               </aside>
             </div>
           ) : null}

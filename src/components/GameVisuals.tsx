@@ -303,6 +303,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       <motion.div
         layout
         {...entrance}
+        transition={{ type: 'spring', stiffness: 720, damping: 38 }}
         whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
         className={`${backSizing} rounded-lg shadow-xl flex items-center justify-center p-1.5 border-2 transition-colors relative ${backClasses}`}
       >
@@ -325,53 +326,81 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const allowHoverMotion =
     (!disabled && !muted) || Boolean(detailTooltip) || Boolean(!detailTooltip && holdCaption);
 
+  const HOVER_HOLD_MS = 1700;
+
+  /** Static hit target: inner face translates on hover so pointer stays inside this box — avoids timer resets + neighbor stealing hover. */
+  const syncHoldTip = () => {
+    if (detailTooltip) {
+      setTipOpen(true);
+      return;
+    }
+    if (!holdCaption) return;
+    if (holdTipTimer.current) clearTimeout(holdTipTimer.current);
+    holdTipTimer.current = setTimeout(() => setHoldTipOpen(true), HOVER_HOLD_MS);
+  };
+
+  const clearHoldTip = () => {
+    if (detailTooltip) setTipOpen(false);
+    if (holdTipTimer.current) {
+      clearTimeout(holdTipTimer.current);
+      holdTipTimer.current = null;
+    }
+    setHoldTipOpen(false);
+  };
+
+  /**
+   * Each card isolates painting so faded center SuitGlyphs can't composite over overlapping neighbors
+   * (was worsened by `overflow-visible` on the face root).
+   */
   return (
-    <motion.div
+    <div
       ref={rootRef}
-      layout
-      {...entrance}
-      style={{
-        transformPerspective:
-          presentation === 'deckPull' || resolutionMorph === 'transform'
-            ? 900
-            : undefined,
+      style={{ isolation: 'isolate' }}
+      className={`relative shrink-0 outline-none ${muted || disabled ? 'cursor-not-allowed' : holdCaption || detailTooltip || onClick ? 'cursor-pointer' : ''}`}
+      onMouseEnter={syncHoldTip}
+      onMouseLeave={clearHoldTip}
+      onFocus={() => {
+        syncHoldTip();
       }}
-      whileHover={allowHoverMotion ? { y: -10, zIndex: 50, scale: muted && !detailTooltip && !holdCaption ? 1 : 1.05 } : {}}
-      whileTap={!disabled && !muted ? { scale: 0.95 } : {}}
-      onClick={muted ? undefined : onClick}
-      onMouseEnter={() => {
-        if (detailTooltip) {
-          setTipOpen(true);
-          return;
-        }
-        if (!holdCaption) return;
-        if (holdTipTimer.current) clearTimeout(holdTipTimer.current);
-        holdTipTimer.current = setTimeout(() => setHoldTipOpen(true), 2000);
+      onBlur={() => {
+        clearHoldTip();
       }}
-      onMouseLeave={() => {
-        if (detailTooltip) setTipOpen(false);
-        if (holdTipTimer.current) {
-          clearTimeout(holdTipTimer.current);
-          holdTipTimer.current = null;
-        }
-        setHoldTipOpen(false);
-      }}
-      onFocus={() => detailTooltip && setTipOpen(true)}
-      onBlur={() => detailTooltip && setTipOpen(false)}
       tabIndex={detailTooltip ? 0 : undefined}
-      className={`
-        ${faceWrap} shadow-xl flex flex-col justify-between relative overflow-visible transition-all outline-none
-        ${muted || disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
-        ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
-        ${isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
-        ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
-        ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
-        ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
-        ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}
-        ${muted ? 'opacity-[0.42] saturate-[0.48] brightness-[0.88]' : ''}
-        ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
-      `}
     >
+      <motion.div
+        layout
+        {...entrance}
+        style={{
+          transformPerspective:
+            presentation === 'deckPull' || resolutionMorph === 'transform'
+              ? 900
+              : undefined,
+        }}
+        transition={{ type: 'spring', stiffness: 720, damping: 38 }}
+        whileHover={
+          allowHoverMotion
+            ? {
+                y: -9,
+                zIndex: 50,
+                scale: muted && !detailTooltip && !holdCaption ? 1 : 1.05,
+              }
+            : {}
+        }
+        whileTap={!disabled && !muted ? { scale: 0.95 } : {}}
+        onClick={muted ? undefined : onClick}
+        className={`
+          ${faceWrap} shadow-xl flex flex-col justify-between overflow-hidden rounded-lg
+          transition-[box-shadow] outline-none will-change-transform
+          ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
+          ${isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
+          ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
+          ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
+          ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
+          ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}
+          ${muted ? 'opacity-[0.42] saturate-[0.48] brightness-[0.88]' : ''}
+          ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
+        `}
+      >
       {isSwordsSuit && wrathPen > 0 && (
         <div className="pointer-events-none absolute top-1 left-1/2 z-20 -translate-x-1/2 text-[9px] font-black tabular-nums text-red-500 sm:text-[11px]">
           −{wrathPen}
@@ -457,6 +486,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           )}
         </div>
       </motion.div>
+      </motion.div>
 
       {(detailTooltip && tipOpen) || holdTipOpen
         ? typeof document !== 'undefined' &&
@@ -475,7 +505,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
             document.body,
           )
         : null}
-    </motion.div>
+    </div>
   );
 };
 
