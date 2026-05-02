@@ -59,6 +59,7 @@ import {
   isCardBlockedByPride,
   envyGreedySealSlots,
   ENVY_MONSTER_START_HP,
+  playingCardUpgradeSteps,
 } from './services/gameService';
 import {
   RoomData,
@@ -1228,6 +1229,21 @@ const ResolutionSequence: React.FC<{
   const [towerScorch, setTowerScorch] = useState<Record<string, boolean>>({});
   const [resolutionFx, setResolutionFx] = useState<ResolutionFx>(null);
   const [lustHeartBurst, setLustHeartBurst] = useState(false);
+  /** Per-seat resolution morph overlay on the played card (`transform` = identity swap flip, `upgrade` = rank/suit flicker ladder). */
+  const [resolutionCardMorph, setResolutionCardMorph] = useState<Record<string, 'transform' | 'upgrade'>>({});
+
+  const lustHeartParticles = useMemo(() => {
+    if (!outcome.lustRoundFx?.contributions.length) return [] as { uid: string; k: string }[];
+    const out: { uid: string; k: string }[] = [];
+    let g = 0;
+    for (const c of outcome.lustRoundFx.contributions) {
+      const pts = Math.max(0, Math.floor(c.lustPointsAdded));
+      for (let h = 0; h < pts; h++) {
+        out.push({ uid: c.uid, k: `lust-${g++}-${h}` });
+      }
+    }
+    return out;
+  }, [outcome.lustRoundFx]);
   const [postClashGhost, setPostClashGhost] = useState<Record<string, boolean>>({});
   const [envyShownHp, setEnvyShownHp] = useState<number | null>(
     outcome.envyRoundFx ? outcome.envyRoundFx.monsterHpStart : null,
@@ -1287,8 +1303,26 @@ const ResolutionSequence: React.FC<{
             if (event.suit) setCurrentTarget(event.suit);
             break;
           case 'CARD_EMPOWER':
-            if (event.uid && event.cardId) {
-               setCurrentCards(prev => ({ ...prev, [event.uid!]: event.cardId! }));
+            if (event.uid && event.cardId && event.fromCardId) {
+              const steps = playingCardUpgradeSteps(event.fromCardId, event.cardId).filter(Boolean);
+              if (steps.length > 1) {
+                setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'upgrade' }));
+                for (let s = 0; s < steps.length; s++) {
+                  const stepCard = steps[s];
+                  setCurrentCards((prev) => ({ ...prev, [event.uid!]: stepCard }));
+                  await new Promise((r) => setTimeout(r, s === 0 ? 120 : 280));
+                  if (!active) return;
+                }
+                setResolutionCardMorph((m) => {
+                  const next = { ...m };
+                  delete next[event.uid!];
+                  return next;
+                });
+              } else {
+                setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.cardId! }));
+              }
+            } else if (event.uid && event.cardId) {
+              setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.cardId! }));
             }
             break;
           case 'SUMMON_CARD':
@@ -1327,8 +1361,21 @@ const ResolutionSequence: React.FC<{
             if (event.uid) setPostClashGhost((p) => ({ ...p, [event.uid]: true }));
             break;
           case 'TRANSFORM':
-            if (event.uid && event.cardId) {
-              setCurrentCards(prev => ({ ...prev, [event.uid!]: event.cardId! }));
+            if (event.uid && event.cardId && event.fromCardId && event.fromCardId !== event.cardId) {
+              setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'transform' }));
+              /** Swap near the rotateY flat edge (~48% · see CardVisual `times`) */
+              await new Promise((r) => setTimeout(r, 440));
+              if (!active) return;
+              setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.cardId! }));
+              await new Promise((r) => setTimeout(r, 520));
+              if (!active) return;
+              setResolutionCardMorph((m) => {
+                const next = { ...m };
+                delete next[event.uid!];
+                return next;
+              });
+            } else if (event.uid && event.cardId) {
+              setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.cardId! }));
             }
             break;
           case 'ENVY_COVET':
@@ -1446,27 +1493,31 @@ const ResolutionSequence: React.FC<{
           </motion.div>
         )}
       </AnimatePresence>
-      {lustHeartBurst && outcome.lustRoundFx && outcome.lustRoundFx.contributions.length > 0 && (
+      {lustHeartBurst && lustHeartParticles.length > 0 && (
         <div className="pointer-events-none absolute inset-0 z-[85] overflow-hidden">
-          {outcome.lustRoundFx.contributions.map((c, i) => (
+          {lustHeartParticles.map((part, i) => (
             <motion.div
-              key={`lustfx-${c.uid}-${i}-${c.doubledValue}`}
+              key={part.k}
               initial={{
                 opacity: 0,
-                scale: 0.35,
-                x: c.uid === hostUid ? '-18vw' : '18vw',
-                y: '38vh',
+                scale: 0.22,
+                left: part.uid === hostUid ? '36%' : '64%',
+                top: '54%',
               }}
               animate={{
-                opacity: [0, 1, 0.85, 0],
-                scale: [0.35, 1.05, 0.75],
-                x: c.uid === hostUid ? '-42vw' : '-8vw',
-                y: ['38vh', '12vh', '4vh'],
+                opacity: [0, 1, 0.9, 0],
+                scale: [0.22, 0.94, 0.72],
+                left: lustHeartResolution ? '12%' : part.uid === hostUid ? '36%' : '64%',
+                top: lustHeartResolution ? '21%' : '48%',
               }}
-              transition={{ duration: 0.95, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+              transition={{
+                duration: lustHeartResolution ? 1.28 : 0.85,
+                delay: i * 0.042,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              className="absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 sm:h-8 sm:w-8"
             >
-              <Heart className="h-7 w-7 fill-red-600 text-red-300 drop-shadow-[0_0_18px_rgba(239,68,68,0.95)]" />
+              <Heart className="h-full w-full fill-red-600 text-red-300 drop-shadow-[0_0_14px_rgba(239,68,68,0.95)]" />
             </motion.div>
           ))}
         </div>
@@ -1494,7 +1545,7 @@ const ResolutionSequence: React.FC<{
         )}
       </AnimatePresence>
 
-      <div className="relative flex-none mb-4">
+      <div className="relative mb-4 flex w-full max-w-[52rem] flex-none flex-col px-2">
         <AnimatePresence>
           {resolutionFx?.kind === 'lovers_hearts' && (
             <>
@@ -1504,9 +1555,9 @@ const ResolutionSequence: React.FC<{
                 animate={{ opacity: [0, 1, 0.85], y: [8, -10, -4], scale: [0.5, 1.1, 1] }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.75 }}
-                className="pointer-events-none absolute -left-6 top-1/2 -translate-y-1/2 z-10"
+                className="pointer-events-none absolute -left-6 top-1/2 z-10 -translate-y-1/2"
               >
-                <Heart className="w-5 h-5 text-pink-400 fill-pink-500/35 drop-shadow-[0_0_10px_rgba(244,114,182,0.6)]" />
+                <Heart className="h-5 w-5 fill-pink-500/35 text-pink-400 drop-shadow-[0_0_10px_rgba(244,114,182,0.6)]" />
               </motion.div>
               <motion.div
                 key="lover-h2"
@@ -1514,32 +1565,55 @@ const ResolutionSequence: React.FC<{
                 animate={{ opacity: [0, 1, 0.85], y: [8, -14, -6], scale: [0.5, 1.05, 1] }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.75, delay: 0.06 }}
-                className="pointer-events-none absolute -right-6 top-1/2 -translate-y-1/2 z-10"
+                className="pointer-events-none absolute -right-6 top-1/2 z-10 -translate-y-1/2"
               >
-                <Heart className="w-5 h-5 text-pink-400 fill-pink-500/35 drop-shadow-[0_0_10px_rgba(244,114,182,0.6)]" />
+                <Heart className="h-5 w-5 fill-pink-500/35 text-pink-400 drop-shadow-[0_0_10px_rgba(244,114,182,0.6)]" />
               </motion.div>
             </>
           )}
         </AnimatePresence>
-        <motion.div 
-          initial={{ y: -10, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="flex flex-col items-center"
+        <div
+          className={`grid w-full items-start gap-y-6 ${lustHeartResolution ? 'sm:grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_minmax(0,7.5rem)] sm:gap-x-4' : ''}`}
         >
-          <div className="flex items-center gap-3 flex-wrap justify-center">
-            <span className="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-widest">Table suit</span>
-            <motion.div
-              key={currentTarget || 'none'}
-              initial={{ scale: 0.75, opacity: 0.4, filter: 'drop-shadow(0 0 0 rgba(251,191,36,0))' }}
-              animate={{ scale: 1.06, opacity: 1, filter: 'drop-shadow(0 0 18px rgba(251,191,36,0.45))' }}
-              transition={{ type: 'spring', stiffness: 280, damping: 18 }}
-              className={`w-[3.35rem] h-[3.35rem] sm:w-16 sm:h-16 flex items-center justify-center rounded-full bg-slate-900 border-2 border-slate-600 shadow-2xl ${SUIT_COLORS[currentTarget || 'Hearts']}`}
-            >
-              <SuitGlyph suit={currentTarget || 'Hearts'} className="w-[2.35rem] h-[2.35rem] sm:w-11 sm:h-11 drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]" />
-            </motion.div>
-            <span className="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-widest">this round</span>
+          <div className="flex flex-col items-center gap-1.5 sm:items-end sm:pt-1">
+            {lustHeartResolution && (
+              <>
+                <span className="text-[9px] font-black uppercase tracking-wider text-rose-400/95">Lust</span>
+                <PowerCardVisual cardId={CURSE_LUST} small revealed />
+                {outcome.lustRoundFx && (
+                  <span className="text-center text-[10px] font-black tabular-nums text-rose-200/95 sm:text-right">
+                    {outcome.lustRoundFx.previousMeter}
+                    <span className="text-rose-500/80"> → </span>
+                    {outcome.lustRoundFx.sated ? 0 : outcome.lustRoundFx.nextMeter}
+                  </span>
+                )}
+              </>
+            )}
           </div>
-        </motion.div>
+          <motion.div
+            initial={{ y: -10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="flex flex-col items-center"
+          >
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-400 sm:text-sm">Table suit</span>
+              <motion.div
+                key={currentTarget || 'none'}
+                initial={{ scale: 0.75, opacity: 0.4, filter: 'drop-shadow(0 0 0 rgba(251,191,36,0))' }}
+                animate={{ scale: 1.06, opacity: 1, filter: 'drop-shadow(0 0 18px rgba(251,191,36,0.45))' }}
+                transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+                className={`flex h-[3.35rem] w-[3.35rem] items-center justify-center rounded-full border-2 border-slate-600 bg-slate-900 shadow-2xl sm:h-16 sm:w-16 ${SUIT_COLORS[currentTarget || 'Hearts']}`}
+              >
+                <SuitGlyph
+                  suit={currentTarget || 'Hearts'}
+                  className="h-[2.35rem] w-[2.35rem] drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] sm:h-11 sm:w-11"
+                />
+              </motion.div>
+              <span className="text-xs font-black uppercase tracking-widest text-slate-400 sm:text-sm">this round</span>
+            </div>
+          </motion.div>
+          {lustHeartResolution ? <div className="hidden sm:block" aria-hidden /> : null}
+        </div>
       </div>
 
       {outcome.envyRoundFx && envyShownHp !== null && (
@@ -1598,6 +1672,7 @@ const ResolutionSequence: React.FC<{
                     delay={idx * 0.07}
                     lustHeartRulesActive={lustHeartResolution}
                     clashGhost={Boolean(postClashGhost[uid])}
+                    resolutionMorph={resolutionCardMorph[uid] ?? null}
                   />
                   <AnimatePresence>
                     {resolutionFx?.kind === 'clash_shatter' && resolutionFx.uid === uid && (
@@ -1927,6 +2002,51 @@ const DraftingPhase: React.FC<{
   );
 };
 
+/** Pinned below HUD — opponent ladder / spin status (was floating over mock hand). */
+const OpponentDesperationTopStrip: React.FC<{ opponent: PlayerData; room: RoomData }> = ({
+  opponent,
+  room,
+}) => {
+  if (!opponentDesperationUiRelevant(room, opponent)) return null;
+  const oppLadderLabel =
+    opponent.desperationTier >= 0
+      ? desperationLadderLabel(room.settings.tiers, opponent.desperationTier)
+      : null;
+  return (
+    <div className="pointer-events-none z-[28] w-full shrink-0 border-b border-purple-800/65 bg-purple-950/93 py-2 shadow-[0_3px_16px_rgba(0,0,0,0.38)]">
+      <div className="mx-auto flex w-[min(100%,26rem)] max-w-none items-start gap-2 px-3">
+        <Skull
+          className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-400 ${opponent.desperationSpinning ? 'animate-pulse' : ''}`}
+        />
+        <div className="min-w-0 flex-1 text-left leading-snug">
+          <span className="block truncate text-[8px] font-black uppercase tracking-wider text-purple-200/95">
+            {opponent.name} · desperation
+          </span>
+          {opponent.desperationSpinning ? (
+            <span className="mt-0.5 block text-[9px] font-black uppercase tracking-wide text-emerald-300/95">
+              Wheel spinning…
+            </span>
+          ) : opponent.desperationResult ? (
+            <span
+              className={`mt-0.5 block truncate text-[9px] font-black uppercase tracking-wide ${opponent.desperationResult === 'GAME OVER' ? 'text-red-400' : 'text-yellow-200/95'}`}
+            >
+              {opponent.desperationResult.replace('GAIN', 'DRAW')}
+            </span>
+          ) : oppLadderLabel ? (
+            <span className="mt-0.5 block truncate text-[9px] font-bold uppercase tracking-wide text-white/95">
+              {oppLadderLabel}
+            </span>
+          ) : (
+            <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wide text-slate-500">
+              Off ladder until first spin
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OpposingHandOverlayStack: React.FC<{
   opponent: PlayerData;
   roomSettings: GameSettings;
@@ -1947,49 +2067,10 @@ const OpposingHandOverlayStack: React.FC<{
   const oppTierRows = desperationTierRowsForDisplay(roomSettings);
   const showOppTierBanner = opponentDesperationUiRelevant(roomSnapshot, opponent);
 
-  const oppLadderLabel =
-    opponent.desperationTier >= 0
-      ? desperationLadderLabel(roomSettings.tiers, opponent.desperationTier)
-      : null;
-
   return (
     <>
       {!powerShowdown && roomStatus === 'powering' && opponentPendingDecision && (
         <OpponentDecisionStrip opponentName={opponent.name} decision={opponentPendingDecision} />
-      )}
-
-      {showOppTierBanner && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-[26] flex justify-center px-2">
-          <div className="flex w-[min(100%,21rem)] max-w-none items-start gap-2 rounded-b-lg border-x border-b border-purple-500/45 bg-purple-950/94 px-2 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-            <Skull
-              className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-400 ${opponent.desperationSpinning ? 'animate-pulse' : ''}`}
-            />
-            <div className="min-w-0 flex-1 text-left leading-snug">
-              <span className="block truncate text-[8px] font-black uppercase tracking-wider text-purple-200/95">
-                {opponent.name} · desperation
-              </span>
-              {opponent.desperationSpinning ? (
-                <span className="mt-0.5 block text-[9px] font-black uppercase tracking-wide text-emerald-300/95">
-                  Wheel spinning…
-                </span>
-              ) : opponent.desperationResult ? (
-                <span
-                  className={`mt-0.5 block truncate text-[9px] font-black uppercase tracking-wide ${opponent.desperationResult === 'GAME OVER' ? 'text-red-400' : 'text-yellow-200/95'}`}
-                >
-                  {opponent.desperationResult.replace('GAIN', 'DRAW')}
-                </span>
-              ) : oppLadderLabel ? (
-                <span className="mt-0.5 block truncate text-[9px] font-bold uppercase tracking-wide text-white/95">
-                  {oppLadderLabel}
-                </span>
-              ) : (
-                <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wide text-slate-500">
-                  Off ladder until first spin
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
       )}
 
       {(opponent.desperationSpinning || opponent.desperationResult != null) && showOppTierBanner && (
@@ -2033,6 +2114,20 @@ interface GameInstanceProps {
   isDual?: boolean;
 }
 
+/** Split local test — persist room JSON so toggling panels can resume the same Peer id + identities. */
+function dualReconnectStorageKey(instanceId: string) {
+  return `cc_dual_session_${instanceId}_v2`;
+}
+
+function wipeDualReconnectSnapshots() {
+  try {
+    sessionStorage.removeItem(dualReconnectStorageKey('p1'));
+    sessionStorage.removeItem(dualReconnectStorageKey('p2'));
+  } catch {
+    /* quota / privacy mode */
+  }
+}
+
 /** UI time to show “deck empty / dealing bones” before the full-screen FAMINE callout */
 const FAMINE_BONE_DEAL_UI_MS = 6400;
 
@@ -2060,6 +2155,114 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const myUid = serviceRef.current.getUid();
   const [famineBannerPhase, setFamineBannerPhase] = useState<FamineBannerPhase>('idle');
   const famineActivePrev = useRef(false);
+  const dualSnapRef = useRef({ instanceId, isDual, playerName, roomId, room });
+  dualSnapRef.current = { instanceId, isDual, playerName, roomId, room };
+  const dualResumeStartedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      const svc = serviceRef.current;
+      const snap = dualSnapRef.current;
+      try {
+        if (
+          snap.isDual &&
+          snap.roomId &&
+          snap.room &&
+          (snap.room.status !== 'waiting' || Object.keys(snap.room.players ?? {}).length > 1)
+        ) {
+          const st = svc.getState();
+          if (st) {
+            sessionStorage.setItem(
+              dualReconnectStorageKey(snap.instanceId),
+              JSON.stringify({
+                savedAt: Date.now(),
+                roomId: snap.roomId,
+                myUid: svc.getUid(),
+                playerName: snap.playerName,
+                isHost: svc.getIsHost(),
+                room: st,
+              }),
+            );
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      svc.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isDual) {
+      dualResumeStartedRef.current = false;
+      return;
+    }
+    if (roomId) return;
+
+    let alive = true;
+    const raw = sessionStorage.getItem(dualReconnectStorageKey(instanceId));
+    if (!raw || dualResumeStartedRef.current) return;
+
+    let snap: {
+      savedAt: number;
+      roomId: string;
+      myUid: string;
+      playerName: string;
+      isHost: boolean;
+      room: RoomData;
+    };
+    try {
+      snap = JSON.parse(raw) as typeof snap;
+    } catch {
+      return;
+    }
+    if (!snap?.room || !snap.roomId || !snap.myUid || !snap.playerName || typeof snap.isHost !== 'boolean') return;
+    if (Date.now() - (snap.savedAt ?? 0) > 2 * 60 * 60 * 1000) {
+      sessionStorage.removeItem(dualReconnectStorageKey(instanceId));
+      return;
+    }
+
+    dualResumeStartedRef.current = true;
+    void (async () => {
+      try {
+        if (!snap.isHost) {
+          await new Promise((r) => setTimeout(r, 420));
+        }
+        if (!alive) return;
+        if (snap.isHost) {
+          await serviceRef.current.resumeDualHost(
+            {
+              roomId: snap.roomId,
+              myUid: snap.myUid,
+              room: snap.room,
+              playerName: snap.playerName,
+            },
+            (st) => {
+              if (alive) setRoom(st);
+            },
+          );
+        } else {
+          await serviceRef.current.resumeDualGuest(
+            { roomId: snap.roomId, myUid: snap.myUid, playerName: snap.playerName },
+            (st) => {
+              if (alive) setRoom(st);
+            },
+          );
+        }
+        if (!alive) return;
+        setRoomId(snap.roomId);
+        if (!snap.isHost) setRoomCode(snap.roomId);
+        setPlayerName(snap.playerName);
+      } catch {
+        dualResumeStartedRef.current = false;
+        sessionStorage.removeItem(dualReconnectStorageKey(instanceId));
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [instanceId, isDual, roomId]);
 
   useEffect(() => {
     if (!room) return;
@@ -2146,16 +2349,11 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     }
   }, [room?.status, room?.players[myUid]?.secretIntel, room?.currentTurn, lastResolvedTurn]);
 
-  useEffect(() => {
-    return () => {
-      serviceRef.current.destroy();
-    };
-  }, []);
-
   const handleCreateRoom = async () => {
     if (!playerName) { setError('Please enter your name'); return; }
     setLoading(true);
     setError(null);
+    wipeDualReconnectSnapshots();
     try {
       const id = await serviceRef.current.createRoom(playerName, (state) => {
         setRoom(state);
@@ -2173,6 +2371,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     if (!playerName || !roomCode) { setError('Please enter name and code'); return; }
     setLoading(true);
     setError(null);
+    wipeDualReconnectSnapshots();
     try {
       await serviceRef.current.joinRoom(roomCode, playerName, (state) => {
         setRoom(state);
@@ -2504,9 +2703,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       ? powerShowdown
         ? 'Cards locked — choose power effects'
         : 'Resolving power cards…'
-      : isWheelSpinning
-        ? 'Drawing table suit…'
-        : null;
+      : null;
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 bg-emerald-950/40 p-4">
@@ -2651,6 +2848,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </div>
       </div>
 
+      {(room.status === 'playing' || room.status === 'powering') && opponent && room.settings.enableDesperation && (
+        <OpponentDesperationTopStrip opponent={opponent} room={room} />
+      )}
+      {(room.status === 'playing' || room.status === 'powering') && isWheelSpinning && (
+        <div className="pointer-events-none w-full shrink-0 border-b border-amber-800/40 bg-emerald-950/90 py-2 text-center shadow-[inset_0_-1px_0_rgba(251,191,36,0.12)]">
+          <span className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-300 sm:text-[11px]">
+            Drawing this round&apos;s table suit…
+          </span>
+        </div>
+      )}
+
       {seenIntel && (
         <InsightModal 
           intel={seenIntel} 
@@ -2697,7 +2905,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {/* Table grid: opp row · deck column share one rail — no overlapping absolutes */}
-      <div className="relative flex min-h-0 flex-1 flex-col gap-6">
+      <div className="relative flex min-h-0 flex-1 flex-col gap-2 sm:gap-3">
           {myWheelDecisionSpinning && (
             <div className="pointer-events-none absolute inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/45 px-2 backdrop-blur-[2px]">
               <span className="text-center text-[9px] font-black uppercase tracking-widest text-amber-300">
@@ -2719,8 +2927,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               <div className="hidden min-h-[0.125rem] sm:col-start-1 sm:row-start-1 sm:block" aria-hidden />
               <div
                 className={`relative col-span-full min-h-0 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1 ${
-                  room.settings.enableDesperation || opponentWheelDecisionSpinning ? 'min-h-[8.75rem]' : 'min-h-[6.75rem]'
-                } ${opponentWheelDecisionSpinning ? 'sm:min-h-[12rem]' : ''}`}
+                  opponentWheelDecisionSpinning ? 'min-h-[10rem] sm:min-h-[12rem]' : 'min-h-[5.75rem] sm:min-h-[6.5rem]'
+                }`}
               >
                 <div className="mb-1 text-center">
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
@@ -2748,20 +2956,22 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 ))}
               </div>
 
-              <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:self-stretch sm:pb-2">
-                <CurseZonePanel
-                  settings={room.settings}
-                  activeCurses={room.activeCurses}
-                  prideCeilingCard={room.prideCeilingCard}
-                  wrathMinionCard={room.wrathMinionCard}
-                  wrathTargetUid={room.wrathTargetUid}
-                  hostUid={room.hostUid}
-                  players={room.players}
-                />
+              <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-x-hidden overflow-y-visible pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:self-stretch sm:pb-2">
+                <div className="flex max-h-[min(44vh,17rem)] w-full flex-col items-center gap-2 overflow-y-auto overscroll-contain pb-1 [-ms-overflow-style:auto] [scrollbar-gutter:stable]">
+                  <CurseZonePanel
+                    settings={room.settings}
+                    activeCurses={room.activeCurses}
+                    prideCeilingCard={room.prideCeilingCard}
+                    wrathMinionCard={room.wrathMinionCard}
+                    wrathTargetUid={room.wrathTargetUid}
+                    hostUid={room.hostUid}
+                    players={room.players}
+                  />
+                </div>
                 {me.powerCards.length > 0 && (
                   <>
                     <span className="text-[8px] font-black uppercase tracking-wider text-emerald-500/90">Your powers</span>
-                    <div className="flex w-full flex-col items-center gap-2">
+                    <div className="flex w-full max-w-full shrink-0 flex-row flex-wrap items-center justify-center gap-x-1.5 gap-y-2 px-0.5">
                       {me.powerCards.map((pId, i) => (
                         <PowerCardVisual
                           key={`${pId}-${i}`}
@@ -2794,11 +3004,21 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   </div>
                 )}
                 <div className="relative z-10 flex w-full min-w-0 flex-col items-center">
-               {!hudPhaseLine ? (
-                  <span className="mb-4 max-w-[min(100%,24rem)] px-2 text-center text-[10px] font-black uppercase tracking-[0.24em] text-yellow-400/90 sm:text-xs sm:tracking-[0.3em]">
-                    Table suit — this trick
-                  </span>
-               ) : null}
+               {!(
+                 room.status === 'powering' &&
+                 me.currentMove &&
+                 opponent?.currentMove
+               ) && (
+                 <span className="mb-6 max-w-[min(100%,28rem)] px-2 text-center text-base font-black uppercase leading-tight tracking-[0.18em] text-yellow-400 sm:mb-8 sm:text-2xl md:mb-10 md:text-3xl sm:tracking-[0.22em]">
+                   {room.status === 'powering'
+                     ? powerShowdown
+                       ? 'Cards locked — choose power effects next'
+                       : 'Resolving power cards…'
+                     : isWheelSpinning
+                       ? 'DRAWING THIS ROUND’S TABLE SUIT…'
+                       : 'TABLE SUIT FOR THIS ROUND'}
+                 </span>
+               )}
 
                <AnimatePresence mode="wait">
                  {room.status === 'powering' && me.currentMove && opponent?.currentMove ? (
@@ -2905,39 +3125,53 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      key="target-card"
                      initial={{ opacity: 0, rotateY: 90 }}
                      animate={{ opacity: 1, rotateY: 0 }}
-                     className="flex flex-col items-center gap-2"
+                     className="flex flex-col items-center gap-3"
                    >
-                     <CompactTableGlyphRow
-                       suit={
-                         (room.status === 'results'
-                           ? room.lastOutcome?.targetSuit || room.targetSuit
-                           : room.targetSuit) as Suit | null
-                       }
-                       greedJointTrump={Boolean(
-                         room.targetSuit === 'Diamonds' &&
-                           room.settings.enableCurseCards &&
-                           greedCurseActive(room.activeCurses ?? []),
-                       )}
-                     />
                      <div
                        className={`
-                         relative flex h-[9.5rem] w-[6.25rem] flex-col items-center justify-center rounded-2xl border-[3px] border-yellow-200 bg-yellow-400 shadow-[0_0_28px_rgba(250,204,21,0.28)]
-                         sm:h-[11rem] sm:w-[7.25rem]
+                         relative flex h-[10.75rem] w-[7.25rem] flex-col items-center justify-center rounded-2xl border-4 border-yellow-200 bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.3)]
+                         sm:h-[13.25rem] sm:w-[8.75rem]
                        `}
                      >
-                        <div className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden">
-                          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px]" />
-                        </div>
-                        <div className="relative z-[1] flex flex-col items-center justify-center gap-1 opacity-[0.22]">
-                          <WolfIcon />
-                          <Rabbit className="h-6 w-6 text-yellow-950/85 sm:h-8 sm:w-8" />
-                        </div>
-                        {!room.targetSuit && !(room.lastOutcome?.targetSuit) && (
-                          <span className="relative z-10 mt-[-3.25rem] text-4xl font-black text-yellow-950/90 sm:text-5xl">
-                            ?
-                          </span>
-                        )}
+                       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-10" />
+                       </div>
+                       {(() => {
+                         const ts = (room.status === 'results'
+                           ? room.lastOutcome?.targetSuit || room.targetSuit
+                           : room.targetSuit) as Suit | null;
+                         const color = ts ? SUIT_COLORS[ts] : '';
+                         const joint =
+                           ts === 'Diamonds' &&
+                           room.settings.enableCurseCards &&
+                           greedCurseActive(room.activeCurses ?? []);
+                         return ts ? (
+                           <div
+                             className={`relative z-10 flex items-center justify-center gap-2 sm:gap-3 ${color} drop-shadow-[0_6px_22px_rgba(0,0,0,0.35)]`}
+                           >
+                             {joint ? (
+                               <>
+                                 <SuitGlyph suit="Diamonds" className="h-[3.25rem] w-[3.25rem] sm:h-[5rem] sm:w-[5rem]" />
+                                 <SuitGlyph suit="Coins" className="h-[3.25rem] w-[3.25rem] sm:h-[5rem] sm:w-[5rem]" />
+                               </>
+                             ) : (
+                               <SuitGlyph suit={ts} className="h-[4.75rem] w-[4.75rem] sm:h-[7.25rem] sm:w-[7.25rem]" />
+                             )}
+                           </div>
+                         ) : (
+                           <span className="relative z-10 text-5xl font-black text-yellow-950">?</span>
+                         );
+                       })()}
                      </div>
+                     <span
+                       className={`text-center text-3xl font-black uppercase tracking-tight sm:text-5xl md:text-6xl ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''}`}
+                     >
+                       {room.targetSuit === 'Diamonds' &&
+                       room.settings.enableCurseCards &&
+                       greedCurseActive(room.activeCurses ?? [])
+                         ? 'Diamonds / Coins'
+                         : room.targetSuit}
+                     </span>
                    </motion.div>
                  )}
                </AnimatePresence>
@@ -3138,23 +3372,20 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </motion.div>
       )}
 
-      {/* Bottom strip (“div9”) + hand */}
+      {/* Bottom strip (div9): your desperation ladder when you’re allowed to spin */}
       <div className="mt-auto shrink-0 px-4 pb-4">
-        {(room.status === 'playing' || room.status === 'powering') && (
-          <div className="mx-auto mb-2 flex min-h-[2.375rem] max-w-3xl flex-col items-center justify-center rounded-xl border border-emerald-800/65 bg-emerald-950/45 px-3 py-2 text-center shadow-[inset_0_0_0_1px_rgba(16,185,129,0.08)]">
-            {room.settings.enableDesperation &&
-            desperationSpinAllowed(room, myUid, me) &&
-            me.desperationTier >= 0 ? (
-              <span className="max-w-[min(100%,24rem)] text-[10px] font-black uppercase leading-snug tracking-widest text-purple-300/95 animate-pulse">
-                Desperation: {desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`}
+        {(room.status === 'playing' || room.status === 'powering') &&
+          room.settings.enableDesperation &&
+          desperationSpinAllowed(room, myUid, me) && (
+            <div className="mx-auto mb-2 flex min-h-[2.5rem] max-w-3xl flex-col items-center justify-center rounded-xl border border-purple-800/55 bg-purple-950/55 px-3 py-2 text-center shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
+              <span className="max-w-[min(100%,26rem)] text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
+                Desperation:{' '}
+                {me.desperationTier >= 0
+                  ? desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`
+                  : 'Off ladder until first in-match spin'}
               </span>
-            ) : (
-              <span className="text-[8px] font-bold uppercase tracking-widest text-emerald-700/85">
-                Power context · dock & expand strip
-              </span>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
         <div className="mb-2 flex items-end justify-between">
            <div className="flex flex-col">
@@ -3323,7 +3554,16 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 )}
              </div>
            )}
-           <button onClick={() => setRoomId(null)} className="mt-8 text-[12px] text-emerald-500 hover:text-white uppercase font-black tracking-[0.3em] border border-emerald-800 px-8 py-3 rounded-full hover:bg-emerald-900 transition-all">Back to menu</button>
+           <button
+             type="button"
+             onClick={() => {
+               wipeDualReconnectSnapshots();
+               setRoomId(null);
+             }}
+             className="mt-8 text-[12px] text-emerald-500 hover:text-white uppercase font-black tracking-[0.3em] border border-emerald-800 px-8 py-3 rounded-full hover:bg-emerald-900 transition-all"
+           >
+             Back to menu
+           </button>
         </div>
       )}
 

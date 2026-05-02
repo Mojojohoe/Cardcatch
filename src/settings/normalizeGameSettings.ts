@@ -20,7 +20,7 @@ function migrateDifficultyToHands(raw: Record<string, unknown>): {
     case 'Fair':
       return { predatorStartingCards: 10, preyStartingCards: 10 };
     case 'Hard':
-      return { predatorStartingCards: 10, preyStartingCards: 4 };
+      return { predatorStartingCards: 10, preyStartingCards: 6 };
     case 'Impossible':
       return { predatorStartingCards: 10, preyStartingCards: 2 };
     default:

@@ -186,6 +186,8 @@ export interface ResolutionEvent {
   type: ResolutionEventType;
   uid?: string;
   cardId?: string;
+  /** Card identity before CARD_EMPOWER / TRANSFORM (for resolution animations). */
+  fromCardId?: string;
   powerCardId?: number;
   suit?: Suit;
   message: string;
@@ -314,7 +316,8 @@ export interface RoomData {
     >;
     /** Lust meter animation + persistence helper. */
     lustRoundFx?: {
-      contributions: { uid: string; card: string; doubledValue: number }[];
+      /** Points added toward the Lust meter from this heart (equals effective clash bonus under lust). */
+      contributions: { uid: string; card: string; lustPointsAdded: number }[];
       previousMeter: number;
       /** After applying contributions; 0 if sated. */
       nextMeter: number;

@@ -66,9 +66,9 @@ export const RoomChat: React.FC<{
         <div
           aria-label="Room chat"
           className="
-            pointer-events-auto flex flex-col overflow-hidden rounded-2xl border-2 border-emerald-700/85
+            pointer-events-auto flex w-[min(18rem,calc(100vw-2rem))]
+            shrink-0 flex-col overflow-hidden rounded-2xl border-2 border-emerald-700/85
             bg-emerald-950/97 shadow-[0_14px_50px_rgba(0,0,0,0.55)] backdrop-blur-sm
-            w-[min(18rem,calc(100%-1.75rem))]
             min-h-[8.75rem] max-h-[min(32vh,11.5rem)] sm:max-h-[min(30vh,12.5rem)]
           "
         >
@@ -116,6 +116,7 @@ export const RoomChat: React.FC<{
               autoComplete="off"
               aria-label="Message"
               placeholder="Message…"
+              spellCheck={false}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -123,7 +124,7 @@ export const RoomChat: React.FC<{
                   void send();
                 }
               }}
-              className="min-h-[2.375rem] min-w-0 flex-1 rounded-lg border border-emerald-800/70 bg-black/35 px-2.5 text-[11px] text-emerald-50 placeholder:text-emerald-700 focus:border-yellow-400/65 focus:outline-none"
+              className="min-h-[2.375rem] min-w-0 w-full flex-1 rounded-lg border border-emerald-800/70 bg-black/35 px-2.5 text-[11px] text-emerald-50 placeholder:text-emerald-700 focus:border-yellow-400/65 focus:outline-none"
             />
             <button
               type="button"

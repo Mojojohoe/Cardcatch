@@ -255,6 +255,34 @@ export const parseCard = (cardStr: string): { suit: string, value: string, isJok
   return { suit, value, isJoker: false };
 };
 
+/** Card ids per frame for CARD_EMPOWER “upgrade” resolution animation (Strength / Emperor rank walks). */
+export function playingCardUpgradeSteps(fromCard: string, toCard: string): string[] {
+  if (fromCard === toCard) return [fromCard];
+  const pf = parseCard(fromCard);
+  const pt = parseCard(toCard);
+  if (pf.isJoker || pt.isJoker) return [fromCard, toCard];
+
+  const valueIndex = (v: string): number =>
+    (VALUES as readonly string[]).indexOf(v);
+
+  const vi = valueIndex(pf.value);
+  const vj = valueIndex(pt.value);
+  if (vi < 0 || vj < 0) return [fromCard, toCard];
+
+  if (pf.suit === pt.suit) {
+    if (vj >= vi) {
+      return VALUES.slice(vi, vj + 1).map((v) => `${pf.suit}-${v}`);
+    }
+    const rev = [...VALUES.slice(vj, vi + 1)].reverse();
+    return rev.map((v) => `${pf.suit}-${v}`);
+  }
+
+  // Cross-suit: walk ranks along the destination suit between the two ranks.
+  const low = Math.min(vi, vj);
+  const high = Math.max(vi, vj);
+  return VALUES.slice(low, high + 1).map((v) => `${pt.suit}-${v}`);
+}
+
 const RANK_WORDS: Record<string, string> = {
   A: 'Ace',
   K: 'King',
@@ -496,11 +524,22 @@ export class GameService {
           conn.close();
           return;
         }
-        
-        // Prevent 3rd player
-        if (this.state && Object.keys(this.state.players).length >= 2) {
-            conn.close();
-            return;
+
+        const playerCount = this.state ? Object.keys(this.state.players).length : 0;
+        const aliveRemote =
+          !!this.connection && 'open' in this.connection ? (this.connection as DataConnection & { open: boolean }).open : false;
+
+        if (aliveRemote && playerCount >= 2) {
+          conn.close();
+          return;
+        }
+
+        if (this.connection && !aliveRemote) {
+          try {
+            this.connection.close();
+          } catch {
+            /* ignore */
+          }
         }
 
         this.connection = conn;
@@ -511,6 +550,84 @@ export class GameService {
 
   getUid() {
     return this.myUid;
+  }
+
+  getIsHost(): boolean {
+    return this.isHost;
+  }
+
+  getState(): RoomData | null {
+    return this.state;
+  }
+
+  /**
+   * Local split-screen / tab refresh: reclaim the same PeerJS id and room state after UI unmount.
+   * Caller should `await` a short delay before guest `resumeDualGuest` connects.
+   */
+  async resumeDualHost(
+    snapshot: { roomId: string; myUid: string; room: RoomData; playerName: string },
+    onStateChange: (state: RoomData) => void,
+  ): Promise<void> {
+    this.destroy();
+    await new Promise<void>((r) => setTimeout(r, 80));
+    this.myUid = snapshot.myUid;
+    this.isHost = true;
+    this.onStateChange = onStateChange;
+    this.state = {
+      ...snapshot.room,
+      code: snapshot.roomId,
+      updatedAt: Date.now(),
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      try {
+        this.peer = new Peer(snapshot.roomId);
+      } catch (e) {
+        reject(e);
+        return;
+      }
+      const t = setTimeout(() => reject(new Error('Host resume timeout')), 16000);
+      this.peer!.on('error', (err) => {
+        clearTimeout(t);
+        reject(err);
+      });
+      this.peer!.on('open', () => {
+        clearTimeout(t);
+        resolve();
+      });
+      this.peer!.on('connection', (conn) => {
+        if (!this.isHost) {
+          conn.close();
+          return;
+        }
+        const playerCount = this.state ? Object.keys(this.state.players).length : 0;
+        const aliveRemote =
+          !!this.connection && 'open' in this.connection
+            ? (this.connection as DataConnection & { open: boolean }).open
+            : false;
+        if (aliveRemote && playerCount >= 2) {
+          conn.close();
+          return;
+        }
+        if (this.connection && !aliveRemote) {
+          try {
+            this.connection.close();
+          } catch {
+            /* ignore */
+          }
+        }
+        this.connection = conn;
+        this.setupConnection(conn);
+      });
+    });
+    onStateChange(this.state!);
+  }
+
+  async resumeDualGuest(
+    snapshot: { roomId: string; myUid: string; playerName: string },
+    onStateChange: (state: RoomData) => void,
+  ): Promise<void> {
+    return this.joinRoom(snapshot.roomId, snapshot.playerName, onStateChange, { reuseUid: snapshot.myUid });
   }
 
   async createRoom(playerName: string, onStateChange: (state: RoomData) => void): Promise<string> {
@@ -586,11 +703,19 @@ export class GameService {
     this.broadcastState();
   }
 
-  async joinRoom(roomId: string, playerName: string, onStateChange: (state: RoomData) => void): Promise<void> {
+  async joinRoom(
+    roomId: string,
+    playerName: string,
+    onStateChange: (state: RoomData) => void,
+    opts?: { reuseUid?: string },
+  ): Promise<void> {
     this.onStateChange = onStateChange;
     this.isHost = false;
+    if (opts?.reuseUid) {
+      this.myUid = opts.reuseUid;
+    }
     await this.init(onStateChange);
-    
+
     return new Promise((resolve, reject) => {
       if (!this.peer) return reject('Peer not initialized');
       
@@ -715,24 +840,28 @@ export class GameService {
 
   private handlePlayerJoin(name: string, uid: string) {
     if (!this.state) return;
-    
-    // Reconnection logic: find by name
-    const existingPlayerUid = Object.keys(this.state.players).find(id => this.state!.players[id].name === name);
-    
-    if (existingPlayerUid && this.state.status !== 'waiting') {
+    /** Dev / P2P: rejoin matches by player name — release builds should authenticate room + invite token before migration. */
+
+    const existingPlayerUid = Object.keys(this.state.players).find((id) => this.state!.players[id].name === name);
+
+    if (existingPlayerUid) {
+      if (existingPlayerUid === uid) {
+        this.broadcastState();
+        return;
+      }
       const player = this.state.players[existingPlayerUid];
       const updatedPlayers = { ...this.state.players };
-      
-      // If the UID is different (new session), update it
-      if (existingPlayerUid !== uid) {
-        delete updatedPlayers[existingPlayerUid];
-        updatedPlayers[uid] = { ...player, uid };
-      }
-      
-      this.state = { 
-        ...this.state, 
-        players: updatedPlayers, 
-        updatedAt: Date.now() 
+      delete updatedPlayers[existingPlayerUid];
+      updatedPlayers[uid] = { ...player, uid };
+
+      let hostUid = this.state.hostUid;
+      if (hostUid === existingPlayerUid) hostUid = uid;
+
+      this.state = {
+        ...this.state,
+        hostUid,
+        players: updatedPlayers,
+        updatedAt: Date.now(),
       };
       this.broadcastState();
       return;
@@ -2095,6 +2224,7 @@ export class GameService {
         events.push({
           type: 'TRANSFORM',
           uid: oppUid,
+          fromCardId: targetCard,
           cardId: frogged,
           powerCardId: 1,
           message: `${players[uid].name} casts Frogs and warps the opposing card to ${frogged.replace('-', ' of ')}!`,
@@ -2176,23 +2306,51 @@ export class GameService {
       if (p === 4) { // Emperor
         events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 4, message: `${players[pUid].name}'s Emperor empowers the card!` });
         if (pUid === p1Uid) {
+          const fromCard = c1;
           c1 = `${targetSuit}-${VALUES[Math.min(VALUES.indexOf(pc1.value as any) + 2, VALUES.length - 1)]}`;
-          events.push({ type: 'CARD_EMPOWER', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name}'s card upgraded to target suit!` });
+          events.push({
+            type: 'CARD_EMPOWER',
+            uid: p1Uid,
+            fromCardId: fromCard,
+            cardId: c1,
+            message: `${players[p1Uid].name}'s card upgraded to target suit!`,
+          });
         } else {
+          const fromCard = c2;
           c2 = `${targetSuit}-${VALUES[Math.min(VALUES.indexOf(pc2.value as any) + 2, VALUES.length - 1)]}`;
-          events.push({ type: 'CARD_EMPOWER', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name}'s card upgraded to target suit!` });
+          events.push({
+            type: 'CARD_EMPOWER',
+            uid: p2Uid,
+            fromCardId: fromCard,
+            cardId: c2,
+            message: `${players[p2Uid].name}'s card upgraded to target suit!`,
+          });
         }
       }
       if (p === 8) { // Strength
         events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 8, message: `${players[pUid].name}'s Strength boosts the card!` });
         if (pUid === p1Uid) {
           const pc = parseCard(c1);
+          const fromCard = c1;
           c1 = pc.isJoker ? c1 : `${pc.suit}-${VALUES[Math.min(VALUES.indexOf(pc.value as any) + 4, VALUES.length - 1)]}`;
-          events.push({ type: 'CARD_EMPOWER', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name}'s card value increased!` });
+          events.push({
+            type: 'CARD_EMPOWER',
+            uid: p1Uid,
+            fromCardId: fromCard,
+            cardId: c1,
+            message: `${players[p1Uid].name}'s card value increased!`,
+          });
         } else {
           const pc = parseCard(c2);
+          const fromCard = c2;
           c2 = pc.isJoker ? c2 : `${pc.suit}-${VALUES[Math.min(VALUES.indexOf(pc.value as any) + 4, VALUES.length - 1)]}`;
-          events.push({ type: 'CARD_EMPOWER', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name}'s card value increased!` });
+          events.push({
+            type: 'CARD_EMPOWER',
+            uid: p2Uid,
+            fromCardId: fromCard,
+            cardId: c2,
+            message: `${players[p2Uid].name}'s card value increased!`,
+          });
         }
       }
       if (p === 11) { // Justice
@@ -2214,20 +2372,24 @@ export class GameService {
       const pc1 = parseCard(c1);
       const pc2 = parseCard(c2);
       if (!pc1.isJoker && pc1.suit !== 'Stars') {
+        const fromCard = c1;
         c1 = `Stars-${pc1.value}`;
         events.push({
           type: 'TRANSFORM',
           uid: p1Uid,
+          fromCardId: fromCard,
           cardId: c1,
           powerCardId: 17,
           message: `${players[p1Uid].name}'s card became a Star!`,
         });
       }
       if (!pc2.isJoker && pc2.suit !== 'Stars') {
+        const fromCard = c2;
         c2 = `Stars-${pc2.value}`;
         events.push({
           type: 'TRANSFORM',
           uid: p2Uid,
+          fromCardId: fromCard,
           cardId: c2,
           powerCardId: 17,
           message: `${players[p2Uid].name}'s card became a Star!`,
@@ -2812,6 +2974,7 @@ export class GameService {
         events.push({
           type: 'TRANSFORM',
           uid,
+          fromCardId: prev,
           cardId: next,
           powerCardId: 17,
           message: `${players[uid].name}'s card became a Star!`,
@@ -2822,6 +2985,7 @@ export class GameService {
         events.push({
           type: 'TRANSFORM',
           uid,
+          fromCardId: prev,
           cardId: next,
           powerCardId: 18,
           message: `${players[uid].name}'s card became a Moon!`,
@@ -2969,15 +3133,15 @@ export class GameService {
     let lustRoundFx: NonNullable<RoomData['lastOutcome']>['lustRoundFx'] = undefined;
     if (curseEnabled && lustHeartRules) {
       const prevLust = roomData.activeCurses?.find((c) => c.id === CURSE_LUST)?.lustAccumulated ?? 0;
-      const contributions: { uid: string; card: string; doubledValue: number }[] = [];
+      const contributions: { uid: string; card: string; lustPointsAdded: number }[] = [];
       let add = 0;
       for (const uid of [p1Uid, p2Uid]) {
         const card = uid === p1Uid ? c1 : c2;
         if (parseCard(card).suit === 'Hearts') {
-          const v = getCardValue(card, true);
-          const doubled = v * 2;
-          add += doubled;
-          contributions.push({ uid, card, doubledValue: doubled });
+          /** One application of lust-boosted heart clash value feeds the meter (was incorrectly doubled again before). */
+          const lustPts = Math.max(0, Math.round(getCardValue(card, true)));
+          add += lustPts;
+          contributions.push({ uid, card, lustPointsAdded: lustPts });
         }
       }
       const nextRaw = prevLust + add;

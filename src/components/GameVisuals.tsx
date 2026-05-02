@@ -44,7 +44,7 @@ import {
   CURSE_WRATH,
   isCurseCardId,
 } from '../curses';
-import { getWrathMagnitude, parseCard } from '../services/gameService';
+import { getCardValue, getWrathMagnitude, parseCard } from '../services/gameService';
 import { MAJOR_ARCANA, PlayerRole } from '../types';
 import { SuitGlyph } from './SuitGlyphs';
 
@@ -64,6 +64,24 @@ export const SUIT_COLORS: Record<string, string> = {
   Bones: 'text-stone-300',
   Joker: 'text-purple-400'
 };
+
+const PLAYING_CARD_RANK_TITLE: Record<string, string> = {
+  A: 'Ace',
+  K: 'King',
+  Q: 'Queen',
+  J: 'Jack',
+};
+
+/** Title + clash value for delayed suit-card hover (“King of Hearts — (13)”). */
+function playingCardHoverCaption(cardStr: string, lustHeartRulesActive: boolean): string | null {
+  const p = parseCard(cardStr);
+  if (p.isJoker) return `Joker — (${getCardValue(cardStr)})`;
+  if (p.suit === 'Grovels') return null;
+  if (p.suit === 'Crowns' && p.value === 'E') return `Emperor of Crowns — (${getCardValue(cardStr)})`;
+  const rank = PLAYING_CARD_RANK_TITLE[p.value] ?? p.value;
+  const v = getCardValue(cardStr, lustHeartRulesActive);
+  return `${rank} of ${p.suit} — (${v})`;
+}
 
 /** Lucide (SVG) mapping for major arcana `icon` field — placeholder until final artwork. */
 const MAJOR_ARCANA_LUCIDE: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
@@ -198,7 +216,7 @@ export interface CardVisualProps {
   presentation?: CardPresentationMode;
   deckPullSide?: DeckPullSide;
   presentationPace?: PresentationPace;
-  /** Hearts show promoted ranks (E/S/G) while Lust curse is active. */
+  /** Used for clash value in delayed tooltip while Lust is active (corner still shows Q/K/A). */
   lustHeartRulesActive?: boolean;
   /** Pride: illegal target-suit plays — greyed and not clickable (tooltip still works). */
   muted?: boolean;
@@ -208,6 +226,8 @@ export interface CardVisualProps {
   clashGhost?: boolean;
   /** Envy: playable coveted card glows green. */
   envyCovetedGlow?: boolean;
+  /** Round-resolution visual: distinguish identity flip vs rank/suit reinforcement. */
+  resolutionMorph?: 'transform' | 'upgrade' | null;
 }
 
 export const CardVisual: React.FC<CardVisualProps> = (props) => {
@@ -229,19 +249,29 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     detailTooltip,
     clashGhost = false,
     envyCovetedGlow = false,
+    resolutionMorph = null,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  const holdTipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tipOpen, setTipOpen] = useState(false);
-  const tooltipStyle = usePowerTooltipPosition(Boolean(detailTooltip) && tipOpen, rootRef, popRef);
+  const [holdTipOpen, setHoldTipOpen] = useState(false);
+  const holdCaption = useMemo(
+    () => (revealed && card ? playingCardHoverCaption(card, lustHeartRulesActive) : null),
+    [card, lustHeartRulesActive, revealed],
+  );
+  const tooltipStyle = usePowerTooltipPosition(
+    (Boolean(detailTooltip) && tipOpen) || (Boolean(holdCaption) && holdTipOpen),
+    rootRef,
+    popRef,
+  );
   const { suit, value, isJoker } = useMemo(() => (revealed ? parseCard(card) : { suit: '', value: '', isJoker: false }), [card, revealed]);
-  const cornerRank = useMemo(() => {
-    if (!lustHeartRulesActive || suit !== 'Hearts') return value;
-    if (value === 'Q') return 'E';
-    if (value === 'K') return 'S';
-    if (value === 'A') return 'G';
-    return value;
-  }, [lustHeartRulesActive, suit, value]);
+
+  useEffect(() => {
+    return () => {
+      if (holdTipTimer.current) clearTimeout(holdTipTimer.current);
+    };
+  }, []);
   const isMoonSuit = suit === 'Moons';
   const isCrownsSuit = suit === 'Crowns';
   const isGrovelsSuit = suit === 'Grovels';
@@ -292,29 +322,51 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     );
   }
 
-  const allowHoverMotion = (!disabled && !muted) || Boolean(detailTooltip);
+  const allowHoverMotion =
+    (!disabled && !muted) || Boolean(detailTooltip) || Boolean(!detailTooltip && holdCaption);
 
   return (
     <motion.div
       ref={rootRef}
       layout
       {...entrance}
-      style={{ transformPerspective: presentation === 'deckPull' ? 900 : undefined }}
-      whileHover={allowHoverMotion ? { y: -10, zIndex: 50, scale: muted && !detailTooltip ? 1 : 1.05 } : {}}
+      style={{
+        transformPerspective:
+          presentation === 'deckPull' || resolutionMorph === 'transform'
+            ? 900
+            : undefined,
+      }}
+      whileHover={allowHoverMotion ? { y: -10, zIndex: 50, scale: muted && !detailTooltip && !holdCaption ? 1 : 1.05 } : {}}
       whileTap={!disabled && !muted ? { scale: 0.95 } : {}}
       onClick={muted ? undefined : onClick}
-      onMouseEnter={() => detailTooltip && setTipOpen(true)}
-      onMouseLeave={() => detailTooltip && setTipOpen(false)}
+      onMouseEnter={() => {
+        if (detailTooltip) {
+          setTipOpen(true);
+          return;
+        }
+        if (!holdCaption) return;
+        if (holdTipTimer.current) clearTimeout(holdTipTimer.current);
+        holdTipTimer.current = setTimeout(() => setHoldTipOpen(true), 2000);
+      }}
+      onMouseLeave={() => {
+        if (detailTooltip) setTipOpen(false);
+        if (holdTipTimer.current) {
+          clearTimeout(holdTipTimer.current);
+          holdTipTimer.current = null;
+        }
+        setHoldTipOpen(false);
+      }}
       onFocus={() => detailTooltip && setTipOpen(true)}
       onBlur={() => detailTooltip && setTipOpen(false)}
       tabIndex={detailTooltip ? 0 : undefined}
       className={`
-        ${faceWrap} shadow-xl flex flex-col justify-between relative overflow-hidden transition-all outline-none
+        ${faceWrap} shadow-xl flex flex-col justify-between relative overflow-visible transition-all outline-none
         ${muted || disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
-        ${presentation === 'deckPull' ? 'perspective-[900px] origin-bottom' : ''}
+        ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
         ${isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
         ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
         ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
+        ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
         ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}
         ${muted ? 'opacity-[0.42] saturate-[0.48] brightness-[0.88]' : ''}
         ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
@@ -325,62 +377,104 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           −{wrathPen}
         </div>
       )}
-      <div className={`flex flex-col items-start leading-[0.9] ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
-        {isGrovelsSuit ? (
-          <span className={`${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}>
-            Grovel
-          </span>
-        ) : (
-          <>
-            <span className={`${cornerText} font-black font-mono tracking-tighter`}>{cornerRank}</span>
-            {isJoker ? (
-              <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
-            ) : (
-              <SuitGlyph suit={suit} className={cornerGlyph} />
-            )}
-          </>
-        )}
-      </div>
-
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div
-          className={`${centerGlyph} ${isSwordsSuit ? 'opacity-[0.24]' : 'opacity-[0.08]'} ${SUIT_COLORS[suit] ?? 'text-red-500'}`}
-        >
+      <motion.div
+        key={`${resolutionMorph ?? 'idle'}-${card}`}
+        className={`relative z-[1] flex flex-1 flex-col justify-between overflow-hidden rounded-[inherit] ${small ? '' : 'min-h-[5.5rem] sm:min-h-[8.25rem]'}`}
+        style={{ transformStyle: 'preserve-3d' }}
+        animate={
+          resolutionMorph === 'transform'
+            ? {
+                rotateY: [0, -90, -90, 0],
+                scaleY: [1, 0.82, 0.82, 1],
+                filter: [
+                  'brightness(1)',
+                  'brightness(1.2)',
+                  'brightness(1.2)',
+                  'brightness(1)',
+                ],
+              }
+            : resolutionMorph === 'upgrade'
+              ? { rotate: [0, -14, 10, -7, 0], x: [0, -10, 8, -4, 0], scale: [1, 1.04, 0.94, 1.06, 1] }
+              : {}
+        }
+        transition={
+          resolutionMorph === 'transform'
+            ? { duration: 0.92, times: [0, 0.48, 0.52, 1], ease: [0.22, 1, 0.36, 1] }
+            : resolutionMorph === 'upgrade'
+              ? { duration: 0.36, ease: [0.22, 1, 0.36, 1] }
+              : { duration: 0 }
+        }
+      >
+        <div className={`relative z-[2] flex flex-col items-start leading-[0.9] ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
           {isGrovelsSuit ? (
-            <SuitGlyph suit="Grovels" className={`text-violet-500/35 ${centerGlyph}`} />
-          ) : isJoker ? (
-            <SuitGlyph suit="Joker" className={`text-purple-600 ${centerGlyph}`} />
+            <span
+              className={`${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}
+            >
+              Grovel
+            </span>
           ) : (
-            <SuitGlyph suit={suit} className={centerGlyph} />
+            <>
+              <span className={`${cornerText} font-black font-mono tracking-tighter`}>{value}</span>
+              {isJoker ? (
+                <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
+              ) : (
+                <SuitGlyph suit={suit} className={cornerGlyph} />
+              )}
+            </>
           )}
         </div>
-      </div>
 
-      <div className={`flex flex-col items-start leading-[0.9] self-end rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
-        {isGrovelsSuit ? (
-          <span className={`${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}>
-            Grovel
-          </span>
-        ) : (
-          <>
-            <span className={`${cornerText} font-black font-mono tracking-tighter`}>{cornerRank}</span>
-            {isJoker ? (
-              <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
+        <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+          <div
+            className={`${centerGlyph} ${isSwordsSuit ? 'opacity-[0.24]' : 'opacity-[0.08]'} ${SUIT_COLORS[suit] ?? 'text-red-500'}`}
+          >
+            {isGrovelsSuit ? (
+              <SuitGlyph suit="Grovels" className={`text-violet-500/35 ${centerGlyph}`} />
+            ) : isJoker ? (
+              <SuitGlyph suit="Joker" className={`text-purple-600 ${centerGlyph}`} />
             ) : (
-              <SuitGlyph suit={suit} className={cornerGlyph} />
+              <SuitGlyph suit={suit} className={centerGlyph} />
             )}
-          </>
-        )}
-      </div>
-      {detailTooltip && tipOpen && (
-        <div
-          ref={popRef}
-          style={tooltipStyle}
-          className="rounded-lg border border-violet-800/80 bg-stone-950/98 px-3 py-2 text-[11px] font-semibold leading-snug text-violet-50 shadow-xl"
-        >
-          {detailTooltip}
+          </div>
         </div>
-      )}
+
+        <div className={`relative z-[2] flex flex-col items-start leading-[0.9] self-end rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
+          {isGrovelsSuit ? (
+            <span
+              className={`${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}
+            >
+              Grovel
+            </span>
+          ) : (
+            <>
+              <span className={`${cornerText} font-black font-mono tracking-tighter`}>{value}</span>
+              {isJoker ? (
+                <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
+              ) : (
+                <SuitGlyph suit={suit} className={cornerGlyph} />
+              )}
+            </>
+          )}
+        </div>
+      </motion.div>
+
+      {(detailTooltip && tipOpen) || holdTipOpen
+        ? typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              ref={popRef}
+              style={tooltipStyle}
+              className={`max-w-[16rem] rounded-xl border px-3 py-2.5 text-left text-[11px] font-semibold leading-snug shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px] ${
+                detailTooltip && tipOpen
+                  ? 'border-violet-800/85 bg-stone-950/98 text-violet-50'
+                  : 'border-yellow-500/40 bg-slate-950/98 text-slate-100'
+              }`}
+            >
+              {detailTooltip && tipOpen ? detailTooltip : holdCaption}
+            </div>,
+            document.body,
+          )
+        : null}
     </motion.div>
   );
 };
@@ -448,14 +542,10 @@ export const PowerCardVisual: React.FC<{
               curseId={cardId}
               className={`${small ? 'h-7 w-7' : 'h-11 w-11 sm:h-12 sm:w-12'} ${cursePowerIconClass(cardId)}`}
             />
-          ) : card ? (
-            <MajorArcanaIconGlyph
-              iconName={card.icon}
-              className={`${small ? 'h-7 w-7' : 'h-11 w-11 sm:h-12 sm:w-12'} text-slate-600`}
-              size={small ? 26 : 44}
-            />
           ) : (
-            <span className="font-black text-slate-500">?</span>
+            <span className={`font-black tabular-nums text-slate-500 ${small ? 'text-lg leading-none' : 'text-3xl sm:text-[2.65rem]'}`}>
+              ?
+            </span>
           )}
         </div>
       </motion.div>
