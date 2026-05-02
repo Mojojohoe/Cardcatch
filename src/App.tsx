@@ -199,6 +199,31 @@ function gluttonyMoodCopy(phase: number): string {
   return 'Gluttony is hungry, gluttony wants more meat';
 }
 
+/** Compact wheel / resolution-style table suit glyphs (areas 13–14) — frees vertical space under the HUD banner. */
+const CompactTableGlyphRow: React.FC<{
+  suit: Suit | null | undefined;
+  greedJointTrump: boolean;
+}> = ({ suit, greedJointTrump }) => {
+  if (!suit) return null;
+  return (
+    <div className="mb-2 flex flex-col items-center gap-1">
+      <span className="text-[8px] font-black uppercase tracking-wider text-slate-500">Table suit</span>
+      <div
+        className={`flex items-center justify-center gap-1 rounded-full border-2 border-slate-600/90 bg-slate-950/90 px-2 py-1 shadow-md ${SUIT_COLORS[suit]}`}
+      >
+        {greedJointTrump ? (
+          <>
+            <SuitGlyph suit="Diamonds" className="h-7 w-7 sm:h-8 sm:w-8" />
+            <SuitGlyph suit="Coins" className="h-7 w-7 sm:h-8 sm:w-8" />
+          </>
+        ) : (
+          <SuitGlyph suit={suit} className="h-8 w-8 sm:h-9 sm:w-9 drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]" />
+        )}
+      </div>
+    </div>
+  );
+};
+
 const CurseZonePanel: React.FC<{
   settings: GameSettings;
   activeCurses?: ActiveCurseState[];
@@ -2474,6 +2499,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const curseSelectionLocked =
     room.settings.enableCurseCards !== false && curseEffectActive(room.activeCurses);
 
+  const hudPhaseLine =
+    room.status === 'powering'
+      ? powerShowdown
+        ? 'Cards locked — choose power effects'
+        : 'Resolving power cards…'
+      : isWheelSpinning
+        ? 'Drawing table suit…'
+        : null;
+
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 bg-emerald-950/40 p-4">
       {room.famineActive && famineBannerPhase === 'bone_deal' && (
@@ -2562,40 +2596,57 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {/* Opponent desperation context is rendered in the opposing hand area. */}
-      {/* HUD Small */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex flex-col">
+      {/* HUD: room / role · phase strip (center) · dev & rules */}
+      <div className="mb-3 grid w-full shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1">
+        <div className="min-w-0 justify-self-start">
           <div className="flex items-center gap-2">
-            <span className="text-[8px] font-bold text-emerald-500 uppercase">{roomId}</span>
+            <span className="truncate text-[8px] font-bold uppercase text-emerald-500">{roomId}</span>
             <button
-               onClick={() => {
-                 navigator.clipboard.writeText(roomId);
-                 setShowCopySuccess(true);
-                 setTimeout(() => setShowCopySuccess(false), 2000);
-               }}
-               className="text-emerald-700 hover:text-yellow-400"
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(roomId);
+                setShowCopySuccess(true);
+                setTimeout(() => setShowCopySuccess(false), 2000);
+              }}
+              className="shrink-0 text-emerald-700 hover:text-yellow-400"
             >
-              {showCopySuccess ? <Check className="w-2 h-2" /> : <Copy className="w-2 h-2" />}
+              {showCopySuccess ? <Check className="h-2 w-2" /> : <Copy className="h-2 w-2" />}
             </button>
           </div>
-          <span className="text-xs font-black italic uppercase leading-none">{me.role}</span>
+          <span className="text-[10px] font-black italic uppercase leading-none sm:text-xs">{me.role}</span>
         </div>
-        <div className="flex items-center justify-end gap-2 sm:gap-4 flex-wrap">
-          <button 
+        <div className="min-w-0 max-w-[min(22rem,calc(100vw-11rem))] justify-self-center text-center px-1">
+          {hudPhaseLine && (
+            <span className="block truncate text-[9px] font-black uppercase tracking-wider text-yellow-400/95 sm:text-[10px]">
+              {hudPhaseLine}
+            </span>
+          )}
+          {(room.status === 'playing' || room.status === 'powering') &&
+            room.famineActive &&
+            !hudPhaseLine && (
+              <span className="block truncate text-[8px] font-black uppercase tracking-wider text-amber-200/85">
+                Famine — bones replace draws
+              </span>
+            )}
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 justify-self-end sm:gap-4">
+          <button
+            type="button"
             onClick={() => setIsDevMenuOpen(true)}
-            className="p-2 rounded-lg bg-emerald-900/40 border border-emerald-800 text-emerald-600 hover:bg-yellow-400 hover:text-emerald-950 hover:border-yellow-500 transition-all flex items-center gap-2 text-[10px] font-black uppercase group"
+            className="group flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-800 bg-emerald-900/40 p-1.5 text-[9px] font-black uppercase text-emerald-600 transition-all hover:border-yellow-500 hover:bg-yellow-400 hover:text-emerald-950 sm:p-2 sm:text-[10px]"
           >
-            <Sparkles className="w-3 h-3 group-hover:rotate-12" /> Dev
+            <Sparkles className="h-3 w-3 group-hover:rotate-12" /> Dev
           </button>
-          <button 
+          <button
+            type="button"
             onClick={() => setShowRules(true)}
-            className="bg-yellow-400/20 text-yellow-400 hover:bg-yellow-400 hover:text-emerald-950 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-yellow-400/40 px-4 py-2 rounded-lg transition-all"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-yellow-400/40 bg-yellow-400/20 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-yellow-400 transition-all hover:bg-yellow-400 hover:text-emerald-950 sm:px-4 sm:py-2 sm:text-[10px]"
           >
-            <Info className="w-4 h-4" /> Rules
+            <Info className="h-4 w-4 shrink-0" /> Rules
           </button>
-          <div className="flex items-center gap-2">
-            {opponent?.confirmed && <Check className="w-3 h-3 text-yellow-400 animate-bounce" />}
-            <span className="text-[10px] font-bold text-emerald-500 uppercase">{opponent?.name || '...'}</span>
+          <div className="flex shrink-0 items-center gap-1">
+            {opponent?.confirmed && <Check className="h-3 w-3 shrink-0 animate-bounce text-yellow-400" />}
+            <span className="truncate text-[10px] font-bold uppercase text-emerald-500">{opponent?.name || '...'}</span>
           </div>
         </div>
       </div>
@@ -2607,40 +2658,45 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         />
       )}
 
-      {/* Opposing hand area (top mockup cards + opponent-only context overlays) */}
-      {opponent && (
+      {/* Opponent strip when not at the active table grid (draft / brief transitions) */}
+      {opponent && !(room.status === 'playing' || room.status === 'powering') && (
         <div
-          className={`relative mb-4 ${
+          className={`relative mb-3 px-1 ${
             room.settings.enableDesperation || opponentWheelDecisionSpinning ? 'min-h-[11.5rem]' : ''
           } ${opponentWheelDecisionSpinning ? 'min-h-[17rem] sm:min-h-[18.5rem]' : ''}`}
         >
-          <div className="text-center mb-1">
-            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Cards: {opponent.hand.length}</span>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="flex-1 text-center text-[10px] font-black uppercase tracking-widest text-emerald-500">
+              Cards: {opponent.hand.length}
+            </span>
           </div>
-          <div className="flex justify-center -space-x-8 sm:-space-x-12 opacity-80 scale-90 sm:scale-100 flex-nowrap h-28 items-center px-4">
-            {Array.from({ length: opponent.hand.length }).map((_, i) => (
-              <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
-            ))}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex h-28 items-center justify-center -space-x-8 overflow-x-auto px-2 opacity-80 flex-nowrap sm:-space-x-12 sm:scale-100 scale-90">
+                {Array.from({ length: opponent.hand.length }).map((_, i) => (
+                  <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
+                ))}
+              </div>
+              <OpposingHandOverlayStack
+                opponent={opponent}
+                roomSettings={room.settings}
+                roomSnapshot={room}
+                roomStatus={room.status}
+                powerShowdown={powerShowdown}
+                opponentPendingDecision={opponentPendingDecision}
+                opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
+              />
+            </div>
+            <div className="flex shrink-0 flex-row flex-wrap items-start justify-end gap-1 opacity-80">
+              {opponent.powerCards.map((pid, i) => (
+                <PowerCardVisual key={`opp-p-${pid}-${i}`} cardId={pid} revealed={false} small />
+              ))}
+            </div>
           </div>
-          {/* Opponent Power Cards */}
-          <div className="absolute right-0 top-0 flex flex-col gap-1 pr-2 opacity-60">
-            {Array.from({ length: opponent.powerCards.length }).map((_, i) => (
-               <PowerCardVisual key={`opp-p-${i}`} cardId={0} revealed={false} small />
-            ))}
-          </div>
-          <OpposingHandOverlayStack
-            opponent={opponent}
-            roomSettings={room.settings}
-            roomSnapshot={room}
-            roomStatus={room.status}
-            powerShowdown={powerShowdown}
-            opponentPendingDecision={opponentPendingDecision}
-            opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
-          />
         </div>
       )}
 
-      {/* Board: grid rails (curse + your powers | table | deck) keeps side UI from stacking over each other */}
+      {/* Table grid: opp row · deck column share one rail — no overlapping absolutes */}
       <div className="relative flex min-h-0 flex-1 flex-col gap-6">
           {myWheelDecisionSpinning && (
             <div className="pointer-events-none absolute inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/45 px-2 backdrop-blur-[2px]">
@@ -2657,9 +2713,42 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           )}
 
-          {room.status === 'playing' || room.status === 'powering' ? (
-            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(5.25rem,7rem)_minmax(0,1fr)] items-start gap-2 px-1 transition-all duration-500 sm:gap-3 lg:grid-cols-[minmax(5.25rem,7rem)_minmax(0,1fr)_minmax(5.25rem,7rem)]">
-              <aside className="relative z-[6] flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain pb-1 sm:pb-2">
+          {(room.status === 'playing' || room.status === 'powering') && opponent ? (
+            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(5rem,7rem)_minmax(0,1fr)_minmax(5rem,7rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:gap-x-3 md:gap-y-1.5">
+              {/* Row 1 napkin sketch: spacer | opp hand | opp powers — deck stacks row2 col3 */}
+              <div className="hidden min-h-[0.125rem] sm:col-start-1 sm:row-start-1 sm:block" aria-hidden />
+              <div
+                className={`relative col-span-full min-h-0 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1 ${
+                  room.settings.enableDesperation || opponentWheelDecisionSpinning ? 'min-h-[8.75rem]' : 'min-h-[6.75rem]'
+                } ${opponentWheelDecisionSpinning ? 'sm:min-h-[12rem]' : ''}`}
+              >
+                <div className="mb-1 text-center">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
+                    Cards: {opponent.hand.length}
+                  </span>
+                </div>
+                <div className="flex h-24 flex-nowrap items-center justify-center -space-x-7 px-3 opacity-[0.82] sm:h-28 sm:-space-x-10 sm:px-4 sm:opacity-95">
+                  {Array.from({ length: opponent.hand.length }).map((_, i) => (
+                    <CardVisual key={`og-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
+                  ))}
+                </div>
+                <OpposingHandOverlayStack
+                  opponent={opponent}
+                  roomSettings={room.settings}
+                  roomSnapshot={room}
+                  roomStatus={room.status}
+                  powerShowdown={powerShowdown}
+                  opponentPendingDecision={opponentPendingDecision}
+                  opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
+                />
+              </div>
+              <div className="col-span-full flex min-h-[3.25rem] flex-row flex-wrap content-start justify-center gap-x-1 gap-y-1 self-start pt-1 opacity-90 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:max-w-none sm:justify-end sm:self-stretch sm:pt-1">
+                {opponent.powerCards.map((pid, i) => (
+                  <PowerCardVisual key={`ogr-${pid}-${i}`} cardId={pid} revealed={false} small />
+                ))}
+              </div>
+
+              <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:self-stretch sm:pb-2">
                 <CurseZonePanel
                   settings={room.settings}
                   activeCurses={room.activeCurses}
@@ -2689,7 +2778,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               </aside>
 
               <div
-                className={`relative z-0 flex min-h-0 min-w-0 flex-col items-center rounded-3xl px-1 pb-2 pt-1 sm:px-3 ${
+                className={`relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:px-3 ${
                   slothDreamTableOverlay
                     ? 'ring-2 ring-indigo-300/30 shadow-[0_0_48px_rgba(99,102,241,0.14)]'
                     : ''
@@ -2705,49 +2794,25 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   </div>
                 )}
                 <div className="relative z-10 flex w-full min-w-0 flex-col items-center">
-               <span className="text-base sm:text-2xl md:text-3xl font-black uppercase tracking-[0.18em] sm:tracking-[0.22em] text-yellow-400 mb-8 sm:mb-10 text-center px-2 leading-tight max-w-[min(100%,28rem)]">
-                 {room.status === 'powering'
-                     ? powerShowdown
-                     ? 'Cards locked — choose power effects next'
-                     : 'Resolving power cards…'
-                   : isWheelSpinning
-                     ? 'DRAWING THIS ROUND’S TABLE SUIT…'
-                     : 'TABLE SUIT FOR THIS ROUND'}
-               </span>
-               
+               {!hudPhaseLine ? (
+                  <span className="mb-4 max-w-[min(100%,24rem)] px-2 text-center text-[10px] font-black uppercase tracking-[0.24em] text-yellow-400/90 sm:text-xs sm:tracking-[0.3em]">
+                    Table suit — this trick
+                  </span>
+               ) : null}
+
                <AnimatePresence mode="wait">
                  {room.status === 'powering' && me.currentMove && opponent?.currentMove ? (
                    <motion.div
                      key="powering-cards"
                      initial={{ opacity: 0, y: 10 }}
                      animate={{ opacity: 1, y: 0 }}
-                     className="flex flex-col items-center gap-4"
+                     className="flex flex-col items-center gap-3"
                    >
                      {room.targetSuit && (
-                       <div className="flex flex-col items-center gap-2 -mt-2 mb-2">
-                         <span className="text-sm sm:text-base font-black uppercase tracking-widest text-slate-400">Table suit</span>
-                         <div
-                           className={`flex items-center gap-3 sm:gap-4 drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)] ${SUIT_COLORS[room.targetSuit]}`}
-                         >
-                           {greedJointTrumpUi ? (
-                             <>
-                               <SuitGlyph suit="Diamonds" className="w-10 h-10 sm:w-12 sm:h-12" />
-                               <SuitGlyph suit="Coins" className="w-10 h-10 sm:w-12 sm:h-12" />
-                               <span className="max-w-[min(100%,14rem)] text-center text-xl font-black uppercase tracking-tight sm:text-3xl md:text-5xl">
-                                 Diamonds / Coins
-                               </span>
-                             </>
-                           ) : (
-                             <>
-                               <SuitGlyph suit={room.targetSuit} className="w-10 h-10 sm:w-12 sm:h-12" />
-                               <span className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight">{room.targetSuit}</span>
-                             </>
-                           )}
-                         </div>
-                       </div>
+                       <CompactTableGlyphRow suit={room.targetSuit} greedJointTrump={greedJointTrumpUi} />
                      )}
                      <div className="flex items-center gap-8">
-                       <div className="relative flex flex-col items-center gap-2 pt-12">
+                       <div className="relative flex flex-col items-center gap-2 pt-8 sm:pt-10">
                          <span className="text-[9px] uppercase font-black text-emerald-400">{me.name}</span>
                          {room.settings.enableCurseCards &&
                            wrathCurseActive(room.activeCurses ?? []) &&
@@ -2782,7 +2847,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            </div>
                          )}
                        </div>
-                       <div className="relative flex flex-col items-center gap-2 pt-12">
+                       <div className="relative flex flex-col items-center gap-2 pt-8 sm:pt-10">
                          <span className="text-[9px] uppercase font-black text-emerald-500">{opponent.name}</span>
                          {room.settings.enableCurseCards &&
                            wrathCurseActive(room.activeCurses ?? []) &&
@@ -2840,52 +2905,39 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      key="target-card"
                      initial={{ opacity: 0, rotateY: 90 }}
                      animate={{ opacity: 1, rotateY: 0 }}
-                     className="flex flex-col items-center gap-3"
+                     className="flex flex-col items-center gap-2"
                    >
-                     {/* The Target Card */}
+                     <CompactTableGlyphRow
+                       suit={
+                         (room.status === 'results'
+                           ? room.lastOutcome?.targetSuit || room.targetSuit
+                           : room.targetSuit) as Suit | null
+                       }
+                       greedJointTrump={Boolean(
+                         room.targetSuit === 'Diamonds' &&
+                           room.settings.enableCurseCards &&
+                           greedCurseActive(room.activeCurses ?? []),
+                       )}
+                     />
                      <div
                        className={`
-                         w-[7.25rem] h-[10.75rem] sm:w-[8.75rem] sm:h-[13.25rem] bg-yellow-400 rounded-2xl shadow-[0_0_40px_rgba(250,204,21,0.3)]
-                         flex flex-col items-center justify-center border-4 border-yellow-200 relative
+                         relative flex h-[9.5rem] w-[6.25rem] flex-col items-center justify-center rounded-2xl border-[3px] border-yellow-200 bg-yellow-400 shadow-[0_0_28px_rgba(250,204,21,0.28)]
+                         sm:h-[11rem] sm:w-[7.25rem]
                        `}
                      >
                         <div className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden">
                           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px]" />
                         </div>
-                        {(() => {
-                          const ts = (room.status === 'results' ? (room.lastOutcome?.targetSuit || room.targetSuit) : room.targetSuit) as Suit | null;
-                          const color = ts ? SUIT_COLORS[ts] : '';
-                          const joint =
-                            ts === 'Diamonds' &&
-                            room.settings.enableCurseCards &&
-                            greedCurseActive(room.activeCurses ?? []);
-                          return ts ? (
-                            <div
-                              className={`relative z-10 flex items-center justify-center gap-2 sm:gap-3 ${color} drop-shadow-[0_6px_22px_rgba(0,0,0,0.35)]`}
-                            >
-                              {joint ? (
-                                <>
-                                  <SuitGlyph suit="Diamonds" className="w-[3.25rem] h-[3.25rem] sm:w-[5rem] sm:h-[5rem]" />
-                                  <SuitGlyph suit="Coins" className="w-[3.25rem] h-[3.25rem] sm:w-[5rem] sm:h-[5rem]" />
-                                </>
-                              ) : (
-                                <SuitGlyph suit={ts} className="w-[4.75rem] h-[4.75rem] sm:w-[7.25rem] sm:h-[7.25rem]" />
-                              )}
-                            </div>
-                          ) : (
-                            <span className="relative z-10 text-5xl font-black text-yellow-950">?</span>
-                          );
-                        })()}
+                        <div className="relative z-[1] flex flex-col items-center justify-center gap-1 opacity-[0.22]">
+                          <WolfIcon />
+                          <Rabbit className="h-6 w-6 text-yellow-950/85 sm:h-8 sm:w-8" />
+                        </div>
+                        {!room.targetSuit && !(room.lastOutcome?.targetSuit) && (
+                          <span className="relative z-10 mt-[-3.25rem] text-4xl font-black text-yellow-950/90 sm:text-5xl">
+                            ?
+                          </span>
+                        )}
                      </div>
-                     <span
-                       className={`text-center text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''}`}
-                     >
-                       {room.targetSuit === 'Diamonds' &&
-                       room.settings.enableCurseCards &&
-                       greedCurseActive(room.activeCurses ?? [])
-                         ? 'Diamonds / Coins'
-                         : room.targetSuit}
-                     </span>
                    </motion.div>
                  )}
                </AnimatePresence>
@@ -2895,7 +2947,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 </div>
               </div>
 
-              <aside className="relative z-0 hidden min-h-0 w-full min-w-0 flex-col items-center justify-start pt-1 sm:pt-2 lg:flex">
+              <aside className="relative z-0 hidden min-h-0 w-full min-w-0 flex-col items-center justify-start pt-1 sm:col-span-1 sm:col-start-3 sm:row-start-2 sm:pt-2 lg:flex">
                 <div className="relative group">
                   <div className="relative h-28 w-20">
                     {Array.from({ length: 4 }).map((_, i) => (
@@ -3086,19 +3138,25 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </motion.div>
       )}
 
-      {/* Hand Small */}
-      <div className="mt-auto px-4 pb-4">
-        {room.settings.enableDesperation &&
-          desperationSpinAllowed(room, myUid, me) &&
-          me.desperationTier >= 0 && (
-          <div className="flex flex-col items-center mb-2">
-            <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest animate-pulse">
-              Desperation: {desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`}
-            </span>
+      {/* Bottom strip (“div9”) + hand */}
+      <div className="mt-auto shrink-0 px-4 pb-4">
+        {(room.status === 'playing' || room.status === 'powering') && (
+          <div className="mx-auto mb-2 flex min-h-[2.375rem] max-w-3xl flex-col items-center justify-center rounded-xl border border-emerald-800/65 bg-emerald-950/45 px-3 py-2 text-center shadow-[inset_0_0_0_1px_rgba(16,185,129,0.08)]">
+            {room.settings.enableDesperation &&
+            desperationSpinAllowed(room, myUid, me) &&
+            me.desperationTier >= 0 ? (
+              <span className="max-w-[min(100%,24rem)] text-[10px] font-black uppercase leading-snug tracking-widest text-purple-300/95 animate-pulse">
+                Desperation: {desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`}
+              </span>
+            ) : (
+              <span className="text-[8px] font-bold uppercase tracking-widest text-emerald-700/85">
+                Power context · dock & expand strip
+              </span>
+            )}
           </div>
         )}
 
-        <div className="flex justify-between items-end mb-2">
+        <div className="mb-2 flex items-end justify-between">
            <div className="flex flex-col">
               <span className="text-[10px] font-bold opacity-50 uppercase tracking-tighter">Cards: {me.hand.length}</span>
            </div>
@@ -3297,9 +3355,7 @@ export default function App() {
 
       <div className={`h-screen transition-all duration-500 flex bg-emerald-950`}>
         <div className={`h-full transition-all duration-500 overflow-hidden ${isDual ? 'w-1/2' : 'w-full'}`}>
-          <GameInstance 
-            instanceId="p1"
-          />
+          <GameInstance instanceId="p1" isDual={isDual} />
         </div>
         
         {isDual && (

@@ -2513,7 +2513,6 @@ export class GameService {
             if (!wheelDjLock) winnerUid = uid;
           } else if (outcomeLabel === 'WIN_2_CARDS') {
             gains[uid].push({ type: 'draw', id: 2 });
-            gains[uid].push({ type: 'draw', id: 2 });
           } else if (outcomeLabel === 'DOUBLE_JOKER') {
             c1 = 'Joker-1';
             c2 = 'Joker-2';

@@ -17,19 +17,16 @@ export const RoomChat: React.FC<{
   /** Peer messages strictly after this timestamp count as unread (while chat is collapsed). */
   const [readThroughAt, setReadThroughAt] = useState(0);
 
-  useEffect(() => {
-    const list = chatMsgs ?? [];
-    setReadThroughAt((prev) =>
-      Math.max(prev, list.length === 0 ? 0 : Math.max(...list.map((m) => m.at))),
-    );
-  }, [room.code, chatMsgs]);
-
   const peerUnreadCount = useMemo(() => {
     return messages.reduce((acc, m) => {
       if (m.uid !== myUid && m.at > readThroughAt) acc += 1;
       return acc;
     }, 0);
   }, [messages, myUid, readThroughAt]);
+
+  useEffect(() => {
+    setReadThroughAt(0);
+  }, [room.code]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -43,6 +40,7 @@ export const RoomChat: React.FC<{
     if (!draft.trim()) return;
     await serviceRef.current.sendChat(draft);
     setDraft('');
+    setReadThroughAt((prev) => Math.max(prev, Date.now()));
   };
 
   const badgeLabel = peerUnreadCount > 99 ? '99+' : String(peerUnreadCount);
@@ -71,7 +69,7 @@ export const RoomChat: React.FC<{
             pointer-events-auto flex flex-col overflow-hidden rounded-2xl border-2 border-emerald-700/85
             bg-emerald-950/97 shadow-[0_14px_50px_rgba(0,0,0,0.55)] backdrop-blur-sm
             w-[min(18rem,calc(100%-1.75rem))]
-            max-h-[min(32vh,11.5rem)] sm:max-h-[min(30vh,12.5rem)]
+            min-h-[8.75rem] max-h-[min(32vh,11.5rem)] sm:max-h-[min(30vh,12.5rem)]
           "
         >
           <button
@@ -89,7 +87,7 @@ export const RoomChat: React.FC<{
 
           <div
             ref={listRef}
-            className="custom-scrollbar min-h-[5.75rem] max-h-[calc(min(28vh,9.5rem)-0px)] shrink overflow-y-auto overscroll-contain px-2.5 py-2"
+            className="custom-scrollbar min-h-[6.25rem] max-h-[calc(min(28vh,9.5rem)-0px)] shrink flex-1 overflow-y-auto overscroll-contain px-2.5 py-2"
           >
             {messages.length === 0 ? (
               <p className="py-3 text-center text-[9px] font-bold uppercase tracking-wide text-emerald-600">
