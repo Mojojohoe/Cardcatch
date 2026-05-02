@@ -1,0 +1,4 @@
+name: Cardcatch — How it was meant to be played
+description: A balance of skill and risk on an unbalanced playing field.
+---
+{"hostRole":"Predator","predatorStartingCards":10,"preyStartingCards":6,"deckSizeMultiplier":1,"disableJokers":false,"disablePowerCards":false,"enableCurseCards":true,"curseCardsInPowerDeck":false,"enablePokerChips":true,"enablePanicDice":true,"enableDesperation":true,"desperationStarterTierEnabled":true,"preydatorDesperationSeats":"guest","tiers":["1 Week Temp","2 Weeks Temp","1 Month Temp","2 Months Temp","6 Months Temp","1 Year Temp","Permanent"]}

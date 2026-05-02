@@ -58,17 +58,27 @@ export interface Card {
 
 export type PlayerRole = 'Predator' | 'Prey' | 'Preydator';
 
-export type Difficulty = 'Fair' | 'Normal' | 'Hard' | 'Impossible';
-
 export interface GameSettings {
   hostRole: PlayerRole;
-  difficulty: Difficulty;
+  /** Predator-aligned seat draws this many suit cards when the trick begins. */
+  predatorStartingCards: number;
+  /** Prey-aligned seat draws this many suit cards when the trick begins. */
+  preyStartingCards: number;
+  /**
+   * How many copies of the standard pile (52 + optional 2 Jokers each) shuffle into the table deck.
+   * 1 ⇒ 54 with Jokers; same ratio scales when Jokers off.
+   */
+  deckSizeMultiplier: number;
   disableJokers: boolean;
   disablePowerCards: boolean;
   /** Deadly-sins curse cards (table zone + effects). Off = no curse mechanics. */
   enableCurseCards: boolean;
   /** Mix curse IDs into the power draft deck / random power draws. Off by default. */
   curseCardsInPowerDeck: boolean;
+  /** Optional future module — no gameplay effect yet. */
+  enablePokerChips: boolean;
+  /** Optional future module — no gameplay effect yet. */
+  enablePanicDice: boolean;
   enableDesperation: boolean;
   /**
    * When desperation is on: if true, prey seats begin **at desperation tier 0** from deal (on the ladder immediately).
@@ -81,6 +91,11 @@ export interface GameSettings {
    */
   preydatorDesperationSeats?: 'host' | 'guest' | 'both';
   tiers: string[];
+  /**
+   * `builtin:*` IDs map to bundled text presets; `local:*` to host-saved presets;
+   * `custom` whenever the host edited individual fields outside a preset apply.
+   */
+  lobbyPresetId: string;
 }
 
 /** Rows shown in UI; index `ladderIdx` matches `PlayerData.desperationTier` and `settings.tiers[ladderIdx]`. */

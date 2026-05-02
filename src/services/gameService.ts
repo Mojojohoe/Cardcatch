@@ -37,11 +37,16 @@ import {
   wrathCurseActive,
   slothCurseActive,
 } from '../curses';
+import {
+  normalizeGameSettings as normalizeLobbyGameSettings,
+  loadPersistedLobbySettings,
+  persistLobbyDefaults,
+} from '../settings/normalizeGameSettings';
 
 export const createDeck = (disableJokers: boolean): string[] => {
   const deck: string[] = [];
-  SUITS.forEach(suit => {
-    VALUES.forEach(value => {
+  SUITS.forEach((suit) => {
+    VALUES.forEach((value) => {
       deck.push(`${suit}-${value}`);
     });
   });
@@ -50,6 +55,16 @@ export const createDeck = (disableJokers: boolean): string[] => {
     deck.push('Joker-2');
   }
   return shuffle(deck);
+};
+
+/** Multiple standard piles shuffled into one physical draw pile. */
+export const createMultiDeck = (multiplier: number, disableJokers: boolean): string[] => {
+  const copies = Math.max(1, Math.floor(multiplier || 1));
+  const combined: string[] = [];
+  for (let i = 0; i < copies; i++) {
+    combined.push(...createDeck(disableJokers));
+  }
+  return shuffle(combined);
 };
 
 export const shuffle = <T>(array: T[]): T[] => {
@@ -431,53 +446,12 @@ type GameEvent =
 
 const STORAGE_KEY = 'preydator_settings';
 
-const normalizeGameSettings = (raw: Partial<GameSettings> | GameSettings): GameSettings => {
-  const hostRole = raw.hostRole ?? 'Predator';
-  const preydOk =
-    hostRole === 'Preydator' &&
-    (raw.preydatorDesperationSeats === 'host' ||
-      raw.preydatorDesperationSeats === 'guest' ||
-      raw.preydatorDesperationSeats === 'both');
-  return {
-    hostRole,
-    difficulty: (raw.difficulty ?? 'Normal') as GameSettings['difficulty'],
-    disableJokers: Boolean(raw.disableJokers),
-    disablePowerCards: Boolean(raw.disablePowerCards),
-    enableCurseCards: raw.enableCurseCards !== false,
-    curseCardsInPowerDeck: Boolean(raw.curseCardsInPowerDeck),
-    enableDesperation: Boolean(raw.enableDesperation),
-    desperationStarterTierEnabled: raw.desperationStarterTierEnabled !== false,
-    preydatorDesperationSeats: preydOk ? raw.preydatorDesperationSeats! : 'guest',
-    tiers: raw.tiers && raw.tiers.length > 0 ? raw.tiers : ['TIER 0']
-  };
-};
+const normalizeGameSettings = (raw: Partial<GameSettings> | GameSettings): GameSettings =>
+  normalizeLobbyGameSettings(raw);
 
-const loadSettings = (): GameSettings => {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      return normalizeGameSettings(parsed);
-    } catch (e) {
-      console.error('Failed to load settings', e);
-    }
-  }
-  return normalizeGameSettings({
-    hostRole: 'Predator',
-    difficulty: 'Normal',
-    disableJokers: false,
-    disablePowerCards: false,
-    enableCurseCards: true,
-    curseCardsInPowerDeck: false,
-    enableDesperation: false,
-    desperationStarterTierEnabled: true,
-    tiers: ['TIER 0']
-  });
-};
+const loadSettings = (): GameSettings => loadPersistedLobbySettings(STORAGE_KEY);
 
-const saveSettings = (settings: GameSettings) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-};
+const saveSettings = (settings: GameSettings) => persistLobbyDefaults(STORAGE_KEY, settings);
 
 /** Same slice weights as wheels module / UI */
 export const DESPERATION_SLICES = DESPERATION_GAME_SLICES;
@@ -767,11 +741,10 @@ export class GameService {
     if (this.state.status !== 'waiting' || Object.keys(this.state.players).length >= 2) return;
     
     const settings = this.state.settings;
-    const deck = createDeck(settings.disableJokers);
-    
+
     let hostRole = settings.hostRole;
     let guestRole: PlayerRole;
-    
+
     if (hostRole === 'Preydator') {
       // Internal roles for logic: Host is Pred, Guest is Prey
       hostRole = 'Predator';
@@ -779,20 +752,6 @@ export class GameService {
     } else {
       guestRole = hostRole === 'Predator' ? 'Prey' : 'Predator';
     }
-
-    let predatorHandSize = 10;
-    let preyHandSize = 6;
-    
-    if (settings.difficulty === 'Fair') {
-      preyHandSize = 10;
-    } else if (settings.difficulty === 'Hard') {
-      preyHandSize = 4;
-    } else if (settings.difficulty === 'Impossible') {
-      preyHandSize = 2;
-    }
-
-    const hostHandSize = hostRole === 'Predator' ? predatorHandSize : preyHandSize;
-    const guestHandSize = guestRole === 'Predator' ? predatorHandSize : preyHandSize;
 
     this.state = {
       ...this.state,
@@ -847,8 +806,8 @@ export class GameService {
     if (!guestUid || !this.state.players[guestUid].lobbyGuestReady) return;
 
     const settings = this.state.settings;
-    const deck = createDeck(settings.disableJokers);
-    
+    const deck = createMultiDeck(settings.deckSizeMultiplier, settings.disableJokers);
+
     let hostRole = settings.hostRole;
     let guestRole: PlayerRole;
 
@@ -859,16 +818,8 @@ export class GameService {
       guestRole = hostRole === 'Predator' ? 'Prey' : 'Predator';
     }
 
-    let predatorHandSize = 10;
-    let preyHandSize = 6;
-    
-    if (settings.difficulty === 'Fair') {
-      preyHandSize = 10;
-    } else if (settings.difficulty === 'Hard') {
-      preyHandSize = 4;
-    } else if (settings.difficulty === 'Impossible') {
-      preyHandSize = 2;
-    }
+    const predatorHandSize = settings.predatorStartingCards;
+    const preyHandSize = settings.preyStartingCards;
 
     const hostHandSize = hostRole === 'Predator' ? predatorHandSize : preyHandSize;
     const guestHandSize = guestRole === 'Predator' ? predatorHandSize : preyHandSize;

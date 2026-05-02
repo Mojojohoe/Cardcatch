@@ -1,4 +1,5 @@
 import { PlayerData, RoomData } from '../types';
+import { normalizeGameSettings } from '../settings/normalizeGameSettings';
 
 export const createFixturePlayers = (): Record<string, PlayerData> => ({
   host: {
@@ -41,18 +42,12 @@ export const createFixtureRoom = (): RoomData => ({
   code: 'TEST01',
   status: 'playing',
   players: createFixturePlayers(),
-  settings: {
+  settings: normalizeGameSettings({
     hostRole: 'Predator',
-    difficulty: 'Normal',
-    disableJokers: false,
-    disablePowerCards: false,
-    enableCurseCards: true,
-    curseCardsInPowerDeck: false,
     enableDesperation: false,
-    desperationStarterTierEnabled: true,
-    preydatorDesperationSeats: 'guest',
-    tiers: ['TIER 1']
-  },
+    tiers: ['TIER 1'],
+    lobbyPresetId: 'custom',
+  }),
   currentTurn: 1,
   targetSuit: 'Hearts',
   availableSuits: ['Hearts', 'Diamonds', 'Clubs', 'Spades'],

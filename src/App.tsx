@@ -67,7 +67,6 @@ import {
   CARD_UNICODE,
   SUITS,
   PlayerRole,
-  Difficulty,
   GameSettings,
   MAJOR_ARCANA,
   ResolutionEvent,
@@ -98,6 +97,9 @@ import {
   slothDreamWheelDefinition,
 } from './wheels';
 import { desperationLadderLabel } from './utils/desperationUi';
+import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
+import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
+import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -2352,498 +2354,88 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     const lobbyGuestUid = Object.keys(room.players).find(uid => uid !== room.hostUid);
     const guestLobbyReady = !!(lobbyGuestUid && room.players[lobbyGuestUid]?.lobbyGuestReady);
     const preyLab = preySideLabel(room.settings.hostRole);
-    const preyStarter =
-      room.settings.difficulty === 'Fair'
-        ? 10
-        : room.settings.difficulty === 'Normal'
-          ? 6
-          : room.settings.difficulty === 'Hard'
-            ? 4
-            : 2;
+    const linkCode = roomId ?? room.code;
+
+    const copyRoomId = () => {
+      navigator.clipboard.writeText(linkCode);
+      setShowCopySuccess(true);
+      setTimeout(() => setShowCopySuccess(false), 2000);
+    };
+
+    const patchLobbySettings = (partial: Partial<GameSettings>) => {
+      handleUpdateSettings(
+        normalizeGameSettings({ ...room.settings, ...partial, lobbyPresetId: CUSTOM_LOBBY_PRESET_ID }),
+      );
+    };
+
+    const applyBuiltinPreset = (presetId: string, partial?: Partial<GameSettings>) => {
+      handleUpdateSettings(normalizeGameSettings({ ...(partial ?? {}), lobbyPresetId: presetId }));
+    };
+
+    const applySavedLobbyPreset = (entry: SavedLobbyPreset) => {
+      handleUpdateSettings(
+        normalizeGameSettings({ ...(entry.settings as Partial<GameSettings>), lobbyPresetId: entry.id }),
+      );
+    };
 
     return (
-      <div className="h-full flex flex-col p-6 space-y-6 overflow-y-auto">
-        <div className="flex justify-between items-center bg-emerald-900/30 p-4 rounded-xl border border-emerald-800">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">TABLE LINK</span>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-mono font-black text-white">{roomId}</span>
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(roomId);
-                  setShowCopySuccess(true);
-                  setTimeout(() => setShowCopySuccess(false), 2000);
-                }}
-                className="text-yellow-400 p-1"
-              >
-                {showCopySuccess ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-          <div className="text-right">
-             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">STATUS</span>
-             <div className="text-xs font-black text-emerald-400 animate-pulse uppercase">
-               {Object.keys(room.players).length < 2
-                 ? 'WAITING FOR PLAYER 2'
-                 : isHost
-                   ? guestLobbyReady
-                     ? 'OPPONENT READY'
-                     : 'WAITING FOR READY'
-                   : guestLobbyReady
-                     ? 'YOU ARE READY'
-                     : 'CHECK SETTINGS & READY UP'}
-             </div>
-          </div>
-        </div>
-
+      <div className="flex h-full flex-col space-y-6 overflow-y-auto p-6">
         {isHost ? (
-          <div className="flex-1 space-y-6">
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-yellow-400 uppercase tracking-widest border-l-4 border-yellow-400 pl-3">Table setup</h3>
-              
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-emerald-500 uppercase">Host Primary Identity</label>
-                  <div className="flex bg-emerald-900/50 p-1 rounded-xl border border-emerald-800">
-                    {(['Predator', 'Prey', 'Preydator'] as const).map(r => (
-                      <button 
-                        key={r}
-                        onClick={() => handleUpdateSettings({...room.settings, hostRole: r})}
-                        className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-all ${room.settings.hostRole === r ? 'bg-yellow-400 text-emerald-950 shadow-lg' : 'text-emerald-500 hover:text-white'}`}
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-emerald-500 uppercase">
-                      Handicap (smaller prey hand)
-                      <span className="ml-2 text-yellow-500/80 normal-case opacity-90">Prey seats: {preyLab}</span>
-                    </label>
-                  </div>
-                  <div className="flex bg-emerald-900/50 p-1 rounded-xl border border-emerald-800">
-                    {(['Fair', 'Normal', 'Hard', 'Impossible'] as const).map(d => {
-                      const hostIsPrey = room.settings.hostRole === 'Prey';
-                      const guestIsPrey = room.settings.hostRole === 'Predator' || room.settings.hostRole === 'Preydator';
-                      
-                      let ratio = '';
-                      if (d === 'Fair') ratio = '10 vs 10';
-                      if (d === 'Normal') ratio = '10 vs 6';
-                      if (d === 'Hard') ratio = '10 vs 4';
-                      if (d === 'Impossible') ratio = '10 vs 2';
-
-                      return (
-                        <button 
-                          key={d}
-                          onClick={() => handleUpdateSettings({...room.settings, difficulty: d})}
-                          className={`flex-1 py-3 px-1 text-[8px] font-black uppercase rounded-lg transition-all flex flex-col items-center gap-0.5 ${room.settings.difficulty === d ? 'bg-yellow-400 text-emerald-950 shadow-lg' : 'text-emerald-500 hover:text-white'}`}
-                        >
-                          <span>{d}</span>
-                          <span className="opacity-70 text-[7px]">{ratio}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="px-3 py-3 bg-yellow-500/10 rounded-xl border border-yellow-500/30">
-                     <p className="text-[11px] text-yellow-400 font-black leading-relaxed uppercase tracking-tight">
-                        {room.settings.difficulty === 'Fair' && 'Fair: both seats start with ten cards.'}
-                        {room.settings.difficulty === 'Normal' &&
-                          `Normal: predator ten cards vs prey (${preyLab}) ${preyStarter} cards.`}
-                        {room.settings.difficulty === 'Hard' &&
-                          `Hard: predator ten vs prey (${preyLab}) ${preyStarter} cards.`}
-                        {room.settings.difficulty === 'Impossible' &&
-                          `Impossible: predator ten vs prey (${preyLab}) ${preyStarter} cards — tiny margin for error.`}
-                     </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button 
-                  onClick={() => handleUpdateSettings({...room.settings, disableJokers: !room.settings.disableJokers})}
-                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${room.settings.disableJokers ? 'border-red-900/50 bg-red-950/20 text-red-500' : 'border-emerald-800 bg-emerald-900/20 text-emerald-500'}`}
-                >
-                  <Skull className="w-5 h-5 mb-1" />
-                  <span className="text-[10px] font-black uppercase">Jokers</span>
-                  <span className="text-[8px] font-bold">{room.settings.disableJokers ? 'DISABLED' : 'ACTIVE'}</span>
-                </button>
-                <button 
-                  onClick={() => handleUpdateSettings({...room.settings, disablePowerCards: !room.settings.disablePowerCards})}
-                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${room.settings.disablePowerCards ? 'border-red-900/50 bg-red-950/20 text-red-500' : 'border-emerald-800 bg-emerald-900/20 text-emerald-500'}`}
-                >
-                  <Zap className="w-5 h-5 mb-1" />
-                  <span className="text-[10px] font-black uppercase">Power Cards</span>
-                  <span className="text-[8px] font-bold">{room.settings.disablePowerCards ? 'DISABLED' : 'ACTIVE'}</span>
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleUpdateSettings({
-                      ...room.settings,
-                      enableCurseCards: !room.settings.enableCurseCards,
-                    })
-                  }
-                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
-                    room.settings.enableCurseCards
-                      ? 'border-red-800 bg-zinc-950/90 text-red-400'
-                      : 'border-zinc-700 bg-zinc-950/40 text-zinc-500'
-                  }`}
-                >
-                  <Heart className="w-5 h-5 mb-1" />
-                  <span className="text-[10px] font-black uppercase">Curse cards</span>
-                  <span className="text-[8px] font-bold">{room.settings.enableCurseCards ? 'ON' : 'OFF'}</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={room.settings.disablePowerCards || !room.settings.enableCurseCards}
-                  onClick={() =>
-                    handleUpdateSettings({
-                      ...room.settings,
-                      curseCardsInPowerDeck: !room.settings.curseCardsInPowerDeck,
-                    })
-                  }
-                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-1 disabled:opacity-40 disabled:pointer-events-none ${
-                    room.settings.curseCardsInPowerDeck
-                      ? 'border-amber-700 bg-amber-950/30 text-amber-300'
-                      : 'border-zinc-700 bg-zinc-950/40 text-zinc-500'
-                  }`}
-                >
-                  <Flame className="w-5 h-5 mb-1" />
-                  <span className="text-[10px] font-black uppercase">Curses in power deck</span>
-                  <span className="text-[8px] font-bold text-center leading-tight">
-                    {room.settings.curseCardsInPowerDeck ? 'Draft & draws' : 'Separate'}
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-purple-400 uppercase tracking-widest border-l-4 border-purple-400 pl-3">Last-chance wheel</h3>
-              <div className="bg-purple-950/20 border border-purple-900/50 p-4 rounded-xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black text-purple-400 uppercase">Desperation wheel on</span>
-                  <button 
-                    onClick={() => handleUpdateSettings({...room.settings, enableDesperation: !room.settings.enableDesperation})}
-                    className={`w-12 h-6 rounded-full relative transition-colors ${room.settings.enableDesperation ? 'bg-purple-600' : 'bg-emerald-900'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${room.settings.enableDesperation ? 'left-7' : 'left-1'}`} />
-                  </button>
-                </div>
-
-                {room.settings.enableDesperation && (
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center justify-between gap-4 pb-2 border-b border-purple-900/40">
-                      <span className="text-[10px] text-purple-100/95 leading-snug normal-case font-bold">
-                        Tier 0 from deal: when on, prey begin at desperation tier 0. When off, they have no desperation tier until their first in-match spin, which moves them to tier 1.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateSettings({
-                            ...room.settings,
-                            desperationStarterTierEnabled: !room.settings.desperationStarterTierEnabled
-                          })
-                        }
-                        className={`shrink-0 w-12 h-6 rounded-full relative transition-colors ${
-                          room.settings.desperationStarterTierEnabled ? 'bg-amber-500' : 'bg-emerald-900'
-                        }`}
-                      >
-                        <div
-                          className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
-                            room.settings.desperationStarterTierEnabled ? 'left-7' : 'left-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                    <div
-                      className={`rounded-xl border p-4 space-y-3 transition-opacity ${
-                        room.settings.hostRole !== 'Preydator'
-                          ? 'opacity-40 pointer-events-none border-purple-950/55 bg-purple-950/10'
-                          : 'border-purple-800/55 bg-purple-950/25'
-                      }`}
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black text-purple-200 uppercase tracking-wider">
-                          Preydator · desperation access
-                        </span>
-                        <span className="text-[9px] text-purple-400/95 leading-snug normal-case font-bold">
-                          Only applies when Host role is Preydator. Outside that, prey-side rules stay default.
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(
-                          [
-                            { id: 'guest' as const, label: 'Guest only', sub: 'Prey-aligned seat spins' },
-                            { id: 'host' as const, label: 'Host only', sub: 'Host seat spins' },
-                            { id: 'both' as const, label: 'Both', sub: 'Either seat spins' },
-                          ] as const
-                        ).map((opt) => (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            disabled={room.settings.hostRole !== 'Preydator'}
-                            onClick={() =>
-                              handleUpdateSettings({ ...room.settings, preydatorDesperationSeats: opt.id })
-                            }
-                            className={`flex-1 min-w-[8rem] py-2 px-2 rounded-lg border text-left transition-all ${
-                              (room.settings.preydatorDesperationSeats ?? 'guest') === opt.id &&
-                              room.settings.hostRole === 'Preydator'
-                                ? 'border-amber-400 bg-amber-400/15 text-amber-100 shadow-[0_0_14px_rgba(251,191,36,0.15)]'
-                                : 'border-purple-900/70 bg-purple-950/40 text-purple-300/90 hover:border-purple-600'
-                            }`}
-                          >
-                            <span className="block text-[9px] font-black uppercase">{opt.label}</span>
-                            <span className="block text-[7px] text-purple-500/95 font-bold mt-1 leading-tight">{opt.sub}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {room.settings.tiers.map((tier, idx) => {
-                      if (!room.settings.desperationStarterTierEnabled && idx === 0) return null;
-                      return (
-                      <div key={idx} className="flex gap-2">
-                        <div className="bg-purple-900/50 border border-purple-800 rounded px-2 py-1 flex items-center justify-center min-w-[60px]">
-                          <span className="text-[8px] font-black text-purple-300">TIER {idx}</span>
-                        </div>
-                        <input 
-                          type="text"
-                          value={tier}
-                          onChange={(e) => {
-                            const newTiers = [...room.settings.tiers];
-                            newTiers[idx] = e.target.value;
-                            handleUpdateSettings({...room.settings, tiers: newTiers});
-                          }}
-                          placeholder="Tier objective..."
-                          className="flex-1 bg-emerald-900/50 border border-emerald-800 rounded px-3 py-1 text-[10px] text-white focus:outline-none focus:border-purple-500"
-                        />
-                        <button 
-                          onClick={() => {
-                            const newTiers = room.settings.tiers.filter((_, i) => i !== idx);
-                            handleUpdateSettings({...room.settings, tiers: newTiers});
-                          }}
-                          className="text-red-500 hover:bg-red-950/40 p-1 rounded"
-                        >
-                          <Hash className="w-4 h-4" />
-                        </button>
-                      </div>
-                    );
-                    })}
-                    <button 
-                      onClick={() => handleUpdateSettings({...room.settings, tiers: [...room.settings.tiers, `TIER ${room.settings.tiers.length}`]})}
-                      className="w-full text-center py-2 border border-dashed border-purple-800 rounded text-[8px] font-black text-purple-400 uppercase hover:bg-purple-900/20"
-                    >
-                      + Add wheel tier label
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-               {Object.keys(room.players).length < 2 ? (
-                  <div className="text-center py-4 bg-emerald-900/20 rounded-xl border border-dashed border-emerald-800">
-                    <span className="text-[10px] font-black text-emerald-700 animate-pulse uppercase">WAITING FOR PLAYER 2...</span>
-                  </div>
-               ) : (
-                  <button 
-                    onClick={handleStartGame}
-                    disabled={loading || Object.keys(room.players).length < 2 || !guestLobbyReady}
-                    className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(250,204,21,0.3)] ${loading || Object.keys(room.players).length < 2 || !guestLobbyReady ? 'bg-emerald-900 text-emerald-700 cursor-not-allowed opacity-70' : 'bg-yellow-400 text-emerald-950 hover:scale-[1.02] active:scale-95'}`}
-                  >
-                    {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <>
-                      <Play className="w-5 h-5" />
-                      DEAL & START
-                    </>}
-                  </button>
-               )}
-               <p className="text-[8px] text-emerald-600 text-center font-bold uppercase tracking-tight leading-relaxed px-2">
-                 {Object.keys(room.players).length >= 2 && !guestLobbyReady
-                   ? 'You can tweak options until your opponent taps Ready on their screen.'
-                   : 'Only the host can start once the guest has confirmed Ready.'}
-               </p>
-            </div>
-          </div>
+          <HostLobbyPanel
+            room={room}
+            tableCode={linkCode}
+            preySideLabelShort={preyLab}
+            loading={loading}
+            guestLobbyReady={guestLobbyReady}
+            showCopySuccess={showCopySuccess}
+            onRoomIdCopy={copyRoomId}
+            onPatchSettings={patchLobbySettings}
+            onApplyPreset={applyBuiltinPreset}
+            onApplySavedPreset={applySavedLobbyPreset}
+            onStartGame={handleStartGame}
+          />
         ) : (
           <div className="flex-1 space-y-6">
             {room.guestLobbyNotice && (
               <div className="rounded-xl border border-amber-500/60 bg-amber-950/50 px-4 py-4 text-center shadow-[0_0_28px_rgba(245,158,11,0.12)]">
                 <p className="text-[11px] font-black uppercase tracking-wider text-amber-100">{room.guestLobbyNotice}</p>
-                <p className="text-[10px] text-amber-400/90 mt-2 font-bold uppercase leading-snug">
+                <p className="mt-2 text-[10px] font-bold uppercase leading-snug text-amber-400/90">
                   Settings changed — tap Ready below after you have re-read everything.
                 </p>
               </div>
             )}
 
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-yellow-400 uppercase tracking-widest border-l-4 border-yellow-400 pl-3">Host confirmed setup</h3>
-
-              <div className="rounded-xl border border-emerald-800/80 bg-emerald-950/45 p-4 space-y-3">
-                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Role focus</span>
-                <div className="flex flex-wrap gap-2">
-                  {(['Predator', 'Prey', 'Preydator'] as const).map(r => (
-                    <div
-                      key={r}
-                      className={`min-w-[5.5rem] py-2 px-3 text-[10px] font-black uppercase rounded-full border ${
-                        room.settings.hostRole === r
-                          ? 'bg-yellow-400/95 text-emerald-950 border-yellow-300 shadow-[0_0_16px_rgba(250,204,21,0.26)]'
-                          : 'bg-emerald-900/30 text-emerald-400 border-emerald-800/70'
-                      }`}
-                    >
-                      {r}
-                    </div>
-                  ))}
+            <div className="flex items-center justify-between rounded-xl border border-emerald-800 bg-emerald-900/30 p-4">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">TABLE LINK</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xl font-black text-white">{linkCode}</span>
+                  <button type="button" onClick={copyRoomId} className="p-1 text-yellow-400">
+                    {showCopySuccess ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
-
-              <div className="rounded-xl border border-emerald-800/70 bg-emerald-950/35 p-4 space-y-2.5">
-                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Handicap selected</span>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['Fair', 'Normal', 'Hard', 'Impossible'] as const).map(d => {
-                    let ratio = '';
-                    if (d === 'Fair') ratio = '10 vs 10';
-                    if (d === 'Normal') ratio = '10 vs 6';
-                    if (d === 'Hard') ratio = '10 vs 4';
-                    if (d === 'Impossible') ratio = '10 vs 2';
-                    const active = room.settings.difficulty === d;
-                    return (
-                      <div key={d} className={`rounded-lg border px-2 py-2 ${active ? 'border-yellow-300 bg-yellow-400/90 text-emerald-950' : 'border-emerald-800 bg-emerald-950/40 text-emerald-500'}`}>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-center">{d}</p>
-                        <p className="mt-0.5 text-[8px] font-bold uppercase tracking-wide text-center opacity-80">{ratio}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] text-yellow-200/90 font-bold leading-snug normal-case pt-1">
-                  {room.settings.difficulty === 'Fair' && 'Fair: both seats start with ten cards.'}
-                  {room.settings.difficulty === 'Normal' &&
-                    `Normal: predator ten cards vs prey (${preyLab}) ${preyStarter} cards.`}
-                  {room.settings.difficulty === 'Hard' &&
-                    `Hard: predator ten vs prey (${preyLab}) ${preyStarter} cards.`}
-                  {room.settings.difficulty === 'Impossible' &&
-                    `Impossible: predator ten vs prey (${preyLab}) ${preyStarter} cards.`}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-emerald-800/70 bg-emerald-950/30 p-4">
-                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider block mb-2">Deck options</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className={`rounded-lg border px-3 py-2.5 ${room.settings.disableJokers ? 'border-red-900/60 bg-red-950/20 text-red-300' : 'border-emerald-800 bg-emerald-900/35 text-emerald-200'}`}>
-                    <p className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Skull className="w-3.5 h-3.5" /> Jokers</p>
-                    <p className="mt-1 text-[8px] font-bold uppercase">{room.settings.disableJokers ? 'Removed' : 'In deck'}</p>
-                  </div>
-                  <div className={`rounded-lg border px-3 py-2.5 ${room.settings.disablePowerCards ? 'border-red-900/60 bg-red-950/20 text-red-300' : 'border-emerald-800 bg-emerald-900/35 text-emerald-200'}`}>
-                    <p className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Zap className="w-3.5 h-3.5" /> Power cards</p>
-                    <p className="mt-1 text-[8px] font-bold uppercase">{room.settings.disablePowerCards ? 'Off' : 'Draft picks'}</p>
-                  </div>
-                  <div className={`rounded-lg border px-3 py-2.5 ${room.settings.enableCurseCards ? 'border-red-900/60 bg-zinc-950/80 text-red-200' : 'border-zinc-700 bg-zinc-950/40 text-zinc-500'}`}>
-                    <p className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> Curse cards</p>
-                    <p className="mt-1 text-[8px] font-bold uppercase">{room.settings.enableCurseCards ? 'On' : 'Off'}</p>
-                  </div>
-                  <div
-                    className={`rounded-lg border px-3 py-2.5 ${
-                      room.settings.disablePowerCards || !room.settings.enableCurseCards
-                        ? 'border-zinc-700 bg-zinc-950/40 text-zinc-500'
-                        : room.settings.curseCardsInPowerDeck
-                          ? 'border-amber-800/70 bg-amber-950/35 text-amber-200'
-                          : 'border-zinc-600 bg-zinc-900/40 text-zinc-300'
-                    }`}
-                  >
-                    <p className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Flame className="w-3.5 h-3.5" /> Curses in power deck</p>
-                    <p className="mt-1 text-[8px] font-bold uppercase leading-tight">
-                      {room.settings.disablePowerCards || !room.settings.enableCurseCards
-                        ? 'N/A'
-                        : room.settings.curseCardsInPowerDeck
-                          ? 'Round & random draws'
-                          : 'Not in deck'}
-                    </p>
-                  </div>
+              <div className="text-right">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">STATUS</span>
+                <div className="animate-pulse text-xs font-black uppercase text-emerald-400">
+                  {Object.keys(room.players).length < 2
+                    ? 'WAITING FOR PLAYER 2'
+                    : guestLobbyReady
+                      ? 'YOU ARE READY'
+                      : 'CHECK SETTINGS & READY UP'}
                 </div>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-purple-400 uppercase tracking-widest border-l-4 border-purple-400 pl-3">Desperation wheel</h3>
-              <div className="bg-purple-950/25 border border-purple-900/50 p-4 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black text-purple-200 uppercase tracking-wider">Enabled</span>
-                  <span className={`text-[10px] font-black uppercase ${room.settings.enableDesperation ? 'text-purple-300' : 'text-slate-500'}`}>
-                    {room.settings.enableDesperation ? 'Yes' : 'No'}
-                  </span>
-                </div>
-                {room.settings.enableDesperation && (
-                  <>
-                    <div className="flex items-center justify-between gap-4 border-t border-purple-900/35 pt-3">
-                      <span className="text-[10px] text-purple-100/95 leading-snug normal-case font-bold">
-                        Tier 0 from deal (prey on ladder at deal)
-                      </span>
-                      <span className={`text-[10px] font-black shrink-0 ${room.settings.desperationStarterTierEnabled ? 'text-amber-300' : 'text-slate-500'}`}>
-                        {room.settings.desperationStarterTierEnabled ? 'On' : 'Off'}
-                      </span>
-                    </div>
-                    {room.settings.hostRole === 'Preydator' && (
-                      <div className="flex items-center justify-between gap-4 border-t border-purple-900/35 pt-3">
-                        <span className="text-[10px] text-purple-100/95 leading-snug font-bold uppercase tracking-tight">
-                          Preydator spin access
-                        </span>
-                        <span className="text-[10px] font-black shrink-0 text-amber-200 text-right uppercase max-w-[52%]">
-                          {(room.settings.preydatorDesperationSeats ?? 'guest') === 'host'
-                            ? 'Host seat only'
-                            : (room.settings.preydatorDesperationSeats ?? 'guest') === 'both'
-                              ? 'Both seats'
-                              : 'Guest seat only'}
-                        </span>
-                      </div>
-                    )}
-                    <div className="pt-1 border-t border-purple-900/35 space-y-2">
-                      <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest block">Tier labels</span>
-                      <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                        {room.settings.tiers.map((tier, idx) => {
-                          if (!room.settings.desperationStarterTierEnabled && idx === 0) return null;
-                          return (
-                          <li key={idx} className="text-[11px] text-purple-50/95 flex gap-2">
-                            <span className="font-mono text-[9px] text-purple-500 w-14 shrink-0">Tier {idx}</span>
-                            <span className="leading-snug">{tier}</span>
-                          </li>
-                        );
-                        })}
-                      </ul>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => void serviceRef.current.setLobbyReady(!guestLobbyReady)}
-                className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 border-2 transition-all ${
-                  guestLobbyReady
-                    ? 'bg-emerald-800/70 border-emerald-500 text-emerald-50 hover:bg-emerald-800'
-                    : 'bg-yellow-400 border-yellow-300 text-emerald-950 hover:scale-[1.01]'
-                }`}
-              >
-                {guestLobbyReady ? (
-                  <>
-                    <Check className="w-5 h-5" />
-                    READY — TAP TO REVOKE
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-5 h-5" />
-                    READY — LOCK IN TABLE
-                  </>
-                )}
-              </button>
-              <p className="text-[9px] text-center text-emerald-600 font-bold uppercase tracking-tight px-2">
-                Ready tells the host you have reviewed the rules above. Changing host settings clears Ready.
-              </p>
-            </div>
+            <GuestLobbyPanel
+              room={room}
+              preyLab={preyLab}
+              guestLobbyReady={guestLobbyReady}
+              onToggleReady={() => void serviceRef.current.setLobbyReady(!guestLobbyReady)}
+            />
+            <p className="px-2 text-center text-[9px] font-bold uppercase tracking-tight text-emerald-600">
+              Ready tells the host you have reviewed the rules above. Changing host settings clears Ready.
+            </p>
           </div>
         )}
       </div>
@@ -3048,8 +2640,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </div>
       )}
 
-      {/* Board Mini */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 relative min-h-0">
+      {/* Board: grid rails (curse + your powers | table | deck) keeps side UI from stacking over each other */}
+      <div className="relative flex min-h-0 flex-1 flex-col gap-6">
           {myWheelDecisionSpinning && (
             <div className="pointer-events-none absolute inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/45 px-2 backdrop-blur-[2px]">
               <span className="text-center text-[9px] font-black uppercase tracking-widest text-amber-300">
@@ -3064,62 +2656,40 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               </div>
             </div>
           )}
-          {/* Own Power Cards Stack */}
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 pl-2 z-40">
-             {me.powerCards.map((pId, i) => (
-               <PowerCardVisual 
-                 key={`${pId}-${i}`} 
-                 cardId={pId} 
-                 small 
-                 selected={selectedPowerCard === pId}
-                 onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
-                 disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
-               />
-             ))}
-          </div>
-
-          {/* Central Deck */}
-         <div className="absolute right-12 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-center">
-            <div className="relative group">
-              {/* Stack of Cards */}
-              <div className="relative w-20 h-28">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div 
-                    key={i}
-                    className="absolute inset-0 bg-purple-950 border-2 border-purple-600/50 rounded-lg shadow-2xl"
-                    style={{ transform: `translate(${-i * 2}px, ${-i * 2}px)` }}
-                  >
-                    <div className="w-full h-full opacity-20 flex flex-col items-center justify-center p-3">
-                       <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-                          <WolfIcon />
-                          <Rabbit className="w-8 h-8 text-purple-400" />
-                       </div>
-                    </div>
-                    {/* Pattern Overlay */}
-                    <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,#ffffff_1px,transparent_1px)] bg-[size:10px_10px]" />
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 flex flex-col items-center">
-                <div className="text-[10px] font-black uppercase text-emerald-500 tracking-[0.3em] font-mono">{room.deck.length}</div>
-                <div className="text-[8px] font-bold uppercase text-emerald-800 tracking-widest">REMAINING</div>
-              </div>
-            </div>
-          </div>
 
           {room.status === 'playing' || room.status === 'powering' ? (
-            <div className="flex w-full max-w-full flex-row items-start justify-center gap-2 sm:gap-5 px-1 transition-all duration-500">
-              <CurseZonePanel
-                settings={room.settings}
-                activeCurses={room.activeCurses}
-                prideCeilingCard={room.prideCeilingCard}
-                wrathMinionCard={room.wrathMinionCard}
-                wrathTargetUid={room.wrathTargetUid}
-                hostUid={room.hostUid}
-                players={room.players}
-              />
+            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(5.25rem,7rem)_minmax(0,1fr)] items-start gap-2 px-1 transition-all duration-500 sm:gap-3 lg:grid-cols-[minmax(5.25rem,7rem)_minmax(0,1fr)_minmax(5.25rem,7rem)]">
+              <aside className="relative z-[6] flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain pb-1 sm:pb-2">
+                <CurseZonePanel
+                  settings={room.settings}
+                  activeCurses={room.activeCurses}
+                  prideCeilingCard={room.prideCeilingCard}
+                  wrathMinionCard={room.wrathMinionCard}
+                  wrathTargetUid={room.wrathTargetUid}
+                  hostUid={room.hostUid}
+                  players={room.players}
+                />
+                {me.powerCards.length > 0 && (
+                  <>
+                    <span className="text-[8px] font-black uppercase tracking-wider text-emerald-500/90">Your powers</span>
+                    <div className="flex w-full flex-col items-center gap-2">
+                      {me.powerCards.map((pId, i) => (
+                        <PowerCardVisual
+                          key={`${pId}-${i}`}
+                          cardId={pId}
+                          small
+                          selected={selectedPowerCard === pId}
+                          onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
+                          disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </aside>
+
               <div
-                className={`relative flex min-w-0 flex-1 flex-col items-center rounded-3xl px-1 pb-2 pt-1 sm:px-3 ${
+                className={`relative z-0 flex min-h-0 min-w-0 flex-col items-center rounded-3xl px-1 pb-2 pt-1 sm:px-3 ${
                   slothDreamTableOverlay
                     ? 'ring-2 ring-indigo-300/30 shadow-[0_0_48px_rgba(99,102,241,0.14)]'
                     : ''
@@ -3324,6 +2894,34 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                )}
                 </div>
               </div>
+
+              <aside className="relative z-0 hidden min-h-0 w-full min-w-0 flex-col items-center justify-start pt-1 sm:pt-2 lg:flex">
+                <div className="relative group">
+                  <div className="relative h-28 w-20">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="absolute inset-0 rounded-lg border-2 border-purple-600/50 bg-purple-950 shadow-2xl"
+                        style={{ transform: `translate(${-i * 2}px, ${-i * 2}px)` }}
+                      >
+                        <div className="flex h-full w-full flex-col items-center justify-center p-3 opacity-20">
+                          <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+                            <WolfIcon />
+                            <Rabbit className="h-8 w-8 text-purple-400" />
+                          </div>
+                        </div>
+                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,#ffffff_1px,transparent_1px)] bg-[length:10px_10px] opacity-10" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-6 flex flex-col items-center">
+                    <div className="font-mono text-[10px] font-black uppercase tracking-[0.3em] text-emerald-500">
+                      {room.deck.length}
+                    </div>
+                    <div className="text-[8px] font-bold uppercase tracking-widest text-emerald-800">REMAINING</div>
+                  </div>
+                </div>
+              </aside>
             </div>
           ) : null}
       </div>
