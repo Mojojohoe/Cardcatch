@@ -69,6 +69,7 @@ import {
   effectiveActiveDesperationTierCount,
 } from './types';
 import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerInteraction';
+import { RoomChat } from './components/RoomChat';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { SuitGlyph } from './components/SuitGlyphs';
 import { CssCoinEmbed, CssCoinFlipDegrees } from './coinflip/CssCoinEmbed';
@@ -482,7 +483,11 @@ const CardVisual: React.FC<CardVisualProps> = (props) => {
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className={`text-5xl sm:text-8xl opacity-[0.08] ${SUIT_COLORS[suit]}`}>
-          {isJoker ? '🃏' : <SuitGlyph suit={suit} className="w-16 h-16 sm:w-24 sm:h-24" />}
+          {isJoker ? (
+          <SuitGlyph suit="Joker" className="w-16 h-16 sm:w-24 sm:h-24 text-purple-600" />
+        ) : (
+          <SuitGlyph suit={suit} className="w-16 h-16 sm:w-24 sm:h-24" />
+        )}
         </div>
       </div>
 
@@ -2778,7 +2783,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           onSubmit={handleSubmitPowerDecision}
         />
       )}
-      
+
+      {opponent && <RoomChat room={room} myUid={myUid} serviceRef={serviceRef} />}
+
       {isDevMenuOpen && (
         <DevPowerMenu 
           onSelect={(id) => serviceRef.current.cheatPowerCard(id)} 

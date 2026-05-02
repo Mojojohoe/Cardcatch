@@ -195,14 +195,26 @@ export const CardVisual: React.FC<CardVisualProps> = ({ card, selected, onClick,
       className={`w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg shadow-xl flex flex-col justify-between p-2 cursor-pointer relative overflow-hidden transition-all ${isMoonSuit ? 'bg-black' : 'bg-white'} ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : 'border-gray-200'} ${disabled ? 'opacity-60 grayscale cursor-not-allowed' : ''}`}>
       <div className={`flex flex-col items-start leading-[0.7] ${SUIT_COLORS[suit]}`}>
         <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        {isJoker ? <span className="text-lg sm:text-3xl">🃏</span> : <SuitGlyph suit={suit} className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10" />}
+        {isJoker ? (
+          <SuitGlyph suit="Joker" className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10 text-purple-500" />
+        ) : (
+          <SuitGlyph suit={suit} className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10" />
+        )}
       </div>
       <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${SUIT_COLORS[suit]} opacity-[0.12]`}>
-        {isJoker ? <span className="text-5xl sm:text-8xl">🃏</span> : <SuitGlyph suit={suit} className="text-5xl sm:text-8xl w-[2.8rem] h-[2.8rem] sm:w-[5.5rem] sm:h-[5.5rem]" />}
+        {isJoker ? (
+          <SuitGlyph suit="Joker" className="text-5xl sm:text-8xl w-[2.8rem] h-[2.8rem] sm:w-[5.5rem] sm:h-[5.5rem] text-purple-600" />
+        ) : (
+          <SuitGlyph suit={suit} className="text-5xl sm:text-8xl w-[2.8rem] h-[2.8rem] sm:w-[5.5rem] sm:h-[5.5rem]" />
+        )}
       </div>
       <div className={`flex flex-col items-start leading-[0.7] self-end rotate-180 ${SUIT_COLORS[suit]}`}>
         <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        {isJoker ? <span className="text-lg sm:text-3xl">🃏</span> : <SuitGlyph suit={suit} className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10" />}
+        {isJoker ? (
+          <SuitGlyph suit="Joker" className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10 text-purple-500" />
+        ) : (
+          <SuitGlyph suit={suit} className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10" />
+        )}
       </div>
     </motion.div>
   );

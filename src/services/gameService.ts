@@ -1,5 +1,17 @@
 import Peer, { DataConnection } from 'peerjs';
-import { RoomData, PlayerData, Suit, SUITS, VALUES, GameSettings, PlayerRole, MAJOR_ARCANA, ResolutionEvent, PendingPowerDecision } from '../types';
+import {
+  RoomData,
+  PlayerData,
+  Suit,
+  SUITS,
+  VALUES,
+  GameSettings,
+  PlayerRole,
+  MAJOR_ARCANA,
+  ResolutionEvent,
+  PendingPowerDecision,
+  ChatMessageEntry,
+} from '../types';
 import { DESPERATION_GAME_SLICES, FORTUNE_GAME_SLICES } from '../wheels/presets';
 
 export const createDeck = (disableJokers: boolean): string[] => {
@@ -162,7 +174,8 @@ type GameEvent =
   | { type: 'CHEAT_DISCARD_HAND_CARD', uid: string, cardId: string }
   | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null }
   | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number; priestessSwapToCard?: string | null }
-  | { type: 'SET_LOBBY_READY', uid: string, ready: boolean };
+  | { type: 'SET_LOBBY_READY', uid: string, ready: boolean }
+  | { type: 'SEND_CHAT', uid: string, text: string };
 
 const STORAGE_KEY = 'preydator_settings';
 
@@ -310,7 +323,8 @@ export class GameService {
       draftSets: [],
       draftTurn: 0,
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      chatMessages: []
     };
 
     this.onStateChange?.(this.state);
@@ -441,6 +455,10 @@ export class GameService {
       } else if (event.type === 'SUBMIT_POWER_DECISION') {
         if (remoteUid) {
           this.handleSubmitPowerDecision(remoteUid, event.option, event.wheelOffset, event.priestessSwapToCard);
+        }
+      } else if (event.type === 'SEND_CHAT') {
+        if (remoteUid && event.uid === remoteUid) {
+          this.handleChatMessage(remoteUid, event.text);
         }
       }
     } else {
@@ -826,6 +844,35 @@ export class GameService {
       this.handleSubmitPowerDecision(this.myUid, option, wheelOffset, priestessSwapToCard);
     } else {
       this.sendEvent({ type: 'SUBMIT_POWER_DECISION', uid: this.myUid, option, wheelOffset, priestessSwapToCard });
+    }
+  }
+
+  private static normalizeChatBody(raw: string): string {
+    return raw.replace(/\s+/g, ' ').trim().slice(0, 280);
+  }
+
+  private handleChatMessage(uid: string, text: string) {
+    if (!this.state || !this.state.players[uid]) return;
+    const body = GameService.normalizeChatBody(text);
+    if (!body) return;
+    const name = this.state.players[uid].name;
+    const entry: ChatMessageEntry = { uid, name, text: body, at: Date.now() };
+    const prev = this.state.chatMessages ?? [];
+    this.state = {
+      ...this.state,
+      chatMessages: [...prev, entry].slice(-40),
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
+  async sendChat(rawText: string) {
+    const text = GameService.normalizeChatBody(rawText);
+    if (!text) return;
+    if (this.isHost) {
+      this.handleChatMessage(this.myUid, text);
+    } else {
+      this.sendEvent({ type: 'SEND_CHAT', uid: this.myUid, text });
     }
   }
 

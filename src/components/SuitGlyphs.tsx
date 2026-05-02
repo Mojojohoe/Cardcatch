@@ -21,6 +21,12 @@ const CLUB_D = 'M8 1a2.5 2.5 0 0 1 2.495 2.336A2.5 2.5 0 1 1 8 8a2.5 2.5 0 1 1-2
 const SPADE_D = 'M7.184 1.122a1 1 0 0 1 1.632 0c1.743 2.18 4.816 4.4 4.816 6.878a2.75 2.75 0 0 1-5.378.86h-.508a2.75 2.75 0 0 1-5.378-.86c0-2.478 3.073-4.698 4.816-6.878M8 9.5c.552 0 1 .448 1 1v.05c0 .478.134.947.386 1.353L10 13H6l.614-1.097A2.75 2.75 0 0 0 7 10.55v-.05c0-.552.448-1 1-1';
 const STAR_D = 'm8 1.2 1.95 3.95 4.35.63-3.15 3.07.74 4.33L8 11.15l-3.89 2.03.74-4.33L1.7 5.78l4.35-.63z';
 
+/** Stylized harlequin silhouette — replaces mistaken star fallback for real Jokers. ViewBox calibrated to path extents. */
+const JOKER_D =
+  'M28.405,14.7c-0.479,0-0.897,0.228-1.172,0.576c-1.56-1.127-4.992-2.994-7.975-0.271c0,0-3.021-4.168-0.982-7.569c0.246,0.178,0.547,0.286,0.875,0.286c0.827,0,1.5-0.671,1.5-1.5s-0.673-1.5-1.5-1.5c-0.828,0-1.502,0.671-1.502,1.5c0,0.168,0.032,0.327,0.084,0.478c-2.141,0.819-5.836,2.858-6.39,7.307c0,0-3.429-4.541-8.573-1.594c-0.265-0.425-0.732-0.711-1.27-0.711c-0.829,0-1.501,0.672-1.501,1.5s0.672,1.5,1.501,1.5c0.828,0,1.499-0.672,1.499-1.5c0-0.047-0.01-0.091-0.014-0.137c1.794,0.14,4.67,1.726,5.461,10.151l0.09,0.688c0,0.707,2.858,1.279,6.382,1.279c3.526,0,6.383-0.574,6.383-1.279c0,0,0.229-5.78,5.611-7.623c0.041,0.791,0.688,1.423,1.491,1.423c0.83,0,1.5-0.673,1.5-1.5C29.907,15.371,29.235,14.7,28.405,14.7z';
+
+const JOKER_VIEW_BOX = [-16, 8, 48, 26] as const;
+
 /** Suit icon for layouts that use Tailwind + `currentColor` (corners on cards, HUD, etc.). */
 export const SuitGlyph: React.FC<{ suit: string; className?: string }> = ({ suit, className = 'w-4 h-4' }) => {
   if (suit === 'Moons') {
@@ -55,6 +61,18 @@ export const SuitGlyph: React.FC<{ suit: string; className?: string }> = ({ suit
   if (suit === 'Diamonds') return <svg viewBox="0 0 16 16" className={className} aria-hidden><path fill="currentColor" d={DIAMOND_D} /></svg>;
   if (suit === 'Clubs') return <svg viewBox="0 0 16 16" className={className} aria-hidden><path fill="currentColor" d={CLUB_D} /></svg>;
   if (suit === 'Spades') return <svg viewBox="0 0 16 16" className={className} aria-hidden><path fill="currentColor" d={SPADE_D} /></svg>;
+  if (suit === 'Stars')
+    return <svg viewBox="0 0 16 16" className={className} aria-hidden><path fill="currentColor" d={STAR_D} /></svg>;
+  if (suit === 'Joker')
+    return (
+      <svg
+        viewBox={`${JOKER_VIEW_BOX[0]} ${JOKER_VIEW_BOX[1]} ${JOKER_VIEW_BOX[2]} ${JOKER_VIEW_BOX[3]}`}
+        className={className}
+        aria-hidden
+      >
+        <path fill="currentColor" d={JOKER_D} />
+      </svg>
+    );
   return <svg viewBox="0 0 16 16" className={className} aria-hidden><path fill="currentColor" d={STAR_D} /></svg>;
 };
 
@@ -98,5 +116,18 @@ export const SuitWheelMarkerG: React.FC<SuitSvgMarkerProps> = ({ suit, size, x, 
   if (suit === 'Diamonds') return <g transform={`translate(${x - half} ${y - half}) scale(${size / 16})`}><path fill={fill} d={DIAMOND_D} /></g>;
   if (suit === 'Clubs') return <g transform={`translate(${x - half} ${y - half}) scale(${size / 16})`}><path fill={fill} d={CLUB_D} /></g>;
   if (suit === 'Spades') return <g transform={`translate(${x - half} ${y - half}) scale(${size / 16})`}><path fill={fill} d={SPADE_D} /></g>;
+  if (suit === 'Stars')
+    return <g transform={`translate(${x - half} ${y - half}) scale(${size / 16})`}><path fill={fill} d={STAR_D} /></g>;
+  if (suit === 'Joker') {
+    const [, , vbW, vbH] = JOKER_VIEW_BOX;
+    const cx = JOKER_VIEW_BOX[0] + vbW / 2;
+    const cy = JOKER_VIEW_BOX[1] + vbH / 2;
+    const s = size / vbH;
+    return (
+      <g transform={`translate(${x} ${y}) scale(${s}) translate(${-cx} ${-cy})`}>
+        <path fill={fill} d={JOKER_D} />
+      </g>
+    );
+  }
   return <g transform={`translate(${x - half} ${y - half}) scale(${size / 16})`}><path fill={fill} d={STAR_D} /></g>;
 };

@@ -147,6 +147,14 @@ export interface ResolutionEvent {
   message: string;
 }
 
+/** One chat line synced by host across the room (PeerJS clients). */
+export interface ChatMessageEntry {
+  uid: string;
+  name: string;
+  text: string;
+  at: number;
+}
+
 export interface RoomData {
   code: string;
   status: 'waiting' | 'drafting' | 'playing' | 'powering' | 'results' | 'finished';
@@ -179,6 +187,8 @@ export interface RoomData {
    */
   awaitingPowerShowdown?: boolean;
   pendingPowerDecisions?: Record<string, PendingPowerDecision | null>;
+  /** Ring buffer of lobby / in-game messages (host-owned). */
+  chatMessages?: ChatMessageEntry[];
   lastOutcome?: {
     targetSuit: Suit;
     winnerUid: string | 'draw';
