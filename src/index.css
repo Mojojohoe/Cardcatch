@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+/* Playing-card rank lettering — bundled via Vite (`src/fonts/ye-olde-towne-d.otf`). */
+@font-face {
+  font-family: 'Ye Olde Towne D';
+  src: url('./fonts/ye-olde-towne-d.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-card-rank {
+  font-family: 'Ye Olde Towne D', 'Times New Roman', Times, serif;
+}
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;

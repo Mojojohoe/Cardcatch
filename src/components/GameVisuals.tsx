@@ -44,9 +44,17 @@ import {
   CURSE_WRATH,
   isCurseCardId,
 } from '../curses';
-import { getCardValue, getWrathMagnitude, parseCard } from '../services/gameService';
+import {
+  HEART_GOD_RANK,
+  getCardValue,
+  getWrathMagnitude,
+  parseCard,
+} from '../services/gameService';
 import { MAJOR_ARCANA, PlayerRole } from '../types';
 import { SuitGlyph } from './SuitGlyphs';
+
+/** Corner rank / pip letters on playing-card faces (`GameVisuals` only; tooltips/UI stay sans). */
+const CARD_FACE_RANK_CLASS = 'font-card-rank tracking-tighter';
 
 /** Text color classes per suit — shared by card visuals & power UI */
 export const SUIT_COLORS: Record<string, string> = {
@@ -78,6 +86,9 @@ function playingCardHoverCaption(cardStr: string, lustHeartRulesActive: boolean)
   if (p.isJoker) return `Joker — (${getCardValue(cardStr)})`;
   if (p.suit === 'Grovels') return null;
   if (p.suit === 'Crowns' && p.value === 'E') return `Emperor of Crowns — (${getCardValue(cardStr)})`;
+  if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) {
+    return `God of Hearts — (${getCardValue(cardStr, lustHeartRulesActive)})`;
+  }
   const rank = PLAYING_CARD_RANK_TITLE[p.value] ?? p.value;
   const v = getCardValue(cardStr, lustHeartRulesActive);
   return `${rank} of ${p.suit} — (${v})`;
@@ -402,7 +413,9 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         `}
       >
       {isSwordsSuit && wrathPen > 0 && (
-        <div className="pointer-events-none absolute top-1 left-1/2 z-20 -translate-x-1/2 text-[9px] font-black tabular-nums text-red-500 sm:text-[11px]">
+        <div
+          className={`pointer-events-none absolute top-1 left-1/2 z-20 -translate-x-1/2 text-[9px] font-black tabular-nums text-red-500 sm:text-[11px] ${CARD_FACE_RANK_CLASS}`}
+        >
           −{wrathPen}
         </div>
       )}
@@ -443,7 +456,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
             </span>
           ) : (
             <>
-              <span className={`${cornerText} font-black font-mono tracking-tighter`}>{value}</span>
+              <span className={`${cornerText} font-black ${CARD_FACE_RANK_CLASS}`}>{value}</span>
               {isJoker ? (
                 <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
               ) : (
@@ -476,7 +489,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
             </span>
           ) : (
             <>
-              <span className={`${cornerText} font-black font-mono tracking-tighter`}>{value}</span>
+              <span className={`${cornerText} font-black ${CARD_FACE_RANK_CLASS}`}>{value}</span>
               {isJoker ? (
                 <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
               ) : (
@@ -522,6 +535,10 @@ export const PowerCardVisual: React.FC<{
   panel?: boolean;
   /** Tower blocked — greyed but hover still shows text */
   destroyed?: boolean;
+  /** Anonymous opponent-major backs — no hover motion (prevents stray scrollbars in tight rows). */
+  staticBackdrop?: boolean;
+  /** Table curse slab (e.g. Lust): lift tooltip only, no pop/hover tween. */
+  curseRackPeek?: boolean;
 }> = ({
   cardId,
   revealed = true,
@@ -532,6 +549,8 @@ export const PowerCardVisual: React.FC<{
   matchHandCard = false,
   panel = false,
   destroyed = false,
+  staticBackdrop = false,
+  curseRackPeek = false,
 }) => {
   const curseDef = isCurseCardId(cardId) ? CURSES[cardId] : undefined;
   const card = curseDef ? null : MAJOR_ARCANA[cardId];
@@ -543,7 +562,8 @@ export const PowerCardVisual: React.FC<{
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [tipOpen, setTipOpen] = useState(false);
-  const tooltipStyle = usePowerTooltipPosition(tipOpen && !disabled, rootRef, popRef);
+  const tooltipHudOpen = tipOpen && Boolean(tip) && (curseRackPeek || !disabled || destroyed);
+  const tooltipStyle = usePowerTooltipPosition(tooltipHudOpen, rootRef, popRef);
 
   const dimClass = panel
     ? 'w-[6.875rem] sm:w-[7.5rem] min-h-[10rem] max-w-[8rem] text-[10px] p-2.5 pt-3 justify-start gap-2'
@@ -581,12 +601,9 @@ export const PowerCardVisual: React.FC<{
     const backCurse = curseDef
       ? 'bg-zinc-950 border-2 border-red-900/70 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:9px_9px]'
       : 'bg-slate-300 border-2 border-slate-400 bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px]';
-    return (
-      <motion.div
-        whileHover={!disabled ? { scale: 1.1, rotateY: 10 } : {}}
-        onClick={onClick}
-        className={`${backW} rounded-lg shadow-lg flex items-center justify-center relative overflow-hidden perspective-1000 ${backCurse} ${selected ? 'ring-4 ring-yellow-400' : ''} ${disabled ? 'opacity-75 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'}`}
-      >
+    const shellClass = `${backW} rounded-lg shadow-lg flex items-center justify-center relative overflow-hidden ${backCurse} ${selected ? 'ring-4 ring-yellow-400' : ''} ${disabled ? 'opacity-75 saturate-[0.72] brightness-95 cursor-not-allowed' : staticBackdrop ? 'cursor-default select-none' : 'cursor-pointer'}`;
+    const backChildren = (
+      <>
         <div className={`absolute inset-0 bg-linear-to-br ${curseDef ? 'from-red-950/40 to-transparent' : 'from-slate-400/20 to-transparent'}`} />
         <div className="relative z-10 flex items-center justify-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
           {curseDef ? (
@@ -602,6 +619,22 @@ export const PowerCardVisual: React.FC<{
             </span>
           )}
         </div>
+      </>
+    );
+    if (staticBackdrop) {
+      return (
+        <div role="presentation" className={shellClass}>
+          {backChildren}
+        </div>
+      );
+    }
+    return (
+      <motion.div
+        whileHover={!disabled ? { scale: 1.1, rotateY: 10 } : {}}
+        onClick={onClick}
+        className={`${shellClass} perspective-1000`}
+      >
+        {backChildren}
       </motion.div>
     );
   }
@@ -614,24 +647,33 @@ export const PowerCardVisual: React.FC<{
     ? 'from-red-950/30 to-transparent'
     : 'from-white/20 to-slate-900/5';
 
+  const canLiftOnHover = !curseRackPeek && !disabled;
+
   return (
     <motion.div
       ref={rootRef}
       layout
       title={tip}
+      tabIndex={curseRackPeek ? 0 : undefined}
       whileHover={
-        !disabled
+        canLiftOnHover
           ? matchHandCard
             ? { y: -6, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
             : { scale: panel ? 1.05 : small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } }
           : {}
       }
-      onMouseEnter={() => !disabled && setTipOpen(true)}
+      onMouseEnter={() => {
+        if (!(curseRackPeek || !disabled || destroyed) || !tip) return;
+        setTipOpen(true);
+      }}
       onMouseLeave={() => setTipOpen(false)}
-      onFocus={() => !disabled && setTipOpen(true)}
+      onFocus={() => {
+        if (!(curseRackPeek || !disabled || destroyed) || !tip) return;
+        setTipOpen(true);
+      }}
       onBlur={() => setTipOpen(false)}
-      onClick={onClick}
-      className={`${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between ${matchHandCard ? 'overflow-hidden' : 'overflow-visible'} ${faceShell} ${selected ? `${matchHandCard ? 'ring-2 ring-yellow-400' : 'ring-4 ring-yellow-400'} border-yellow-500` : ''} ${disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`}
+      onClick={curseRackPeek ? undefined : onClick}
+      className={`${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between ${matchHandCard ? 'overflow-hidden' : 'overflow-visible'} ${faceShell} ${selected ? `${matchHandCard ? 'ring-2 ring-yellow-400' : 'ring-4 ring-yellow-400'} border-yellow-500` : ''} ${curseRackPeek ? 'cursor-help' : disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`}
     >
       <div
         className={`absolute top-0 left-0 w-full h-full bg-linear-to-b ${gloss} pointer-events-none ${matchHandCard ? 'rounded-md' : 'rounded-[13px]'} overflow-hidden`}
@@ -653,7 +695,7 @@ export const PowerCardVisual: React.FC<{
       </div>
 
       <div
-        className={`z-10 shrink-0 rounded-full border-2 shadow-xl ${matchHandCard ? '' : 'group-hover:scale-105'} transition-transform ${panel ? 'p-2 my-1' : matchHandCard ? 'p-0.5 my-0.5' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : matchHandCard ? '' : 'my-2'} ${curseDef ? 'bg-black border-red-800' : 'bg-slate-900 border-slate-800'}`}
+        className={`z-10 shrink-0 rounded-full border-2 shadow-xl ${curseRackPeek || matchHandCard ? '' : 'group-hover:scale-105'} transition-transform ${panel ? 'p-2 my-1' : matchHandCard ? 'p-0.5 my-0.5' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : matchHandCard ? '' : 'my-2'} ${curseDef ? 'bg-black border-red-800' : 'bg-slate-900 border-slate-800'}`}
       >
         {curseDef ? (
           <CursePowerIcon
@@ -683,7 +725,7 @@ export const PowerCardVisual: React.FC<{
         {curseDef ? 'Curse' : `${cardId} / 21`}
       </div>
 
-      {!disabled &&
+      {(curseRackPeek || !disabled || destroyed) &&
         typeof document !== 'undefined' &&
         createPortal(
           <div

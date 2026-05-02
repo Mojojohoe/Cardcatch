@@ -25,7 +25,6 @@ import {
   CURSE_WRATH,
   CURSES,
   curseEffectActive,
-  getHeartValueUnderLust,
   gluttonyCurseActive,
   greedCurseActive,
   greedTaxAmount,
@@ -76,25 +75,82 @@ export const shuffle = <T>(array: T[]): T[] => {
   return newArray;
 };
 
+/** Lust-only rank: past Ace walks to God of Hearts (clash/satiation value 19). */
+export const HEART_GOD_RANK = 'G';
+
+function standardPlayingCardRankValue(suit: string, value: string, greedTax: boolean): number {
+  if (suit === 'Hearts' && value === HEART_GOD_RANK) return 19;
+
+  let base: number;
+  if (value === 'A') base = 14;
+  else if (value === 'K') base = 13;
+  else if (value === 'Q') base = 12;
+  else if (value === 'J') base = 11;
+  else {
+    const n = parseInt(value, 10);
+    base = Number.isFinite(n) ? n : 0;
+  }
+
+  if (greedTax) {
+    if (suit === 'Diamonds') base = Math.max(0, base - 1);
+    else if (suit === 'Coins') base = Math.max(0, base - 2);
+  }
+  return base;
+}
+
+/**
+ * Printed heart after Lust (+3 ladder steps once). Past Ace ⇒ `Hearts-G`.
+ * Idempotent for God. Non-hearts ⇒ null (caller keeps original).
+ */
+export function lustBumpHeartIfApplicable(cardStr: string): string | null {
+  const pc = parseCard(cardStr);
+  if (pc.isJoker || pc.suit !== 'Hearts') return null;
+  if (pc.value === HEART_GOD_RANK) return cardStr;
+
+  const idx = (VALUES as readonly string[]).indexOf(pc.value);
+  if (idx < 0) return null;
+  const nextIdx = idx + 3;
+  if (nextIdx >= VALUES.length) return `Hearts-${HEART_GOD_RANK}`;
+  return `Hearts-${VALUES[nextIdx]}`;
+}
+
+/** Any Heart id still among the draw pile, players’ hands, or committed tricks. */
+export function heartsRemainInDeckHandsOrCommits(
+  deck: readonly string[],
+  players: Record<string, PlayerData>,
+): boolean {
+  const heart = (c: string | null | undefined): boolean => {
+    if (!c) return false;
+    const p = parseCard(c);
+    return !p.isJoker && p.suit === 'Hearts';
+  };
+  if (deck.some(heart)) return true;
+  for (const p of Object.values(players)) {
+    for (const c of p.hand) {
+      if (heart(c)) return true;
+    }
+    if (heart(p.currentMove)) return true;
+  }
+  return false;
+}
+
 export const getCardValue = (cardStr: string, lustHeartRules = false, greedTax = false): number => {
   if (cardStr.startsWith('Joker')) return 20; // Beat Ace (14)
   const [suit, value] = cardStr.split('-');
   if (suit === 'Grovels') return 0;
   if (suit === 'Swords') return 0;
   if (suit === 'Crowns' && value === 'E') return 17;
-  let base: number;
+
+  let effSuit = suit;
+  let effVal = value;
   if (lustHeartRules && suit === 'Hearts') {
-    base = getHeartValueUnderLust(cardStr);
-  } else if (value === 'A') base = 14;
-  else if (value === 'K') base = 13;
-  else if (value === 'Q') base = 12;
-  else if (value === 'J') base = 11;
-  else base = parseInt(value);
-  if (greedTax) {
-    if (suit === 'Diamonds') base = Math.max(0, base - 1);
-    else if (suit === 'Coins') base = Math.max(0, base - 2);
+    const bumpedId = lustBumpHeartIfApplicable(cardStr) ?? cardStr;
+    const bp = parseCard(bumpedId);
+    effSuit = bp.suit;
+    effVal = bp.value;
   }
-  return base;
+
+  return standardPlayingCardRankValue(effSuit, effVal, greedTax);
 };
 
 /** Special playable card while Pride is active — clash rank 1; ends Pride when played. */
@@ -283,6 +339,25 @@ export function playingCardUpgradeSteps(fromCard: string, toCard: string): strin
   return VALUES.slice(low, high + 1).map((v) => `${pt.suit}-${v}`);
 }
 
+/** Resolution ladder for Hearts bumped into God (`VALUES` omit `G`, so specialized). */
+export function lustHeartUpgradeSteps(fromCard: string, toCard: string): string[] {
+  if (fromCard === toCard) return [fromCard];
+  const pf = parseCard(fromCard);
+  const pt = parseCard(toCard);
+  if (pf.isJoker || pt.isJoker) return [fromCard, toCard];
+  if (pf.suit !== 'Hearts' || pt.suit !== 'Hearts') {
+    return playingCardUpgradeSteps(fromCard, toCard);
+  }
+  if (pt.value === HEART_GOD_RANK) {
+    const vi = (VALUES as readonly string[]).indexOf(pf.value);
+    if (vi < 0) return [fromCard, toCard];
+    const steps = VALUES.slice(vi, VALUES.length).map((v) => `Hearts-${v}`);
+    if (steps[steps.length - 1] !== toCard) steps.push(toCard);
+    return steps.filter((s, i) => i === 0 || s !== steps[i - 1]);
+  }
+  return playingCardUpgradeSteps(fromCard, toCard);
+}
+
 const RANK_WORDS: Record<string, string> = {
   A: 'Ace',
   K: 'King',
@@ -297,6 +372,7 @@ export const describeCardPlain = (cardStr: string): string => {
   if (p.suit === 'Swords') return `the ${describeWrathMinionTitle(cardStr)}`;
   if (p.suit === 'Grovels') return 'Grovel';
   if (p.suit === 'Crowns' && p.value === 'E') return 'the Emperor of Crowns';
+  if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) return 'God of Hearts';
   const rk = RANK_WORDS[p.value] ?? p.value;
   return `the ${rk} of ${p.suit}`;
 };
@@ -361,6 +437,8 @@ export function evaluateTrickClash(
   greedJointDiamondsCoins = false,
   clashValuePenaltyCr1 = 0,
   clashValuePenaltyCr2 = 0,
+  /** Override lust virtual bump per side after `Hearts` have been bumped to printed rank on the trick. */
+  lustHeartRulesPerSeat?: readonly [boolean, boolean],
 ): 'p1' | 'p2' | 'draw' {
   const pr1 = parseCard(cr1);
   const pr2 = parseCard(cr2);
@@ -383,8 +461,10 @@ export function evaluateTrickClash(
   if (p1Target && !p2Target) return 'p1';
   if (!p1Target && p2Target) return 'p2';
 
-  const raw1 = getCardValue(cr1, lustHeartRules, greedTaxActive);
-  const raw2 = getCardValue(cr2, lustHeartRules, greedTaxActive);
+  const lh1 = lustHeartRulesPerSeat?.[0] ?? lustHeartRules;
+  const lh2 = lustHeartRulesPerSeat?.[1] ?? lustHeartRules;
+  const raw1 = getCardValue(cr1, lh1, greedTaxActive);
+  const raw2 = getCardValue(cr2, lh2, greedTaxActive);
   const v1 = parseCard(cr1).isJoker ? raw1 : Math.max(0, raw1 - clashValuePenaltyCr1);
   const v2 = parseCard(cr2).isJoker ? raw2 : Math.max(0, raw2 - clashValuePenaltyCr2);
   if (v1 > v2) return 'p1';
@@ -402,6 +482,8 @@ export function explainPlainClash(
   lustHeartRules = false,
   greedTaxActive = false,
   greedJointDiamondsCoins = false,
+  /** [winner virtual lust?, loser virtual lust?] aligned to winner/loser card order. */
+  lustHeartRulesSides?: readonly [boolean, boolean],
 ): string {
   const prW = parseCard(winningCardStr);
   const prL = parseCard(losingCardStr);
@@ -434,8 +516,10 @@ export function explainPlainClash(
 
   const wField = isOnTargetField(winningCardStr, targ, greedJointDiamondsCoins);
   const lField = isOnTargetField(losingCardStr, targ, greedJointDiamondsCoins);
-  const wv = getCardValue(winningCardStr, lustHeartRules, greedTaxActive);
-  const lv = getCardValue(losingCardStr, lustHeartRules, greedTaxActive);
+  const lhW = lustHeartRulesSides?.[0] ?? lustHeartRules;
+  const lhL = lustHeartRulesSides?.[1] ?? lustHeartRules;
+  const wv = getCardValue(winningCardStr, lhW, greedTaxActive);
+  const lv = getCardValue(losingCardStr, lhL, greedTaxActive);
 
   if (wField && !lField)
     return `${sentenceCard(winningCardStr)} matched table suit (${trumpLabel}); ${lMid} did not — table suit wins.`;
@@ -2520,49 +2604,87 @@ export class GameService {
         }
     }
 
-    /** Lust meter uses the heart each player locked in — not the post-power battlefield card (Stars, etc.). */
+    /** Lust meter uses each player’s locked-in heart (`initialCardsPlayed`), not post-power transforms (Hermit swap, Stars, …). */
     let lustRoundFx: NonNullable<RoomData['lastOutcome']>['lustRoundFx'] = undefined;
     if (curseEnabled && lustHeartRules) {
       const prevLust = roomData.activeCurses?.find((c) => c.id === CURSE_LUST)?.lustAccumulated ?? 0;
-      const contributions: { uid: string; card: string; lustPointsAdded: number }[] = [];
-      let add = 0;
+      const heartsRemainAll = heartsRemainInDeckHandsOrCommits(roomData.deck, players);
+      const heartsExhaustedGlobally = !heartsRemainAll;
+
+      type LustContrib = NonNullable<
+        NonNullable<RoomData['lastOutcome']>['lustRoundFx']
+      >['contributions'][number];
+      const contributions: LustContrib[] = [];
+      let hungerAdd = 0;
       for (const uid of [p1Uid, p2Uid]) {
         const engaged = initialCardsPlayed[uid];
         if (!engaged) continue;
         if (parseCard(engaged).suit !== 'Hearts') continue;
+        const bumpedCard = lustBumpHeartIfApplicable(engaged) ?? engaged;
         const lustPts = Math.max(0, Math.round(getCardValue(engaged, true, greedTaxActive)));
-        add += lustPts;
-        contributions.push({ uid, card: engaged, lustPointsAdded: lustPts });
+        hungerAdd += lustPts;
+        contributions.push({
+          uid,
+          card: bumpedCard,
+          engagedCard: engaged,
+          lustPointsAdded: lustPts,
+        });
       }
-      if (contributions.length > 0) {
-        const nextRaw = prevLust + add;
-        const sated = nextRaw >= 150;
+
+      const nextRaw = prevLust + hungerAdd;
+      const meterFull = nextRaw >= 150;
+      const curseClears = heartsExhaustedGlobally || (contributions.length > 0 && meterFull);
+
+      if (contributions.length > 0 || curseClears) {
         lustRoundFx = {
           contributions,
           previousMeter: prevLust,
-          nextMeter: sated ? 0 : nextRaw,
-          sated,
+          nextMeter: curseClears ? 0 : nextRaw,
+          sated: contributions.length > 0 && meterFull,
+          heartsExhausted: curseClears && heartsExhaustedGlobally,
         };
 
         for (const c of contributions) {
+          const nm = players[c.uid].name;
+          const lbl = sentenceCard(c.card);
+          const line =
+            curseClears && meterFull && contributions.length > 0
+              ? `Lust was sated by ${c.lustPointsAdded} from ${nm}'s ${lbl}.`
+              : `Lust took ${c.lustPointsAdded} from ${nm}'s ${lbl}.`;
           events.push({
             type: 'POWER_TRIGGER',
             uid: c.uid,
             powerCardId: CURSE_LUST,
             lustFeedPts: c.lustPointsAdded,
             lustSurgeHeart: true,
-            message: `Gluttony's Lust drank ${c.lustPointsAdded} from ${players[c.uid].name}'s ${sentenceCard(c.card)}.`,
+            message: line,
           });
         }
-        if (sated) {
-          events.push({
-            type: 'POWER_TRIGGER',
-            powerCardId: CURSE_LUST,
-            message: `Lust is sated this round (${add} hunger${contributions.length > 1 ? ' combined' : ''}) — Gluttony's thirst is cleared.`,
-          });
+
+        if (curseClears) {
+          if (contributions.length > 0 && meterFull) {
+            events.push({
+              type: 'POWER_TRIGGER',
+              powerCardId: CURSE_LUST,
+              message: `Gluttony's Lust accumulated ${hungerAdd} hunger this round — thirst cleared at 150.`,
+            });
+          }
+          if (heartsExhaustedGlobally) {
+            events.push({
+              type: 'POWER_TRIGGER',
+              powerCardId: CURSE_LUST,
+              message:
+                meterFull && contributions.length > 0
+                  ? 'No hearts remain in deck or hands — Lust fades with the last bite.'
+                  : 'No hearts remain in deck or hands — Lust departs.',
+            });
+          }
         }
       }
     }
+
+    /** True once printed trick hearts mutate for clash (`Hearts-G` / +3 ranks). */
+    let lustPrintedHeartsBump = false;
 
     // Phase 3: Resolution
     if (power1 === 14 || power2 === 14) {
@@ -2590,6 +2712,32 @@ export class GameService {
             });
           }
         }
+
+        if (curseEnabled && lustHeartRules) {
+          for (const uid of [p1Uid, p2Uid] as const) {
+            const isP1 = uid === p1Uid;
+            const cur = isP1 ? c1 : c2;
+            const pcCur = parseCard(cur);
+            if (pcCur.isJoker || pcCur.suit !== 'Hearts') continue;
+            const bumped = lustBumpHeartIfApplicable(cur);
+            if (!bumped || bumped === cur) continue;
+            lustPrintedHeartsBump = true;
+            events.push({
+              type: 'CARD_EMPOWER',
+              uid,
+              fromCardId: cur,
+              cardId: bumped,
+              message: `Lust exalts ${players[uid].name}'s heart.`,
+            });
+            if (isP1) c1 = bumped;
+            else c2 = bumped;
+          }
+        }
+
+        const lhPlayed = (cardStr: string) =>
+          lustHeartRules && !(lustPrintedHeartsBump && parseCard(cardStr).suit === 'Hearts');
+        const playedLustSides = [lhPlayed(c1), lhPlayed(c2)] as const;
+
         const res = evaluateTrickClash(
           c1,
           c2,
@@ -2599,6 +2747,7 @@ export class GameService {
           greedJointTrump,
           wp1,
           wp2,
+          playedLustSides,
         );
         const s1 = summonedCards[p1Uid];
         const s2 = summonedCards[p2Uid];
@@ -2613,6 +2762,7 @@ export class GameService {
             greedJointTrump,
             0,
             0,
+            [lhPlayed(s1), lhPlayed(s2)],
           );
           const rMain = res;
           if (rMain === 'p1' || r1 === 'p1') winnerUid = p1Uid;
@@ -2628,6 +2778,7 @@ export class GameService {
             greedJointTrump,
             0,
             wp2,
+            [lhPlayed(s1), lhPlayed(c2)],
           );
           if (res === 'p1' || resSummon === 'p1') winnerUid = p1Uid;
           else if (res === 'p2' && resSummon === 'p2') winnerUid = p2Uid;
@@ -2642,6 +2793,7 @@ export class GameService {
             greedJointTrump,
             0,
             wp1,
+            [lhPlayed(s2), lhPlayed(c1)],
           );
           if (res === 'p2' || resSummon === 'p2') winnerUid = p2Uid;
           else if (res === 'p1' && resSummon === 'p1') winnerUid = p1Uid;
@@ -2657,7 +2809,7 @@ export class GameService {
             const pc = parseCard(card);
             if (pc.isJoker || card === GROVEL_CARD_ID || pen <= 0) clashDestroyedForOutcome[uid] = false;
             else {
-              const eff = Math.max(0, getCardValue(card, lustHeartRules, greedTaxActive) - pen);
+              const eff = Math.max(0, getCardValue(card, lhPlayed(card), greedTaxActive) - pen);
               clashDestroyedForOutcome[uid] = eff === 0;
             }
           }
@@ -2894,6 +3046,8 @@ export class GameService {
     if (power2 === 5) {
       events.push({ type: 'INTEL_REVEAL', uid: p2Uid, message: `${players[p2Uid].name} used The Hierophant to peek into ${players[p1Uid].name}'s hand!` });
     }
+    const lhPlayedFinal = (cardStr: string) =>
+      lustHeartRules && !(lustPrintedHeartsBump && parseCard(cardStr).suit === 'Hearts');
     let finalMessage = "";
     if (winnerUid === 'draw') {
        if (power1 === 14 || power2 === 14) finalMessage = "Temperance has balanced the scale of fate.";
@@ -2915,6 +3069,7 @@ export class GameService {
             lustHeartRules,
             greedTaxActive,
             greedJointTrump,
+            [lhPlayedFinal(winnerCardStr), lhPlayedFinal(loserCardStr)],
           )}`;
        }
     }
@@ -2939,7 +3094,7 @@ export class GameService {
       if (!departedDoubleGrovel) {
         for (const uid of [p1Uid, p2Uid] as const) {
           const card = uid === p1Uid ? c1 : c2;
-          const damage = Math.max(0, getCardValue(card, lustHeartRules, greedTaxActive));
+          const damage = Math.max(0, getCardValue(card, lhPlayedFinal(card), greedTaxActive));
           hp = Math.max(0, hp - damage);
           strikes.push({ uid, damage, hpAfter: hp });
           const plain = sentenceCard(card);
@@ -3647,8 +3802,8 @@ export class GameService {
     }
 
     if (curseOk && outcome.lustRoundFx) {
-      const { nextMeter, sated } = outcome.lustRoundFx;
-      if (sated) {
+      const { nextMeter, sated, heartsExhausted } = outcome.lustRoundFx;
+      if (sated || heartsExhausted) {
         nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_LUST);
       } else {
         const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_LUST);

@@ -32,7 +32,7 @@ export const CURSES: Record<number, CurseDefinition> = {
     sin: 'Lust',
     name: 'Lust',
     description:
-      'Hearts dominate the target wheel. Heart plays gain power; lust feeds until sated (150).',
+      'Hearts dominate the target wheel. Hearts played bump +3 ranks (past Ace becomes God at 19). Lust meter feeds until 150 or no hearts remain in deck or hands.',
   },
   [CURSE_GLUTTONY]: {
     id: CURSE_GLUTTONY,
@@ -123,18 +123,6 @@ export function curseEffectActive(active: readonly { id: number }[] | undefined)
   return (active?.length ?? 0) > 0;
 }
 
-/** Combat value for Hearts while Lust rules apply (face ranks promoted; pip/J +3). */
-export function getHeartValueUnderLust(cardStr: string): number {
-  const [suit, value] = cardStr.split('-');
-  if (suit !== 'Hearts') return getStandardNumericRank(value);
-  if (value === 'Q') return 17;
-  if (value === 'K') return 18;
-  if (value === 'A') return 19;
-  if (value === 'J') return 11 + 3;
-  const n = parseInt(value, 10);
-  return Number.isFinite(n) ? n + 3 : 0;
-}
-
 /** Raw clash tax routed to the Greed crown (Diamonds −1, Coins −2). */
 export function greedTaxAmount(cardStr: string): number {
   const [suit] = cardStr.split('-');
@@ -142,13 +130,4 @@ export function greedTaxAmount(cardStr: string): number {
   if (suit === 'Diamonds') return 1;
   if (suit === 'Coins') return 2;
   return 0;
-}
-
-function getStandardNumericRank(value: string): number {
-  if (value === 'A') return 14;
-  if (value === 'K') return 13;
-  if (value === 'Q') return 12;
-  if (value === 'J') return 11;
-  const n = parseInt(value, 10);
-  return Number.isFinite(n) ? n : 0;
 }

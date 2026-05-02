@@ -9,11 +9,40 @@ import {
   handHasLegalPridePlay,
   handHasLegalEnvyPlay,
   isCardBlockedByPride,
+  lustBumpHeartIfApplicable,
+  lustHeartUpgradeSteps,
   parseCard,
   pickEnvyCovetedForRound,
   pickSlothDreamResult,
 } from './gameService';
 import { createFixturePlayers, createFixtureRoom } from './gameService.fixtures';
+
+test('Lust: +3 ladder bump once; God of Hearts is printed at 19', () => {
+  assert.equal(lustBumpHeartIfApplicable('Hearts-J'), 'Hearts-A');
+  assert.equal(lustBumpHeartIfApplicable('Hearts-Q'), `Hearts-G`);
+  assert.equal(getCardValue('Hearts-J', true, false), 14);
+  assert.equal(getCardValue('Hearts-G', false, false), 19);
+  const steps = lustHeartUpgradeSteps('Hearts-Q', 'Hearts-G');
+  assert.equal(steps[0], 'Hearts-Q');
+  assert.equal(steps[steps.length - 1], `Hearts-G`);
+  assert.deepEqual(evaluateTrickClash(`Hearts-A`, `Hearts-K`, 'Hearts', false, false, false, 0, 0, [true, true]), 'draw');
+
+  assert.equal(
+    evaluateTrickClash(
+      `Hearts-A`,
+      `Hearts-K`,
+      'Hearts',
+      true,
+      false,
+      false,
+      0,
+      0,
+      [false, true],
+    ),
+    'p2',
+    'Printed Ace stays at 14; King still climbs virtually on the summoned side.',
+  );
+});
 
 test('parseCard and getCardValue preserve card parsing semantics', () => {
   const joker = parseCard('Joker-1');

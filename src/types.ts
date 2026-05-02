@@ -320,12 +320,18 @@ export interface RoomData {
     >;
     /** Lust meter animation + persistence helper. */
     lustRoundFx?: {
-      /** Points added toward the Lust meter from this heart (equals effective clash bonus under lust). */
-      contributions: { uid: string; card: string; lustPointsAdded: number }[];
+      /**
+       * Points added toward the meter (from engaged heart’s bump).
+       * `card` — bumped printed id (`Hearts-G` when past Ace).
+       */
+      contributions: { uid: string; card: string; engagedCard: string; lustPointsAdded: number }[];
       previousMeter: number;
-      /** After applying contributions; 0 if sated. */
+      /** After applying contributions; 0 if the curse clears this round. */
       nextMeter: number;
+      /** Meter reached ≥150 while a heart fed. */
       sated: boolean;
+      /** Cleared because no Hearts remain in deck or hands (+ committed trick). */
+      heartsExhausted?: boolean;
     };
     /** Gluttony starvation advance after this round (when Gluttony was already active). */
     gluttonyPersistence?: {

@@ -60,6 +60,7 @@ import {
   envyGreedySealSlots,
   ENVY_MONSTER_START_HP,
   playingCardUpgradeSteps,
+  lustHeartUpgradeSteps,
 } from './services/gameService';
 import {
   RoomData,
@@ -250,7 +251,7 @@ const CurseZonePanel: React.FC<{
     <div className="relative flex w-full max-w-[14rem] shrink-0 flex-col items-stretch gap-3 pt-1 sm:max-w-none">
       {lust && (
         <motion.div layout className="relative flex w-full flex-col items-center gap-1.5">
-          <PowerCardVisual cardId={CURSE_LUST} revealed matchHandCard disabled />
+          <PowerCardVisual cardId={CURSE_LUST} revealed matchHandCard curseRackPeek />
           <p className="text-center text-[7px] font-black uppercase tracking-wider text-red-400">Lust</p>
           <p className="text-center font-mono text-[10px] font-bold tabular-nums leading-tight text-red-200">
             {lust.lustAccumulated ?? 0}
@@ -261,7 +262,7 @@ const CurseZonePanel: React.FC<{
       )}
       {gluttony && (
         <motion.div layout className="relative flex w-full flex-col items-center gap-1.5">
-          <PowerCardVisual cardId={CURSE_GLUTTONY} revealed matchHandCard disabled />
+          <PowerCardVisual cardId={CURSE_GLUTTONY} revealed matchHandCard curseRackPeek />
           <p className="text-center text-[7px] font-black uppercase tracking-wider text-red-400">Gluttony</p>
           <p className="max-w-[12rem] px-0.5 text-center text-[7px] font-bold leading-snug normal-case text-red-200/95">
             {gluttonyMoodCopy(gluttony.gluttonyPhase ?? 0)}
@@ -299,7 +300,9 @@ const CurseZonePanel: React.FC<{
               <p className="text-center text-[6px] font-bold uppercase tracking-wide text-violet-300/90">Barrier</p>
               <div className={`flex items-center gap-1 ${SUIT_COLORS[parseCard(prideCeilingCard).suit] ?? 'text-violet-200'}`}>
                 <SuitGlyph suit={parseCard(prideCeilingCard).suit} className="h-6 w-6 sm:h-7 sm:w-7" />
-                <span className="font-mono text-[11px] font-black tabular-nums">{parseCard(prideCeilingCard).value}</span>
+                <span className="font-card-rank text-[11px] font-black tabular-nums">
+                  {parseCard(prideCeilingCard).value}
+                </span>
               </div>
             </div>
           ) : (
@@ -1302,7 +1305,13 @@ const ResolutionSequence: React.FC<{
             break;
           case 'CARD_EMPOWER':
             if (event.uid && event.cardId && event.fromCardId) {
-              const steps = playingCardUpgradeSteps(event.fromCardId, event.cardId).filter(Boolean);
+              const f = parseCard(event.fromCardId);
+              const t = parseCard(event.cardId);
+              const steps = (
+                f.suit === 'Hearts' && t.suit === 'Hearts'
+                  ? lustHeartUpgradeSteps(event.fromCardId, event.cardId)
+                  : playingCardUpgradeSteps(event.fromCardId, event.cardId)
+              ).filter(Boolean);
               if (steps.length > 1) {
                 setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'upgrade' }));
                 for (let s = 0; s < steps.length; s++) {
@@ -2917,9 +2926,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
               />
             </div>
-            <div className="flex max-w-full shrink-0 flex-row flex-nowrap items-start justify-end gap-0 overflow-x-auto [-ms-overflow-style:auto] [scrollbar-width:thin] opacity-80 -space-x-2 sm:-space-x-2.5">
+            <div className="flex max-w-full shrink-0 flex-row flex-wrap items-end justify-end gap-x-4 gap-y-2 overflow-visible py-1 pr-1 opacity-80 sm:flex-nowrap sm:gap-x-5">
               {opponent.powerCards.map((pid, i) => (
-                <PowerCardVisual key={`opp-p-${pid}-${i}`} cardId={pid} revealed={false} small />
+                <PowerCardVisual key={`opp-p-${pid}-${i}`} cardId={pid} revealed={false} small staticBackdrop />
               ))}
             </div>
           </div>
@@ -2972,9 +2981,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
                 />
               </div>
-              <div className="col-span-full flex min-h-[3.25rem] flex-row flex-nowrap justify-center gap-0 self-start overflow-x-auto overflow-y-visible pt-1 opacity-95 [scrollbar-width:thin] [-ms-overflow-style:auto] -space-x-2 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-full sm:max-w-none sm:justify-end sm:self-stretch sm:px-0 sm:pt-1 sm:-space-x-2.5 [&::-webkit-scrollbar]:h-1">
+              <div className="col-span-full flex min-h-[3.5rem] flex-row flex-wrap justify-center gap-x-4 gap-y-2 self-start overflow-visible py-2 pt-3 opacity-95 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-full sm:max-w-none sm:flex-nowrap sm:justify-end sm:gap-x-5 sm:self-stretch sm:px-1 sm:pb-1 sm:pt-3">
                 {opponent.powerCards.map((pid, i) => (
-                  <PowerCardVisual key={`ogr-${pid}-${i}`} cardId={pid} revealed={false} small />
+                  <PowerCardVisual key={`ogr-${pid}-${i}`} cardId={pid} revealed={false} small staticBackdrop />
                 ))}
               </div>
 
