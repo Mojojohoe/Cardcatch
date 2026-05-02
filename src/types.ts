@@ -27,7 +27,7 @@ export interface PowerCard {
 export const MAJOR_ARCANA: PowerCard[] = [
   { id: 0, name: "The Fool", description: "Swaps both committed suit cards before clash resolution. Wrath’s agent stays visually over the same seat while the card beneath swaps.", icon: "Sparkles" },
   { id: 1, name: "The Magician", description: "Cast Spell: steal a Joker or transmute opponent card into a Frog 1.", icon: "Wand2" },
-  { id: 2, name: "The High Priestess", description: "If opponent commits a Major: three draft decoys plus optional swap of your suit play. If not: glimpse one Major still in their pile (when they have any).", icon: "Eye" },
+  { id: 2, name: "The High Priestess", description: "If opponent uses a power card: three draft decoys plus optional swap of your suit play. If not: glimpse one power card still in their pile (when they have any).", icon: "Eye" },
   { id: 3, name: "The Empress", description: "Gain copies of both resulting suit cards after the round — the final cards on the table after transforms, frogging, and curse clash effects.", icon: "Crown" },
   { id: 4, name: "The Emperor", description: "Changes your card to the target suit and adds 2 to its value.", icon: "Shield" },
   { id: 5, name: "The Hierophant", description: "Reveals half of the opponent's hand after the round, including power cards.", icon: "BookType" },
@@ -40,7 +40,13 @@ export const MAJOR_ARCANA: PowerCard[] = [
   { id: 12, name: "The Hanged Man", description: "Player forfeits the round, but gains 3 cards.", icon: "Anchor" },
   { id: 13, name: "Death", description: "Wins the round outright unless blocked by The Tower.", icon: "Skull" },
   { id: 14, name: "Temperance", description: "The round is drawn. Players get suit cards back, power cards are consumed.", icon: "Waves" },
-  { id: 15, name: "The Devil", description: "Devil Deal: discard 2 random hand cards to apply one tactical effect.", icon: "Flame" },
+  {
+    id: 15,
+    name: 'The Devil',
+    description:
+      'Devil Deal: bend your suit to a King or spin the trump wheel against the opponent\'s suit. Pact injects a random curse next round (skipped if any curse holds the table). If you lose, you discard 1 random card.',
+    icon: 'Flame',
+  },
   { id: 16, name: "The Tower", description: "Stops the effects of an opponent's power card.", icon: "ZapOff" },
   { id: 17, name: "The Star", description: "Adds 'Stars' suit to the target wheel. Star suit transforms all played cards to Stars.", icon: "Star" },
   { id: 18, name: "The Moon", description: "Adds 'Moons' suit to target wheel and deck. Also conjures two Moons-suited suit cards next round.", icon: "Moon" },
@@ -167,6 +173,8 @@ export type ResolutionEventType =
   | 'TARGET_CHANGE' 
   | 'COIN_FLIP' 
   | 'SUMMON_CARD'
+  /** Gluttony: heart play digested after scoring → bone acquisition. */
+  | 'GLUTTONY_DIGEST'
   | 'TRANSFORM'
   | 'INTEL_REVEAL'
   /** Clash rank floored to 0 by penalties (e.g. Wrath) — play shattered animation; not Grovel/Joker. */
@@ -193,8 +201,14 @@ export interface ResolutionEvent {
   lustFeedPts?: number;
   /** Brief “upgrade” pulse on this seat’s resolved card during Lust feed. */
   lustSurgeHeart?: boolean;
+  /** Narration line before meter pulses (paired with lust contributions). */
+  lustFeedBegins?: boolean;
+  /** Greed curse: points tithed from this seat’s diamond/coin play toward the crown. */
+  greedTaxPts?: number;
   suit?: Suit;
-  message: string;
+  message?: string;
+  /** Gluttony: bone card returning to hand (after bite animation). */
+  gluttonyBoneId?: string;
   /** Envy strike: damage dealt this hit. */
   envyDamage?: number;
   /** Envy: monster HP after this event (strike / feed). */
@@ -324,7 +338,13 @@ export interface RoomData {
        * Points added toward the meter (from engaged heart’s bump).
        * `card` — bumped printed id (`Hearts-G` when past Ace).
        */
-      contributions: { uid: string; card: string; engagedCard: string; lustPointsAdded: number }[];
+      contributions: {
+        uid: string;
+        /** Heart card id after lust empowerment this round (`Hearts-G`, etc.). */
+        card: string;
+        engagedCard?: string;
+        lustPointsAdded: number;
+      }[];
       previousMeter: number;
       /** After applying contributions; 0 if the curse clears this round. */
       nextMeter: number;
@@ -375,6 +395,8 @@ export interface RoomData {
       result: SlothDreamResult;
       spinOffset: number;
     };
+    /** Devil pact: inject this curse next apply when no curse was active entering results. */
+    devilForcedCurseId?: number;
   };
 }
 

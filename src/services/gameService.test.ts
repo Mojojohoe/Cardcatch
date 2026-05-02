@@ -12,10 +12,16 @@ import {
   lustBumpHeartIfApplicable,
   lustHeartUpgradeSteps,
   parseCard,
+  tooltipPrintedStrengthLabel,
   pickEnvyCovetedForRound,
   pickSlothDreamResult,
 } from './gameService';
 import { createFixturePlayers, createFixtureRoom } from './gameService.fixtures';
+
+test('Printed tooltip ignores lust virtual ranks; Jokers show N/A', () => {
+  assert.equal(tooltipPrintedStrengthLabel('Hearts-4'), '4');
+  assert.equal(tooltipPrintedStrengthLabel('Joker-1'), 'N/A');
+});
 
 test('Lust: +3 ladder bump once; God of Hearts is printed at 19', () => {
   assert.equal(lustBumpHeartIfApplicable('Hearts-J'), 'Hearts-A');

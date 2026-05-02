@@ -46,32 +46,18 @@ import {
 } from '../curses';
 import {
   HEART_GOD_RANK,
-  getCardValue,
   getWrathMagnitude,
   parseCard,
+  tooltipPrintedStrengthLabel,
 } from '../services/gameService';
 import { MAJOR_ARCANA, PlayerRole } from '../types';
+import { SUIT_COLORS } from '../suitPresentation';
 import { SuitGlyph } from './SuitGlyphs';
+
+export { SUIT_COLORS };
 
 /** Corner rank / pip letters on playing-card faces (`GameVisuals` only; tooltips/UI stay sans). */
 const CARD_FACE_RANK_CLASS = 'font-card-rank tracking-tighter';
-
-/** Text color classes per suit — shared by card visuals & power UI */
-export const SUIT_COLORS: Record<string, string> = {
-  Hearts: 'text-red-500',
-  Diamonds: 'text-red-400',
-  Clubs: 'text-emerald-400',
-  Spades: 'text-blue-400',
-  Stars: 'text-yellow-400',
-  Moons: 'text-white',
-  Frogs: 'text-lime-400',
-  Coins: 'text-amber-400',
-  Crowns: 'text-amber-300',
-  Grovels: 'text-violet-300',
-  Swords: 'text-red-400',
-  Bones: 'text-stone-300',
-  Joker: 'text-purple-400'
-};
 
 const PLAYING_CARD_RANK_TITLE: Record<string, string> = {
   A: 'Ace',
@@ -80,18 +66,18 @@ const PLAYING_CARD_RANK_TITLE: Record<string, string> = {
   J: 'Jack',
 };
 
-/** Title + clash value for delayed suit-card hover (“King of Hearts — (13)”). */
-function playingCardHoverCaption(cardStr: string, lustHeartRulesActive: boolean): string | null {
+/** Title + printed rank for hover (no lust virtual bump / no greed tax — table context only). */
+function playingCardHoverCaption(cardStr: string): string | null {
   const p = parseCard(cardStr);
-  if (p.isJoker) return `Joker — (${getCardValue(cardStr)})`;
+  const bracket = tooltipPrintedStrengthLabel(cardStr);
+  if (p.isJoker) return `Joker — (${bracket})`;
   if (p.suit === 'Grovels') return null;
-  if (p.suit === 'Crowns' && p.value === 'E') return `Emperor of Crowns — (${getCardValue(cardStr)})`;
+  if (p.suit === 'Crowns' && p.value === 'E') return `Emperor of Crowns — (${bracket})`;
   if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) {
-    return `God of Hearts — (${getCardValue(cardStr, lustHeartRulesActive)})`;
+    return `God of Hearts — (${bracket})`;
   }
   const rank = PLAYING_CARD_RANK_TITLE[p.value] ?? p.value;
-  const v = getCardValue(cardStr, lustHeartRulesActive);
-  return `${rank} of ${p.suit} — (${v})`;
+  return `${rank} of ${p.suit} — (${bracket})`;
 }
 
 /** Lucide (SVG) mapping for major arcana `icon` field — placeholder until final artwork. */
@@ -268,8 +254,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const [tipOpen, setTipOpen] = useState(false);
   const [holdTipOpen, setHoldTipOpen] = useState(false);
   const holdCaption = useMemo(
-    () => (revealed && card ? playingCardHoverCaption(card, lustHeartRulesActive) : null),
-    [card, lustHeartRulesActive, revealed],
+    () => (revealed && card ? playingCardHoverCaption(card) : null),
+    [card, revealed],
   );
   const tooltipStyle = usePowerTooltipPosition(
     (Boolean(detailTooltip) && tipOpen) || (Boolean(holdCaption) && holdTipOpen),

@@ -45,6 +45,7 @@ import {
   Sun,
   Gavel,
   Globe,
+  Coins,
   Settings,
   X,
   Play,
@@ -82,6 +83,7 @@ import { DesperationWheel, TargetSuitWheel } from './components/GameWheels';
 import { RoomChat } from './components/RoomChat';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { SuitGlyph } from './components/SuitGlyphs';
+import { DualTableTrumpCard, DualTrumpTableLabel } from './components/DualTableTrumpCard';
 import {
   CardVisual,
   CursePowerIcon,
@@ -102,6 +104,7 @@ import { desperationLadderLabel } from './utils/desperationUi';
 import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
+import { jointTableTrumpPair } from './suitPresentation';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -115,6 +118,7 @@ import {
   curseEffectActive,
   isCurseCardId,
   greedCurseActive,
+  gluttonyCurseActive,
   lustCurseActive,
   prideCurseActive,
   envyCurseActive,
@@ -207,21 +211,19 @@ const CompactTableGlyphRow: React.FC<{
   greedJointTrump: boolean;
 }> = ({ suit, greedJointTrump }) => {
   if (!suit) return null;
+  const joint = jointTableTrumpPair(suit, { greedActive: greedJointTrump });
   return (
     <div className="mb-2 flex flex-col items-center gap-1">
       <span className="text-[8px] font-black uppercase tracking-wider text-slate-500">Table suit</span>
-      <div
-        className={`flex items-center justify-center gap-1 rounded-full border-2 border-slate-600/90 bg-slate-950/90 px-2 py-1 shadow-md ${SUIT_COLORS[suit]}`}
-      >
-        {greedJointTrump ? (
-          <>
-            <SuitGlyph suit="Diamonds" className="h-7 w-7 sm:h-8 sm:w-8" />
-            <SuitGlyph suit="Coins" className="h-7 w-7 sm:h-8 sm:w-8" />
-          </>
-        ) : (
+      {joint ? (
+        <DualTableTrumpCard suits={joint} density="compact" appearance="hud" />
+      ) : (
+        <div
+          className={`flex items-center justify-center gap-1 rounded-full border-2 border-slate-600/90 bg-slate-950/90 px-2 py-1 shadow-md ${SUIT_COLORS[suit]}`}
+        >
           <SuitGlyph suit={suit} className="h-8 w-8 sm:h-9 sm:w-9 drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]" />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -274,9 +276,13 @@ const CurseZonePanel: React.FC<{
           layout
           className="relative flex w-full flex-col items-center rounded-xl border-2 border-red-900/75 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]"
         >
-          <div className="flex items-center gap-1 text-amber-500">
-            <SuitGlyph suit="Diamonds" className="h-4 w-4 sm:h-5 sm:w-5" />
-            <SuitGlyph suit="Coins" className="h-4 w-4 sm:h-5 sm:w-5" />
+          <div className="flex items-center gap-1">
+            <div className={SUIT_COLORS.Diamonds ?? 'text-red-500'}>
+              <SuitGlyph suit="Diamonds" className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className={SUIT_COLORS.Coins ?? 'text-amber-400'}>
+              <SuitGlyph suit="Coins" className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
           </div>
           <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-red-400">Greed</p>
           <div className="mt-1 flex flex-col items-center gap-0.5">
@@ -1011,10 +1017,16 @@ type ResolutionFx =
   | { kind: 'magician_steal'; uid: string }
   | { kind: 'wheel_chaos'; uid: string }
   | { kind: 'envy_lunge'; uid: string }
-  | { kind: 'moon_glow'; uid: string };
+  | { kind: 'moon_glow'; uid: string }
+  | { kind: 'gluttony_bite'; uid: string; cardId: string }
+  | { kind: 'greed_coin_drain'; uid: string; pts: number };
 
 function deriveResolutionFx(event: ResolutionEvent, hostUid: string, guestUid: string): ResolutionFx {
   const otherUid = (uid: string) => (uid === hostUid ? guestUid : hostUid);
+
+  if (event.type === 'GLUTTONY_DIGEST' && event.uid && event.cardId) {
+    return { kind: 'gluttony_bite', uid: event.uid, cardId: event.cardId };
+  }
 
   if (event.type === 'CLASH_DESTROYED' && event.uid && event.cardId) {
     return { kind: 'clash_shatter', uid: event.uid, cardId: event.cardId };
@@ -1023,6 +1035,9 @@ function deriveResolutionFx(event: ResolutionEvent, hostUid: string, guestUid: s
   if (event.type === 'POWER_TRIGGER') {
     const id = event.powerCardId;
     const uid = event.uid;
+    if (id === CURSE_GREED && uid && (event.greedTaxPts ?? 0) > 0) {
+      return { kind: 'greed_coin_drain', uid, pts: event.greedTaxPts! };
+    }
     if (id === 13 && uid) return { kind: 'death_slash', victimUid: otherUid(uid) };
     if (id === 16 && uid) return { kind: 'tower_shield', towerUid: uid };
     if (id === 0) return { kind: 'fool_swap' };
@@ -1079,6 +1094,11 @@ function resolutionColumnMotion(fx: ResolutionFx, uid: string) {
     return { y: [0, -34, -8, 0], rotate: [0, -7, 2, 0], scale: [1, 1.08, 1] };
   if (fx.kind === 'moon_glow' && fx.uid === uid)
     return { scale: [1, 1.065, 1], filter: ['brightness(1)', 'brightness(1.2)', 'brightness(1)'] };
+  if (fx.kind === 'greed_coin_drain' && fx.uid === uid)
+    return {
+      scale: [1, 1.048, 1],
+      filter: ['brightness(1)', 'brightness(1.12)', 'brightness(1)'],
+    };
   return {};
 }
 
@@ -1281,10 +1301,10 @@ const ResolutionSequence: React.FC<{
           ...prev,
           {
             id: Date.now() + i,
-            message: event.message,
+            message: event.message ?? '',
             eventType: event.type,
             coinWinnerUid:
-              event.type === 'COIN_FLIP' ? inferCoinFlipWinnerUid(event.message, room) : undefined,
+              event.type === 'COIN_FLIP' ? inferCoinFlipWinnerUid(event.message ?? '', room) : undefined,
           },
         ]);
         
@@ -1338,8 +1358,12 @@ const ResolutionSequence: React.FC<{
             }
             break;
           case 'POWER_TRIGGER':
-            if (event.powerCardId === CURSE_LUST && (event.lustFeedPts ?? 0) > 0 && event.uid) {
+            if (event.powerCardId === CURSE_LUST && event.lustFeedBegins) {
+              await new Promise((r) => setTimeout(r, 480));
+              if (!active) return;
               setLustHeartBurst(true);
+            }
+            if (event.powerCardId === CURSE_LUST && (event.lustFeedPts ?? 0) > 0 && event.uid) {
               if (event.lustSurgeHeart) {
                 setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'upgrade' }));
                 await new Promise((r) => setTimeout(r, 460));
@@ -1412,7 +1436,19 @@ const ResolutionSequence: React.FC<{
             break;
           case 'SLOTH_DREAM':
             break;
+          case 'GLUTTONY_DIGEST':
+            break;
         }
+
+        if (event.type === 'GLUTTONY_DIGEST' && event.uid && event.cardId && event.gluttonyBoneId) {
+          await new Promise((r) => setTimeout(r, 760));
+          if (!active) return;
+          setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.gluttonyBoneId! }));
+          await new Promise((r) => setTimeout(r, 320));
+          if (!active) return;
+          setResolutionFx(null);
+        }
+
         let pauseMs =
           event.type === 'COIN_FLIP'
             ? 5800
@@ -1420,8 +1456,16 @@ const ResolutionSequence: React.FC<{
               ? 1500
               : event.type === 'CARD_EMPOWER' || event.type === 'TARGET_CHANGE'
                 ? 980
-                : event.type === 'POWER_TRIGGER'
-                  ? (event.powerCardId === CURSE_LUST && (event.lustFeedPts ?? 0) > 0 ? 1320 : 1050)
+                : event.type === 'GLUTTONY_DIGEST'
+                  ? 3200
+                  : event.type === 'POWER_TRIGGER'
+                    ? event.powerCardId === 10 && event.uid
+                      ? 4500
+                      : event.powerCardId === CURSE_LUST && (event.lustFeedPts ?? 0) > 0
+                        ? 1320
+                        : event.powerCardId === CURSE_GREED && (event.greedTaxPts ?? 0) > 0
+                          ? 1150
+                          : 1050
                   : event.type === 'ENVY_COVET' || event.type === 'ENVY_STRIKE' || event.type === 'ENVY_DEFEATED' || event.type === 'ENVY_DEPARTS'
                   ? 1280
                   : event.type === 'SLOTH_DREAM'
@@ -1432,6 +1476,8 @@ const ResolutionSequence: React.FC<{
         if (fx?.kind === 'death_slash' || fx?.kind === 'tower_shield') pauseMs = Math.max(pauseMs, 1380);
         if (fx?.kind === 'envy_lunge') pauseMs = Math.max(pauseMs, 1380);
         if (fx?.kind === 'clash_shatter') pauseMs = Math.max(pauseMs, 1640);
+        if (fx?.kind === 'gluttony_bite') pauseMs = Math.max(pauseMs, 3400);
+        if (fx?.kind === 'greed_coin_drain') pauseMs = Math.max(pauseMs, 1280);
         if (fx?.kind === 'judgement_flash' || fx?.kind === 'temperance_balance') pauseMs = Math.max(pauseMs, 1240);
         if (fx?.kind === 'fool_swap') pauseMs = Math.max(pauseMs, 1180);
         if (
@@ -1486,6 +1532,25 @@ const ResolutionSequence: React.FC<{
       outcome.powerCardIdsPlayed[hostUid] === CURSE_LUST ||
       outcome.powerCardIdsPlayed[guestUid] === CURSE_LUST);
 
+  const gluttonyShownInResolution =
+    room.settings.enableCurseCards &&
+    (gluttonyCurseActive(room.activeCurses ?? []) ||
+      outcome.events?.some((e) => e.type === 'GLUTTONY_DIGEST'));
+
+  const greedActiveResolution =
+    room.settings.enableCurseCards && greedCurseActive(room.activeCurses ?? []);
+
+  const jointTrump = jointTableTrumpPair(currentTarget, { greedActive: greedActiveResolution });
+
+  const activeCursesSorted =
+    room.settings.enableCurseCards && (room.activeCurses?.length ?? 0) > 0
+      ? [...(room.activeCurses ?? [])].sort(
+          (a, b) => CURSE_IDS.indexOf(a.id as (typeof CURSE_IDS)[number]) - CURSE_IDS.indexOf(b.id as (typeof CURSE_IDS)[number]),
+        )
+      : [];
+
+  const lustHeartFlyCentered = activeCursesSorted.length > 1 && lustHeartResolution;
+
   return (
     <div className="relative overflow-hidden flex flex-col items-center w-full h-full max-h-screen p-4 sm:p-6 justify-center rounded-2xl border border-slate-800/50 bg-[radial-gradient(ellipse_80%_55%_at_50%_0%,rgba(251,191,36,0.14),transparent_58%),linear-gradient(180deg,#020617_0%,#0f172a_50%,#020617_100%)] shadow-[inset_0_0_100px_rgba(15,23,42,0.55)]">
       <AnimatePresence>
@@ -1526,8 +1591,14 @@ const ResolutionSequence: React.FC<{
               animate={{
                 opacity: [0, 1, 0.9, 0],
                 scale: [0.22, 0.94, 0.72],
-                left: lustHeartResolution ? '12%' : part.uid === hostUid ? '36%' : '64%',
-                top: lustHeartResolution ? '21%' : '48%',
+                left: lustHeartFlyCentered
+                  ? '50%'
+                  : lustHeartResolution
+                    ? '12%'
+                    : part.uid === hostUid
+                      ? '36%'
+                      : '64%',
+                top: lustHeartFlyCentered ? '22%' : lustHeartResolution ? '21%' : '48%',
               }}
               transition={{
                 duration: lustHeartResolution ? 1.28 : 0.85,
@@ -1537,6 +1608,38 @@ const ResolutionSequence: React.FC<{
               className="absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 sm:h-8 sm:w-8"
             >
               <Heart className="h-full w-full fill-red-600 text-red-300 drop-shadow-[0_0_14px_rgba(239,68,68,0.95)]" />
+            </motion.div>
+          ))}
+        </div>
+      )}
+      {resolutionFx?.kind === 'greed_coin_drain' && (
+        <div className="pointer-events-none absolute inset-0 z-[86] overflow-hidden">
+          {Array.from({ length: Math.min(5, Math.max(1, Math.floor(resolutionFx.pts))) }).map((_, i) => (
+            <motion.div
+              key={`greed-coin-${resolutionFx.uid}-${i}`}
+              initial={{
+                opacity: 0,
+                scale: 0.2,
+                left: resolutionFx.uid === hostUid ? '36%' : '64%',
+                top: '54%',
+              }}
+              animate={{
+                opacity: [0, 1, 0.88, 0],
+                scale: [0.2, 0.92, 0.68],
+                left: '50%',
+                top: activeCursesSorted.length > 0 ? '20%' : '16%',
+              }}
+              transition={{
+                duration: 1.12,
+                delay: i * 0.055,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              className="absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 sm:h-8 sm:w-8"
+            >
+              <Coins
+                className="h-full w-full text-amber-300 drop-shadow-[0_0_14px_rgba(251,191,72,0.95)]"
+                strokeWidth={1.75}
+              />
             </motion.div>
           ))}
         </div>
@@ -1591,47 +1694,112 @@ const ResolutionSequence: React.FC<{
             </>
           )}
         </AnimatePresence>
-        <div
-          className={`grid w-full items-start gap-y-6 ${lustHeartResolution ? 'sm:grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_minmax(0,7.5rem)] sm:gap-x-4' : ''}`}
-        >
-          <div className="flex flex-col items-center gap-1.5 sm:items-end sm:pt-1">
-            {lustHeartResolution && (
-              <>
-                <span className="text-[9px] font-black uppercase tracking-wider text-rose-400/95">Lust</span>
-                <PowerCardVisual cardId={CURSE_LUST} small revealed />
-                {outcome.lustRoundFx && (
-                  <span className="text-center text-[10px] font-black tabular-nums text-rose-200/95 sm:text-right">
-                    {outcome.lustRoundFx.previousMeter}
-                    <span className="text-rose-500/80"> → </span>
-                    {outcome.lustRoundFx.sated ? 0 : outcome.lustRoundFx.nextMeter}
-                  </span>
-                )}
-              </>
-            )}
-          </div>
+        <div className="flex w-full flex-col items-center gap-5">
           <motion.div
             initial={{ y: -10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="flex flex-col items-center"
+            className="flex w-full flex-col items-center"
           >
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
               <span className="text-xs font-black uppercase tracking-widest text-slate-400 sm:text-sm">Table suit</span>
-              <motion.div
-                key={currentTarget || 'none'}
-                initial={{ scale: 0.75, opacity: 0.4, filter: 'drop-shadow(0 0 0 rgba(251,191,36,0))' }}
-                animate={{ scale: 1.06, opacity: 1, filter: 'drop-shadow(0 0 18px rgba(251,191,36,0.45))' }}
-                transition={{ type: 'spring', stiffness: 280, damping: 18 }}
-                className={`flex h-[3.35rem] w-[3.35rem] items-center justify-center rounded-full border-2 border-slate-600 bg-slate-900 shadow-2xl sm:h-16 sm:w-16 ${SUIT_COLORS[currentTarget || 'Hearts']}`}
-              >
-                <SuitGlyph
-                  suit={currentTarget || 'Hearts'}
-                  className="h-[2.35rem] w-[2.35rem] drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] sm:h-11 sm:w-11"
-                />
-              </motion.div>
+              {jointTrump ? (
+                <>
+                  {jointTrump.map((suit, ji) => (
+                    <React.Fragment key={`${currentTarget ?? 'none'}-jt-${ji}-${suit}`}>
+                      {ji === 1 && (
+                        <span className="mx-1 text-[9px] font-black uppercase tracking-widest text-slate-500 sm:text-[10px]">
+                          or
+                        </span>
+                      )}
+                      <motion.div
+                        key={`${currentTarget}-${suit}`}
+                        initial={{ scale: 0.75, opacity: 0.4, filter: 'drop-shadow(0 0 0 rgba(251,191,36,0))' }}
+                        animate={{
+                          scale: 1.06,
+                          opacity: 1,
+                          filter: 'drop-shadow(0 0 18px rgba(251,191,36,0.45))',
+                        }}
+                        transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+                        className={`flex h-[3.35rem] w-[3.35rem] items-center justify-center rounded-full border-2 border-slate-600 bg-slate-900 shadow-2xl sm:h-16 sm:w-16 ${SUIT_COLORS[suit]}`}
+                      >
+                        <SuitGlyph
+                          suit={suit}
+                          className="h-[2.35rem] w-[2.35rem] drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] sm:h-11 sm:w-11"
+                        />
+                      </motion.div>
+                    </React.Fragment>
+                  ))}
+                </>
+              ) : (
+                <motion.div
+                  key={currentTarget || 'none'}
+                  initial={{ scale: 0.75, opacity: 0.4, filter: 'drop-shadow(0 0 0 rgba(251,191,36,0))' }}
+                  animate={{ scale: 1.06, opacity: 1, filter: 'drop-shadow(0 0 18px rgba(251,191,36,0.45))' }}
+                  transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+                  className={`flex h-[3.35rem] w-[3.35rem] items-center justify-center rounded-full border-2 border-slate-600 bg-slate-900 shadow-2xl sm:h-16 sm:w-16 ${SUIT_COLORS[currentTarget || 'Hearts']}`}
+                >
+                  <SuitGlyph
+                    suit={currentTarget || 'Hearts'}
+                    className="h-[2.35rem] w-[2.35rem] drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] sm:h-11 sm:w-11"
+                  />
+                </motion.div>
+              )}
               <span className="text-xs font-black uppercase tracking-widest text-slate-400 sm:text-sm">this round</span>
             </div>
           </motion.div>
-          {lustHeartResolution ? <div className="hidden sm:block" aria-hidden /> : null}
+
+          {activeCursesSorted.length > 0 && (
+            <div className="flex max-w-[52rem] flex-wrap justify-center gap-x-4 gap-y-4 px-1 sm:gap-x-5">
+              {activeCursesSorted.map((entry) => (
+                <div key={entry.id} className="flex max-w-[6.75rem] flex-col items-center gap-1">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-red-400/95">
+                    {CURSES[entry.id]?.sin ?? 'Curse'}
+                  </span>
+                  <PowerCardVisual cardId={entry.id} small revealed curseRackPeek />
+                  {entry.id === CURSE_LUST && outcome.lustRoundFx && (
+                    <span className="text-center text-[9px] font-black tabular-nums text-rose-200/95">
+                      {outcome.lustRoundFx.previousMeter}
+                      <span className="text-rose-500/80"> → </span>
+                      {outcome.lustRoundFx.sated ? 0 : outcome.lustRoundFx.nextMeter}
+                    </span>
+                  )}
+                  {entry.id === CURSE_GLUTTONY && gluttonyShownInResolution && (
+                    <span className="text-center text-[8px] font-bold uppercase leading-snug text-amber-200/85">
+                      Hearts digest to bones after scoring.
+                    </span>
+                  )}
+                  {entry.id === CURSE_GREED && outcome.greedPersistence && (
+                    <span className="text-center text-[9px] font-black tabular-nums text-amber-100/95">
+                      +{outcome.greedPersistence.taxThisRound} tithe · crown {outcome.greedPersistence.nextCrown}/17
+                    </span>
+                  )}
+                  {entry.id === CURSE_ENVY &&
+                    outcome.envyRoundFx &&
+                    typeof envyShownHp === 'number' && (
+                      <span className="text-center text-[9px] font-black tabular-nums text-emerald-200/95">
+                        Monster {envyShownHp} HP
+                      </span>
+                    )}
+                  {entry.id === CURSE_WRATH && outcome.wrathFx && (
+                    <span className="text-center text-[8px] font-bold uppercase leading-snug text-red-300/90">
+                      {describeWrathMinionTitle(outcome.wrathFx.minionCard)} · −{outcome.wrathFx.magnitude}
+                      {outcome.wrathFx.sparedJoker ? ' · spared' : ''}
+                    </span>
+                  )}
+                  {entry.id === CURSE_PRIDE && room.prideCeilingCard && (
+                    <span className="break-words text-center text-[8px] font-bold uppercase leading-snug text-violet-200/85">
+                      Ceiling beats {parseCard(room.prideCeilingCard).value} ({parseCard(room.prideCeilingCard).suit}).
+                    </span>
+                  )}
+                  {entry.id === CURSE_SLOTH && outcome.slothDreamFx && (
+                    <span className="text-center text-[8px] font-bold uppercase leading-snug text-indigo-200/85">
+                      Dream transforms apply after the wheel.
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1678,6 +1846,18 @@ const ResolutionSequence: React.FC<{
 
             <div className="relative">
               <div className="flex items-end gap-2">
+                {idx === 0 && summoned[uid] && (
+                  <div className="origin-center scale-[0.72] sm:scale-[0.78]">
+                    <CardVisual
+                      card={summoned[uid]}
+                      revealed
+                      presentation="deckPull"
+                      deckPullSide="left"
+                      delay={0.12}
+                      lustHeartRulesActive={lustHeartResolution}
+                    />
+                  </div>
+                )}
                 <motion.div
                   className="relative z-10 rounded-xl shadow-[0_0_32px_rgba(250,204,21,0.18)] overflow-visible"
                   animate={resolutionColumnMotion(resolutionFx, uid)}
@@ -1826,6 +2006,40 @@ const ResolutionSequence: React.FC<{
                         transition={{ duration: 0.55 }}
                       />
                     )}
+                    {resolutionFx?.kind === 'gluttony_bite' && resolutionFx.uid === uid && (
+                      <motion.div
+                        key="gluttony-bite"
+                        className="pointer-events-none absolute inset-0 z-[31] flex items-center justify-center overflow-visible rounded-xl"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                      >
+                        <motion.div
+                          className="absolute inset-[-4px] rounded-[13px]"
+                          initial={{
+                            clipPath: 'ellipse(138% 120% at 112% -12%)',
+                            boxShadow: 'inset 0 0 0 0 rgba(15,23,42,0)',
+                          }}
+                          animate={{
+                            clipPath: [
+                              'ellipse(138% 120% at 112% -12%)',
+                              'ellipse(55% 48% at 108% -4%)',
+                              'ellipse(28% 24% at 96% 6%)',
+                            ],
+                            boxShadow: [
+                              'inset 0 0 0 0 rgba(15,23,42,0)',
+                              'inset 0 -12px 28px rgba(15,23,42,0.88)',
+                              'inset 0 -26px 40px rgba(15,23,42,1)',
+                            ],
+                          }}
+                          transition={{ duration: 0.74, ease: [0.5, 0, 0.5, 1] }}
+                          style={{
+                            background:
+                              'radial-gradient(110% 80% at 95% -5%,rgba(254,243,199,0.12),transparent 58%),rgba(15,23,42,0.72)',
+                          }}
+                        />
+                      </motion.div>
+                    )}
                   </AnimatePresence>
                   <div className="absolute -top-2 -right-2 z-20">
                     {outcome.powerCardIdsPlayed[uid] !== null && (
@@ -1870,21 +2084,18 @@ const ResolutionSequence: React.FC<{
                     )}
                   </div>
                 </motion.div>
-
-                <AnimatePresence>
-                  {summoned[uid] && (
-                    <div className="origin-left scale-[0.72] sm:scale-[0.78]">
-                      <CardVisual
-                        card={summoned[uid]}
-                        revealed
-                        presentation="deckPull"
-                        deckPullSide={idx === 0 ? 'right' : 'left'}
-                        delay={0.14 + idx * 0.05}
-                        lustHeartRulesActive={lustHeartResolution}
-                      />
-                    </div>
-                  )}
-                </AnimatePresence>
+                {idx === 1 && summoned[uid] && (
+                  <div className="origin-center scale-[0.72] sm:scale-[0.78]">
+                    <CardVisual
+                      card={summoned[uid]}
+                      revealed
+                      presentation="deckPull"
+                      deckPullSide="right"
+                      delay={0.16}
+                      lustHeartRulesActive={lustHeartResolution}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2121,6 +2332,7 @@ const OpposingHandOverlayStack: React.FC<{
           <div className="w-[min(11rem,78vw)] max-w-full shrink-0 sm:w-52">
             <FortuneWheelVisual
               spinning
+              dense
               offset={opponentPendingDecision?.wheelOffset ?? 0}
               sizeClass="w-full"
             />
@@ -2764,6 +2976,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           priestessLockedCard={myPendingDecision.powerCardId === 2 ? (room.engageMoves?.[myUid] ?? me.currentMove ?? null) : null}
           priestessHand={myPendingDecision.powerCardId === 2 ? me.hand : []}
           tableSuit={room.targetSuit ?? null}
+          curseHoldsTable={room.settings.enableCurseCards !== false && curseEffectActive(room.activeCurses)}
           onSubmit={handleSubmitPowerDecision}
         />
       )}
@@ -3132,6 +3345,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                        availableSuits={room.availableSuits}
                        lustTripleHearts={lustTripleWheel}
                        greedHalveBasicSuits={greedHalveWheel}
+                       greedJointDiamondCoinGlyphs={greedHalveWheel}
                      />
                    </motion.div>
                  ) : (
@@ -3141,51 +3355,60 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      animate={{ opacity: 1, rotateY: 0 }}
                      className="flex flex-col items-center gap-3"
                    >
-                     <div
-                       className={`
+                     {(() => {
+                       const ts = (room.status === 'results'
+                         ? room.lastOutcome?.targetSuit || room.targetSuit
+                         : room.targetSuit) as Suit | null;
+                       const greedActive =
+                         room.settings.enableCurseCards && greedCurseActive(room.activeCurses ?? []);
+                       const joint = jointTableTrumpPair(ts, { greedActive });
+                       return (
+                         <>
+                           {joint ? (
+                             <DualTableTrumpCard suits={joint} />
+                           ) : ts ? (
+                             <div
+                               className={`
                          relative flex h-[9.75rem] w-[6.75rem] flex-col items-center justify-center rounded-2xl border-4 border-yellow-200 bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.28)]
                          sm:h-[11.75rem] sm:w-[8.125rem]
                        `}
-                     >
-                       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-10" />
-                       </div>
-                       {(() => {
-                         const ts = (room.status === 'results'
-                           ? room.lastOutcome?.targetSuit || room.targetSuit
-                           : room.targetSuit) as Suit | null;
-                         const color = ts ? SUIT_COLORS[ts] : '';
-                         const joint =
-                           ts === 'Diamonds' &&
-                           room.settings.enableCurseCards &&
-                           greedCurseActive(room.activeCurses ?? []);
-                         return ts ? (
-                           <div
-                             className={`relative z-10 flex items-center justify-center gap-2 sm:gap-3 ${color} drop-shadow-[0_6px_22px_rgba(0,0,0,0.35)]`}
-                           >
+                             >
+                               <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+                                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-10" />
+                               </div>
+                               <div
+                                 className={`relative z-10 ${SUIT_COLORS[ts] ?? 'text-white'} drop-shadow-[0_6px_22px_rgba(0,0,0,0.35)]`}
+                               >
+                                 <SuitGlyph
+                                   suit={ts}
+                                   className="h-[4.75rem] w-[4.75rem] sm:h-[7.25rem] sm:w-[7.25rem]"
+                                 />
+                               </div>
+                             </div>
+                           ) : (
+                             <div
+                               className={`
+                         relative flex h-[9.75rem] w-[6.75rem] flex-col items-center justify-center rounded-2xl border-4 border-yellow-200 bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.28)]
+                         sm:h-[11.75rem] sm:w-[8.125rem]
+                       `}
+                             >
+                               <span className="relative z-10 text-5xl font-black text-yellow-950">?</span>
+                             </div>
+                           )}
+                           <span className="pointer-events-none text-center text-[11px] font-black uppercase tracking-[0.12em] sm:text-xs opacity-[0.82]">
                              {joint ? (
-                               <>
-                                 <SuitGlyph suit="Diamonds" className="h-[3.25rem] w-[3.25rem] sm:h-[5rem] sm:w-[5rem]" />
-                                 <SuitGlyph suit="Coins" className="h-[3.25rem] w-[3.25rem] sm:h-[5rem] sm:w-[5rem]" />
-                               </>
-                             ) : (
-                               <SuitGlyph suit={ts} className="h-[4.75rem] w-[4.75rem] sm:h-[7.25rem] sm:w-[7.25rem]" />
-                             )}
-                           </div>
-                         ) : (
-                           <span className="relative z-10 text-5xl font-black text-yellow-950">?</span>
-                         );
-                       })()}
-                     </div>
-                     <span
-                       className={`pointer-events-none text-center text-[11px] font-black uppercase tracking-[0.12em] sm:text-xs ${room.targetSuit ? SUIT_COLORS[room.targetSuit] : ''} opacity-[0.82]`}
-                     >
-                       {room.targetSuit === 'Diamonds' &&
-                       room.settings.enableCurseCards &&
-                       greedCurseActive(room.activeCurses ?? [])
-                         ? 'Diamonds / Coins'
-                         : room.targetSuit ?? ''}
-                     </span>
+                               <DualTrumpTableLabel
+                                 suits={joint}
+                                 className="uppercase tracking-[0.12em]"
+                                 dividerClassName="text-slate-400"
+                               />
+                             ) : ts ? (
+                               <span className={SUIT_COLORS[ts] ?? ''}>{ts}</span>
+                             ) : null}
+                           </span>
+                         </>
+                       );
+                     })()}
                    </motion.div>
                  )}
                </AnimatePresence>

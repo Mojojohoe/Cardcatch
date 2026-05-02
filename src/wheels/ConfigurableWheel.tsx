@@ -9,6 +9,10 @@ export interface ConfigurableWheelProps {
   offset: number;
   spinning: boolean;
   sizeClass?: string;
+  /** Multiplier for wedge labels (Fortune Wheel: slightly smaller overlays). Range ~0.55–1. */
+  labelSizeMultiplier?: number;
+  /** Compact hub sizing for opponent / small overlays */
+  hubScale?: number;
   /** When set, overrides weight-based landing angle (target suit legacy motion). */
   discRotationDeg?: number;
   /** Replaces hub from definition (e.g. Desperation SPIN button). */
@@ -20,16 +24,20 @@ export interface ConfigurableWheelProps {
 function Hub({
   definition,
   renderCenter,
+  hubScale = 1,
 }: {
   definition: WheelDefinition;
   renderCenter?: React.ReactNode;
+  hubScale?: number;
 }) {
   if (renderCenter != null) return <>{renderCenter}</>;
   const hub = definition.hub;
   if (!hub) return null;
   if (hub.mode === 'node') return <>{hub.node}</>;
+  const scaleCls = hubScale !== 1 ? 'origin-center' : '';
+  const style = hubScale !== 1 ? { transform: `scale(${hubScale})` } : undefined;
   return (
-    <div className={hub.className}>
+    <div className={`${hub.className} ${scaleCls}`.trim()} style={style}>
       <span className={hub.innerClassName}>{hub.text}</span>
     </div>
   );
@@ -41,6 +49,8 @@ export const ConfigurableWheel: React.FC<ConfigurableWheelProps> = ({
   offset,
   spinning,
   sizeClass = 'w-72 h-72',
+  labelSizeMultiplier = 1,
+  hubScale = 1,
   discRotationDeg: explicitRotation,
   renderCenter,
   decorativeRings = false,
@@ -58,10 +68,8 @@ export const ConfigurableWheel: React.FC<ConfigurableWheelProps> = ({
           extraSpins: definition.extraSpinsWhileSpinning,
         });
 
-  const labelFontPx = Math.max(
-    6.5,
-    Math.min(14, Math.floor(215 / Math.max(segments.length, 3))),
-  );
+  const labelFontPx =
+    Math.max(6.5, Math.min(14, Math.floor(215 / Math.max(segments.length, 3)))) * labelSizeMultiplier;
 
   const borderW = definition.outerEdgeWidthPx ?? 10;
 
@@ -135,13 +143,18 @@ export const ConfigurableWheel: React.FC<ConfigurableWheelProps> = ({
                 ? 'text-white/70'
                 : 'text-white/90';
 
+          const wedgeLabelBox =
+            labelSizeMultiplier < 0.92
+              ? 'absolute right-[6%] flex w-[38%] flex-col items-center justify-center gap-0.5 text-center sm:right-[5%] sm:w-[34%]'
+              : 'absolute right-[5%] flex w-[32%] flex-col items-center justify-center gap-0.5 text-center sm:right-[4%] sm:w-[30%]';
+
           return (
             <div
               key={s.id}
               className="pointer-events-none absolute inset-0 flex items-center justify-center"
               style={{ transform: `rotate(${midDeg - 90}deg)` }}
             >
-              <div className="absolute right-[5%] flex w-[32%] flex-col items-center justify-center gap-0.5 text-center sm:right-[4%] sm:w-[30%]">
+              <div className={wedgeLabelBox}>
                 {s.content != null ? (
                   <span className="flex items-center justify-center drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">
                     {s.content}
@@ -165,7 +178,7 @@ export const ConfigurableWheel: React.FC<ConfigurableWheelProps> = ({
       </motion.div>
 
       <div className="pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center">
-        <Hub definition={definition} renderCenter={renderCenter} />
+        <Hub definition={definition} renderCenter={renderCenter} hubScale={hubScale} />
       </div>
     </div>
   );

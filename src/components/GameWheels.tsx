@@ -236,6 +236,8 @@ export interface TargetSuitWheelProps {
   lustTripleHearts?: boolean;
   /** Greed curse: Hearts, Clubs, Spades slices each get half weight. */
   greedHalveBasicSuits?: boolean;
+  /** Greed joint trump visual on the Diamonds wedge (Diamonds + Coins). */
+  greedJointDiamondCoinGlyphs?: boolean;
 }
 
 export const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
@@ -245,14 +247,16 @@ export const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
   availableSuits = SUITS,
   lustTripleHearts = false,
   greedHalveBasicSuits = false,
+  greedJointDiamondCoinGlyphs = false,
 }) => {
   const wheelDef = useMemo(
     () =>
       buildTargetSuitWheelDefinition(availableSuits, {
         lustTripleHearts,
         greedHalveBasicSuits,
+        greedJointDiamondCoinGlyphs,
       }),
-    [availableSuits, lustTripleHearts, greedHalveBasicSuits],
+    [availableSuits, lustTripleHearts, greedHalveBasicSuits, greedJointDiamondCoinGlyphs],
   );
   const segments = useMemo(() => resolveWheelSegments(wheelDef), [wheelDef]);
 

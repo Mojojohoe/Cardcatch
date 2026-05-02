@@ -50,9 +50,8 @@ export const OpponentDecisionStrip: React.FC<{
             <span className="text-[7px] text-slate-400 normal-case leading-tight mt-1">
               {decision.powerCardId === 1 && option === 'STEAL_JOKER' && 'Attempts to steal a Joker.'}
               {decision.powerCardId === 1 && option === 'FROGIFY' && 'Turns target into Frogs-1.'}
-              {decision.powerCardId === 15 && option === 'DEVIL_KING' && 'Pays 2 cards for a King.'}
-              {decision.powerCardId === 15 && option === 'DEVIL_BLOCK' && 'Pays 2 cards to block power.'}
-              {decision.powerCardId === 15 && option === 'DEVIL_RANDOMIZE' && 'Pays 2 cards to randomize suits.'}
+              {decision.powerCardId === 15 && option === 'DEVIL_KING' && 'King pact — random curse if table clear; lose a card if they lose.'}
+              {decision.powerCardId === 15 && option === 'DEVIL_RANDOMIZE' && 'Spins opponent suit on the trump wheel; same pact penalties.'}
               {decision.powerCardId === 10 && 'Spins outcome wheel.'}
             </span>
           </div>

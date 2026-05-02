@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Crown, Rabbit, Shuffle, Sparkles, Wand2 } from 'lucide-react';
 import { MAJOR_ARCANA, Suit } from '../types';
-import { CardVisual, PowerCardVisual, SUIT_COLORS } from './GameVisuals';
+import { CardVisual, MajorArcanaIconGlyph, PowerCardVisual, SUIT_COLORS } from './GameVisuals';
 import { SuitGlyph } from './SuitGlyphs';
 import { ConfigurableWheel, fortuneWheelDefinition, resolveWheelSegments } from '../wheels';
 
@@ -25,10 +25,13 @@ export const FortuneWheelVisual: React.FC<{
   offset: number;
   /** Width / max-width utilities; wheel stays square via ConfigurableWheel’s aspect-ratio. */
   sizeClass?: string;
+  /** Smaller labels + hub for scaled-down overlays (opponent powering view). */
+  dense?: boolean;
 }> = ({
   spinning,
   offset,
   sizeClass = 'w-full max-w-[min(18rem,100%)] sm:max-w-[20rem]',
+  dense = false,
 }) => (
   <div className={`mx-auto min-w-0 ${sizeClass}`}>
     <ConfigurableWheel
@@ -37,6 +40,8 @@ export const FortuneWheelVisual: React.FC<{
       offset={offset}
       spinning={spinning}
       sizeClass="h-full w-full"
+      labelSizeMultiplier={dense ? 0.56 : 0.84}
+      hubScale={dense ? 0.76 : 0.9}
     />
   </div>
 );
@@ -44,10 +49,24 @@ export const FortuneWheelVisual: React.FC<{
 const optionMeta: Record<string, { title: string; description: string }> = {
   STEAL_JOKER: { title: 'Steal Joker', description: 'Take a Joker from the opponent if they have one.' },
   FROGIFY: { title: 'Frogify', description: 'Turn the opponent’s played card into a Frog (or bump an existing Frog).' },
-  DEVIL_KING: { title: 'Upgrade to King', description: 'Discard 2 cards from hand. Your played card becomes a King.' },
-  DEVIL_BLOCK: { title: 'Block power card', description: 'Discard 2 cards. Opponent’s power does nothing this round.' },
-  DEVIL_RANDOMIZE: { title: 'Randomize suits', description: 'Discard 2 cards. Randomize both played suit cards.' },
+  DEVIL_KING: {
+    title: 'Crown Your Play — King',
+    description:
+      'Your committed suit card becomes a King (same pip suit). Summons a random curse next round if the table has none. If you lose, you discard 1 random card.',
+  },
+  DEVIL_RANDOMIZE: {
+    title: 'Spin Opponent Suit',
+    description:
+      'Spins the current trump/target wheel against the opponent’s play — their suit becomes the result (rank unchanged). Same curse / lose-card pact as Crown.',
+  },
   SPIN_WHEEL: { title: 'Spin the wheel', description: 'Seven weighted outcomes—including round swing, cards, and jackpot.' },
+};
+
+const CHOICE_ICONS: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
+  STEAL_JOKER: Wand2,
+  FROGIFY: Rabbit,
+  DEVIL_KING: Crown,
+  DEVIL_RANDOMIZE: Shuffle,
 };
 
 function reason(opt: string, decision: PendingDecisionView): string | null {
@@ -62,6 +81,8 @@ export const PowerDecisionModal: React.FC<{
   priestessLockedCard?: string | null;
   priestessHand?: string[];
   tableSuit?: Suit | null;
+  /** True when any curse is already active — Devil’s “summon curse” clause is dormant. */
+  curseHoldsTable?: boolean;
   onSubmit: (option: string, wheelOffset?: number, priestessSwapToCard?: string | null) => void;
 }> = ({
   compactPane = false,
@@ -69,6 +90,7 @@ export const PowerDecisionModal: React.FC<{
   priestessLockedCard = null,
   priestessHand = [],
   tableSuit = null,
+  curseHoldsTable = false,
   onSubmit,
 }) => {
   const [wheelOffsetPreview] = useState(0.25);
@@ -77,6 +99,7 @@ export const PowerDecisionModal: React.FC<{
 
   const isPriestess = decision.powerCardId === 2;
   const isWheel = decision.powerCardId === 10;
+  const isChoicePowerTap = decision.powerCardId === 1 || decision.powerCardId === 15;
 
   /** Docked mode hides table blur — never dock an empty Priestess panel. */
   useEffect(() => {
@@ -158,13 +181,13 @@ export const PowerDecisionModal: React.FC<{
           {!dockBottom && isPriestess && (
             <div className="mb-4 space-y-3 rounded-2xl border border-purple-500/25 bg-purple-950/40 p-4 text-center">
               {decision.priestessOpponentUsesPower ? (
-                <p className="text-[11px] font-black uppercase italic text-purple-200">
-                  <span className="text-purple-400">{decision.priestessOpponentName ?? 'Opponent'}</span> committed a Major
-                  — one of three shown powers is theirs.
+                <p className="text-[11px] font-bold normal-case italic text-purple-200">
+                  <span className="font-black text-purple-400">{decision.priestessOpponentName ?? 'Opponent'}</span> uses a
+                  power card — one of three shown powers is theirs.
                 </p>
               ) : (
-                <p className="text-[11px] font-black uppercase italic text-purple-300/95">
-                  No opposing Major — Priestess glimpses stash only.
+                <p className="text-[11px] font-bold normal-case italic text-purple-300/95">
+                  Opponent did not use a power card — Priestess only peeks a spare from their pile.
                 </p>
               )}
 
@@ -236,8 +259,49 @@ export const PowerDecisionModal: React.FC<{
             </div>
           )}
 
+          {!dockBottom && !isPriestess && isChoicePowerTap && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {decision.options.map((opt) => {
+                if (opt === 'PRIESTESS_RESOLVE') return null;
+                const meta = optionMeta[opt];
+                const why = reason(opt, decision);
+                const OptIc = CHOICE_ICONS[opt] ?? Sparkles;
+                const arcIc = MAJOR_ARCANA[decision.powerCardId]?.icon ?? 'Sparkles';
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    disabled={why != null}
+                    onClick={() => onSubmit(opt)}
+                    className={`flex min-h-[10rem] flex-col gap-3 rounded-2xl border-2 border-yellow-500/50 bg-zinc-950 p-4 text-left shadow-[0_14px_48px_rgba(0,0,0,0.6)] outline-none ring-1 ring-yellow-900/35 transition-colors ${
+                      why
+                        ? 'cursor-not-allowed opacity-45 saturate-[0.7]'
+                        : 'hover:border-yellow-300 hover:shadow-[0_18px_56px_rgba(250,204,21,0.14)]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <MajorArcanaIconGlyph iconName={arcIc} className="h-7 w-7 text-yellow-400" size={28} />
+                      <OptIc className="h-6 w-6 shrink-0 text-yellow-200" />
+                    </div>
+                    <p className="text-[12px] font-black uppercase tracking-wide leading-tight text-yellow-100">
+                      {meta?.title ?? opt.replace(/_/g, ' ')}
+                    </p>
+                    <p className="text-[11px] font-semibold leading-snug text-yellow-50/82">{meta?.description ?? ''}</p>
+                    {decision.powerCardId === 15 && curseHoldsTable && (
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                        Extra curse dormant — another curse holds the table.
+                      </p>
+                    )}
+                    {why && <p className="text-[10px] font-bold uppercase text-red-400">{why}</p>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {!dockBottom &&
             !isPriestess &&
+            !isChoicePowerTap &&
             decision.options.map((opt) => {
               if (opt === 'PRIESTESS_RESOLVE') return null;
               if (opt === 'SPIN_WHEEL') {
