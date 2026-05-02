@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GameService, evaluateTrickClash, explainPlainClash, getCardValue, parseCard } from './gameService';
+import {
+  GameService,
+  evaluateTrickClash,
+  explainPlainClash,
+  getCardValue,
+  getWrathMagnitude,
+  handHasLegalPridePlay,
+  handHasLegalEnvyPlay,
+  isCardBlockedByPride,
+  parseCard,
+  pickEnvyCovetedForRound,
+  pickSlothDreamResult,
+} from './gameService';
 import { createFixturePlayers, createFixtureRoom } from './gameService.fixtures';
 
 test('parseCard and getCardValue preserve card parsing semantics', () => {
@@ -10,6 +22,71 @@ test('parseCard and getCardValue preserve card parsing semantics', () => {
   assert.equal(ace.suit, 'Hearts');
   assert.equal(getCardValue('Joker-1'), 20);
   assert.equal(getCardValue('Hearts-A'), 14);
+  assert.equal(getCardValue('Crowns-E'), 17);
+  assert.equal(getCardValue('Diamonds-A', false, true), 13);
+  assert.equal(getCardValue('Coins-10', false, true), 8);
+  assert.equal(getCardValue('Grovels-1'), 0);
+});
+
+test('Greed: Coins match Diamonds trump; tax lowers clash values', () => {
+  assert.equal(evaluateTrickClash('Coins-10', 'Diamonds-K', 'Diamonds', false, true, true), 'p2');
+  assert.equal(evaluateTrickClash('Coins-5', 'Hearts-A', 'Diamonds', false, true, true), 'p1');
+});
+
+test('Envy: picks highest table-suit candidate; sealed copies skipped', () => {
+  const players = createFixturePlayers();
+  players.host.hand = ['Hearts-10', 'Diamonds-8'];
+  players.guest.hand = ['Hearts-J', 'Spades-4'];
+  let pick = pickEnvyCovetedForRound(players, 'host', 'guest', 'Hearts', {}, false, false, false);
+  assert.equal(pick?.uid, 'guest');
+  assert.equal(pick?.cardId, 'Hearts-J');
+  pick = pickEnvyCovetedForRound(players, 'host', 'guest', 'Hearts', { guest: ['Hearts-J'] }, false, false, false);
+  assert.equal(pick?.uid, 'host');
+  assert.equal(pick?.cardId, 'Hearts-10');
+});
+
+test('Envy: hand has no legal play when every slot is sealed (Grovel exempt path is separate)', () => {
+  const hand = ['Hearts-10', 'Diamonds-8'];
+  assert.equal(handHasLegalEnvyPlay(hand, 'host', {}), true);
+  assert.equal(handHasLegalEnvyPlay(hand, 'host', { host: ['Hearts-10', 'Diamonds-8'] }), false);
+});
+
+test('Pride barrier blocks target suit at or above ceiling; Grovel exempt', () => {
+  const ceiling = 'Hearts-9';
+  assert.equal(isCardBlockedByPride('Hearts-J', ceiling, false, false), true);
+  assert.equal(isCardBlockedByPride('Hearts-9', ceiling, false, false), true);
+  assert.equal(isCardBlockedByPride('Hearts-8', ceiling, false, false), false);
+  assert.equal(isCardBlockedByPride('Grovels-1', ceiling, false, false), false);
+  assert.equal(isCardBlockedByPride('Diamonds-A', ceiling, false, false), false);
+  assert.equal(handHasLegalPridePlay(['Hearts-J', 'Diamonds-2'], ceiling, false, false), true);
+  assert.equal(handHasLegalPridePlay(['Hearts-J', 'Hearts-Q'], ceiling, false, false), false);
+});
+
+test('Wrath clash penalties reduce marked side rank; Jokers ignore penalties', () => {
+  assert.equal(getWrathMagnitude('Swords-T'), 1);
+  assert.equal(getWrathMagnitude('Swords-W'), 5);
+  assert.equal(
+    evaluateTrickClash('Hearts-10', 'Hearts-J', 'Hearts', false, false, false, 3, 0),
+    'p2',
+  );
+  assert.equal(
+    evaluateTrickClash('Hearts-10', 'Hearts-J', 'Hearts', false, false, false, 0, 3),
+    'p1',
+  );
+  assert.equal(evaluateTrickClash('Joker-1', 'Stars-A', 'Stars', false, false, false, 5, 0), 'p1');
+});
+
+test('Sloth dream wheel maps weight-space offsets to five equal buckets', () => {
+  assert.equal(pickSlothDreamResult(0), 'NOTHING');
+  assert.equal(pickSlothDreamResult(0.19), 'NOTHING');
+  assert.equal(pickSlothDreamResult(0.2), 'STARS');
+  assert.equal(pickSlothDreamResult(0.399), 'STARS');
+  assert.equal(pickSlothDreamResult(0.4), 'MOONS');
+  assert.equal(pickSlothDreamResult(0.599), 'MOONS');
+  assert.equal(pickSlothDreamResult(0.6), 'STARS_AND_MOONS');
+  assert.equal(pickSlothDreamResult(0.799), 'STARS_AND_MOONS');
+  assert.equal(pickSlothDreamResult(0.8), 'SUN');
+  assert.equal(pickSlothDreamResult(0.999), 'SUN');
 });
 
 test('explainPlainClash states joker beats on-suit play', () => {

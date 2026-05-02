@@ -41,3 +41,19 @@ export const FORTUNE_GAME_SLICES = FORTUNE_SLICE_ROWS.map((r) => ({
   label: r.label,
   weight: r.probability,
 }));
+
+/** Sloth curse dream wheel: five equal slices (each ⅕ ≈ Sun’s stated 0.2). */
+export const SLOTH_DREAM_SLICE_ROWS = [
+  { id: 'nothing', label: 'NOTHING', probability: 1 },
+  { id: 'stars', label: 'STARS', probability: 1 },
+  { id: 'moons', label: 'MOONS', probability: 1 },
+  { id: 'both', label: 'STARS_AND_MOONS', probability: 1 },
+  { id: 'sun', label: 'SUN', probability: 1 },
+] as const;
+
+export const SLOTH_DREAM_GAME_SLICES = SLOTH_DREAM_SLICE_ROWS.map((r) => ({
+  label: r.label,
+  weight: r.probability,
+}));
+
+export type SlothDreamWheelLabel = (typeof SLOTH_DREAM_SLICE_ROWS)[number]['label'];

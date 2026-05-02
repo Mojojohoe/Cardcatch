@@ -4,9 +4,9 @@ import { usePowerTooltipPosition } from '../hooks/usePowerTooltipPosition';
 import { motion } from 'motion/react';
 import {
   BicepsFlexed,
-  BookOpen,
   BookType,
-  ChevronRight,
+  Cloud,
+  Coins,
   Crown,
   FastForward,
   Flame,
@@ -18,22 +18,35 @@ import {
   Moon,
   Rabbit,
   RefreshCw,
-  RotateCcw,
   Scale,
   Skull,
   Sparkles,
   Star,
   Sun,
+  Swords,
+  UtensilsCrossed,
   Wand2,
   Waves,
   Eye,
   Shield,
   Anchor,
-  ZapOff
+  ZapOff,
 } from 'lucide-react';
-import { DESPERATION_SLICES, parseCard } from '../services/gameService';
-import { MAJOR_ARCANA, PlayerRole, Suit, SUITS } from '../types';
-import { SuitGlyph, SuitWheelMarkerG } from './SuitGlyphs';
+import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide, type PresentationPace } from '../animations/cardMotion';
+import {
+  CURSES,
+  CURSE_ENVY,
+  CURSE_GLUTTONY,
+  CURSE_GREED,
+  CURSE_LUST,
+  CURSE_PRIDE,
+  CURSE_SLOTH,
+  CURSE_WRATH,
+  isCurseCardId,
+} from '../curses';
+import { getWrathMagnitude, parseCard } from '../services/gameService';
+import { MAJOR_ARCANA, PlayerRole } from '../types';
+import { SuitGlyph } from './SuitGlyphs';
 
 /** Text color classes per suit — shared by card visuals & power UI */
 export const SUIT_COLORS: Record<string, string> = {
@@ -45,9 +58,110 @@ export const SUIT_COLORS: Record<string, string> = {
   Moons: 'text-white',
   Frogs: 'text-lime-400',
   Coins: 'text-amber-400',
+  Crowns: 'text-amber-300',
+  Grovels: 'text-violet-300',
+  Swords: 'text-red-400',
   Bones: 'text-stone-300',
   Joker: 'text-purple-400'
 };
+
+/** Lucide (SVG) mapping for major arcana `icon` field — placeholder until final artwork. */
+const MAJOR_ARCANA_LUCIDE: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
+  Sparkles,
+  Wand2,
+  Eye,
+  Crown,
+  Shield,
+  BookType,
+  Heart,
+  FastForward,
+  BicepsFlexed,
+  Lamp,
+  RefreshCw,
+  Scale,
+  Anchor,
+  Skull,
+  Waves,
+  Flame,
+  ZapOff,
+  Star,
+  Moon,
+  Sun,
+  Gavel,
+  Globe,
+};
+
+export function MajorArcanaIconGlyph({
+  iconName,
+  className,
+  size,
+}: {
+  iconName: string;
+  className?: string;
+  size?: number;
+}) {
+  const Comp = MAJOR_ARCANA_LUCIDE[iconName] || Sparkles;
+  return <Comp className={className} size={size} />;
+}
+
+export const GreenEyedMonsterIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="-0.5 8 39 26"
+    className={className}
+    aria-hidden
+  >
+    <path
+      fill="currentColor"
+      d="M0 16q0.064 0.128 0.16 0.352t0.48 0.928 0.832 1.344 1.248 1.536 1.664 1.696 2.144 1.568 2.624 1.344 3.136 0.896 3.712 0.352 3.712-0.352 3.168-0.928 2.592-1.312 2.144-1.6 1.664-1.632 1.248-1.6 0.832-1.312 0.48-0.928l0.16-0.352q-0.032-0.128-0.16-0.352t-0.48-0.896-0.832-1.344-1.248-1.568-1.664-1.664-2.144-1.568-2.624-1.344-3.136-0.896-3.712-0.352-3.712 0.352-3.168 0.896-2.592 1.344-2.144 1.568-1.664 1.664-1.248 1.568-0.832 1.344-0.48 0.928zM10.016 16q0-2.464 1.728-4.224t4.256-1.76 4.256 1.76 1.76 4.224-1.76 4.256-4.256 1.76-4.256-1.76-1.728-4.256zM12 16q0 1.664 1.184 2.848t2.816 1.152 2.816-1.152 1.184-2.848-1.184-2.816-2.816-1.184-2.816 1.184l2.816 2.816h-4z"
+    />
+  </svg>
+);
+
+/** Distinct placeholder per curse card (SVG / Lucide). */
+/** Class names for curse icon tint (placeholder art). */
+export function cursePowerIconClass(curseId: number): string {
+  switch (curseId) {
+    case CURSE_LUST:
+      return 'text-rose-500';
+    case CURSE_GLUTTONY:
+      return 'text-orange-500';
+    case CURSE_GREED:
+      return 'text-amber-400';
+    case CURSE_PRIDE:
+      return 'text-violet-400';
+    case CURSE_WRATH:
+      return 'text-red-500';
+    case CURSE_ENVY:
+      return 'text-emerald-400';
+    case CURSE_SLOTH:
+      return 'text-sky-300';
+    default:
+      return 'text-red-400';
+  }
+}
+
+export function CursePowerIcon({ curseId, className }: { curseId: number; className?: string }) {
+  const cn = className ?? 'h-10 w-10';
+  switch (curseId) {
+    case CURSE_LUST:
+      return <Heart className={cn} strokeWidth={2.2} aria-hidden />;
+    case CURSE_GLUTTONY:
+      return <UtensilsCrossed className={cn} strokeWidth={2.2} aria-hidden />;
+    case CURSE_GREED:
+      return <Coins className={cn} strokeWidth={2} aria-hidden />;
+    case CURSE_PRIDE:
+      return <Sparkles className={cn} strokeWidth={2} aria-hidden />;
+    case CURSE_WRATH:
+      return <Swords className={cn} strokeWidth={2.2} aria-hidden />;
+    case CURSE_ENVY:
+      return <GreenEyedMonsterIcon className={cn} aria-hidden />;
+    case CURSE_SLOTH:
+      return <Cloud className={cn} strokeWidth={1.85} aria-hidden />;
+    default:
+      return <Skull className={cn} strokeWidth={2} aria-hidden />;
+  }
+}
 
 export const WolfIcon = () => (
   <svg viewBox="0 0 100 125" className="w-full h-full opacity-60 fill-current">
@@ -69,94 +183,6 @@ export const DesperationVignette: React.FC<{ tier: number; totalTiers: number }>
   );
 };
 
-export const DesperationWheel: React.FC<{
-  onSpin: (offset: number) => void;
-  onClose: () => void;
-  onResolve: () => void;
-  isSpinning: boolean;
-  result: string | null;
-  offset: number;
-  tiers: string[];
-  currentTier: number;
-  isSpectator?: boolean;
-}> = ({ onSpin, onClose, onResolve, isSpinning, result, offset, tiers, currentTier, isSpectator = false }) => {
-  const [showResult, setShowResult] = useState(false);
-  const totalWeight = DESPERATION_SLICES.reduce((acc, s) => acc + s.weight, 0);
-  const rotation = useMemo(() => -(360 * 15 + (offset * 360)), [offset]);
-
-  useEffect(() => {
-    if (isSpinning) {
-      setShowResult(false);
-      const timer = setTimeout(() => setShowResult(true), 12000);
-      return () => clearTimeout(timer);
-    }
-    if (result) setShowResult(true);
-  }, [isSpinning, result]);
-
-  return (
-    <div className={`absolute inset-0 z-[200] flex flex-col items-center justify-center p-4 overflow-hidden rounded-3xl transition-all duration-1000 ${isSpectator ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/95 backdrop-blur-2xl'}`}>
-      {!isSpectator && (
-        <div className="absolute top-8 left-8 space-y-4 hidden sm:block">
-          <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest border-l-4 border-purple-400 pl-3">Desperation</h3>
-          <div className="space-y-4">
-            {tiers.map((tier, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${i + 1 === currentTier ? 'bg-purple-500 shadow-[0_0_10px_purple]' : 'bg-emerald-900/40'}`} />
-                <span className={`text-[9px] font-black uppercase transition-colors ${i + 1 === currentTier ? 'text-white' : 'text-emerald-800'}`}>{tier}</span>
-                {i + 1 === currentTier && <ChevronRight className="w-3 h-3 text-purple-500" />}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className={`relative transition-all duration-1000 ${isSpectator ? 'scale-50 sm:scale-75 -translate-y-12' : 'scale-100'} mb-8`}>
-        <div className="relative w-72 h-72 sm:w-[480px] sm:h-[480px]">
-          <motion.div
-            initial={{ rotate: 0 }}
-            animate={{ rotate: isSpinning ? rotation : -(offset * 360) }}
-            transition={{ duration: isSpinning ? 12 : 0.5, ease: [0.12, 0, 0, 1] }}
-            className="w-full h-full rounded-full border-[10px] border-purple-900/40 relative shadow-[0_0_80px_rgba(168,85,247,0.2)] overflow-hidden"
-          >
-            <div className="absolute inset-0" style={{ background: `conic-gradient(${(() => {
-              let currentW = 0;
-              return DESPERATION_SLICES.map((slice, i) => {
-                const start = (currentW / totalWeight) * 100;
-                currentW += slice.weight;
-                const end = (currentW / totalWeight) * 100;
-                const color = slice.label === 'GAME OVER' ? '#2d0606' : i % 2 === 0 ? '#1e1b4b' : '#110e2d';
-                return `${color} ${start}% ${end}%`;
-              }).join(', ');
-            })()})` }} />
-          </motion.div>
-          <div className="absolute inset-0 flex items-center justify-center z-20">
-            {!isSpectator ? (
-              <button onClick={() => !isSpinning && !result && onSpin(Math.random())} disabled={isSpinning || !!result} className={`w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white/10 bg-purple-600 shadow-2xl flex items-center justify-center transition-all active:scale-95 group relative ${(isSpinning || !!result) ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:scale-110 hover:bg-purple-500 shadow-[0_0_50px_rgba(168,85,247,0.5)]'}`}>
-                <div className="bg-emerald-950 px-4 py-1.5 rotate-[-8deg] shadow-xl group-hover:rotate-0 transition-transform">
-                  <span className="text-white text-xl sm:text-2xl font-black uppercase tracking-[0.1em] italic">SPIN</span>
-                </div>
-              </button>
-            ) : (
-              <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-purple-500/20 bg-purple-950 flex items-center justify-center">
-                <Skull className="w-10 h-10 text-purple-700 animate-pulse" />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      {!isSpinning && !result && !isSpectator && (
-        <button onClick={onClose} className="text-[10px] font-black text-emerald-800 uppercase hover:text-white transition-all flex items-center gap-2 group">
-          <RotateCcw className="w-4 h-4 group-hover:rotate-[-90deg] transition-transform" /> ABORT
-        </button>
-      )}
-      {showResult && result && !isSpectator && (
-        <button onClick={onResolve} className="bg-white text-emerald-950 px-20 py-4 rounded-full font-black uppercase tracking-[0.1em] text-[15px] transition-all hover:bg-yellow-400 active:scale-95 shadow-[0_0_60px_rgba(255,255,255,0.3)] animate-pulse">
-          {result === 'GAME OVER' ? 'TERMINATE' : 'EXECUTE RECOVERY'}
-        </button>
-      )}
-    </div>
-  );
-};
-
 export interface CardVisualProps {
   card: string;
   selected?: boolean;
@@ -166,16 +192,75 @@ export interface CardVisualProps {
   role?: PlayerRole;
   delay?: number;
   noAnimate?: boolean;
+  /** Compact footprint (e.g. Priestess swap row). */
+  small?: boolean;
+  /** Round-resolution entrance: card lifts from below like drawing from the deck. */
+  presentation?: CardPresentationMode;
+  deckPullSide?: DeckPullSide;
+  presentationPace?: PresentationPace;
+  /** Hearts show promoted ranks (E/S/G) while Lust curse is active. */
+  lustHeartRulesActive?: boolean;
+  /** Pride: illegal target-suit plays — greyed and not clickable (tooltip still works). */
+  muted?: boolean;
+  /** Hover caption (Pride barrier / Grovel flavor text). */
+  detailTooltip?: string;
+  /** Result / post-shatter ghost from clash penalties (half transparent). */
+  clashGhost?: boolean;
+  /** Envy: playable coveted card glows green. */
+  envyCovetedGlow?: boolean;
 }
 
-export const CardVisual: React.FC<CardVisualProps> = ({ card, selected, onClick, disabled, revealed = true, role, delay = 0, noAnimate = false }) => {
+export const CardVisual: React.FC<CardVisualProps> = (props) => {
+  const {
+    card,
+    selected,
+    onClick,
+    disabled,
+    revealed = true,
+    role,
+    delay = 0,
+    noAnimate = false,
+    small = false,
+    presentation = 'default',
+    deckPullSide = 'left',
+    presentationPace = 'normal',
+    lustHeartRulesActive = false,
+    muted = false,
+    detailTooltip,
+    clashGhost = false,
+    envyCovetedGlow = false,
+  } = props;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [tipOpen, setTipOpen] = useState(false);
+  const tooltipStyle = usePowerTooltipPosition(Boolean(detailTooltip) && tipOpen, rootRef, popRef);
   const { suit, value, isJoker } = useMemo(() => (revealed ? parseCard(card) : { suit: '', value: '', isJoker: false }), [card, revealed]);
+  const cornerRank = useMemo(() => {
+    if (!lustHeartRulesActive || suit !== 'Hearts') return value;
+    if (value === 'Q') return 'E';
+    if (value === 'K') return 'S';
+    if (value === 'A') return 'G';
+    return value;
+  }, [lustHeartRulesActive, suit, value]);
   const isMoonSuit = suit === 'Moons';
-  const entrance = noAnimate ? {} : {
-    initial: { x: 300, y: -100, opacity: 0, rotate: 45, scale: 0.5 },
-    animate: { x: 0, y: 0, opacity: 1, rotate: 0, scale: 1 },
-    transition: { type: 'spring', damping: 20, stiffness: 100, delay }
-  };
+  const isCrownsSuit = suit === 'Crowns';
+  const isGrovelsSuit = suit === 'Grovels';
+  const isSwordsSuit = suit === 'Swords';
+  const wrathPen = isSwordsSuit && revealed && card ? getWrathMagnitude(card) : 0;
+  const entrance = playingCardEntranceMotion({
+    noAnimate,
+    presentation,
+    deckPullSide,
+    presentationPace,
+    delay,
+  });
+
+  const faceWrap = small
+    ? 'w-10 h-[5.5rem] sm:w-14 sm:h-[8.25rem] border-2 rounded-lg p-1.5'
+    : 'w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg p-2';
+  const cornerText = small ? 'text-xs sm:text-base' : 'text-sm sm:text-xl';
+  const cornerGlyph = small ? 'w-4 h-4 sm:w-6 sm:h-6' : 'w-5 h-5 sm:w-8 sm:h-8';
+  const centerGlyph = small ? 'w-12 h-12 sm:w-16 sm:h-16' : 'w-16 h-16 sm:w-24 sm:h-24';
 
   if (!revealed) {
     const isPredator = role === 'Predator';
@@ -183,39 +268,119 @@ export const CardVisual: React.FC<CardVisualProps> = ({ card, selected, onClick,
     let backClasses = 'bg-blue-950 border-blue-800/80 text-blue-500 bg-[radial-gradient(circle_at_center,#172554_1px,transparent_1px)] bg-[size:8px_8px]';
     if (isPredator) backClasses = 'bg-red-950 border-red-800/80 text-red-500 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:8px_8px]';
     else if (isPreydator) backClasses = 'bg-purple-950 border-purple-800/80 text-purple-500 bg-[radial-gradient(circle_at_center,#3b0764_1px,transparent_1px)] bg-[size:8px_8px]';
+    const backSizing = small ? 'w-9 h-[4.75rem] sm:w-12 sm:h-[7.25rem]' : 'w-10 h-14 sm:w-16 sm:h-24';
     return (
-      <motion.div layout {...entrance} whileHover={!disabled ? { y: -8, zIndex: 50 } : {}} className={`w-10 h-14 sm:w-16 sm:h-24 rounded-lg shadow-xl flex items-center justify-center p-1.5 border-2 transition-colors relative ${backClasses}`}>
-        {isPreydator ? <div className="w-full h-full flex flex-col items-center justify-center gap-1 opacity-60"><div className="w-6 h-6"><WolfIcon /></div><Rabbit className="w-6 h-6 text-purple-400" /></div> : isPredator ? <WolfIcon /> : <Rabbit className="w-full h-full opacity-60" />}
+      <motion.div
+        layout
+        {...entrance}
+        whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
+        className={`${backSizing} rounded-lg shadow-xl flex items-center justify-center p-1.5 border-2 transition-colors relative ${backClasses}`}
+      >
+        {isPreydator ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-1 opacity-60">
+            <div className="w-6 h-6">
+              <WolfIcon />
+            </div>
+            <Rabbit className="w-6 h-6 text-purple-400" />
+          </div>
+        ) : isPredator ? (
+          <WolfIcon />
+        ) : (
+          <Rabbit className="w-full h-full opacity-60" />
+        )}
       </motion.div>
     );
   }
 
+  const allowHoverMotion = (!disabled && !muted) || Boolean(detailTooltip);
+
   return (
-    <motion.div layout {...entrance} whileHover={!disabled ? { y: -10, zIndex: 50, scale: 1.05 } : {}} whileTap={!disabled ? { scale: 0.95 } : {}} onClick={onClick}
-      className={`w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg shadow-xl flex flex-col justify-between p-2 cursor-pointer relative overflow-hidden transition-all ${isMoonSuit ? 'bg-black' : 'bg-white'} ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : 'border-gray-200'} ${disabled ? 'opacity-60 grayscale cursor-not-allowed' : ''}`}>
-      <div className={`flex flex-col items-start leading-[0.7] ${SUIT_COLORS[suit]}`}>
-        <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        {isJoker ? (
-          <SuitGlyph suit="Joker" className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10 text-purple-500" />
+    <motion.div
+      ref={rootRef}
+      layout
+      {...entrance}
+      style={{ transformPerspective: presentation === 'deckPull' ? 900 : undefined }}
+      whileHover={allowHoverMotion ? { y: -10, zIndex: 50, scale: muted && !detailTooltip ? 1 : 1.05 } : {}}
+      whileTap={!disabled && !muted ? { scale: 0.95 } : {}}
+      onClick={muted ? undefined : onClick}
+      onMouseEnter={() => detailTooltip && setTipOpen(true)}
+      onMouseLeave={() => detailTooltip && setTipOpen(false)}
+      onFocus={() => detailTooltip && setTipOpen(true)}
+      onBlur={() => detailTooltip && setTipOpen(false)}
+      tabIndex={detailTooltip ? 0 : undefined}
+      className={`
+        ${faceWrap} shadow-xl flex flex-col justify-between relative overflow-hidden transition-all outline-none
+        ${muted || disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+        ${presentation === 'deckPull' ? 'perspective-[900px] origin-bottom' : ''}
+        ${isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
+        ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
+        ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
+        ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}
+        ${muted ? 'opacity-[0.42] saturate-[0.48] brightness-[0.88]' : ''}
+        ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
+      `}
+    >
+      {isSwordsSuit && wrathPen > 0 && (
+        <div className="pointer-events-none absolute top-1 left-1/2 z-20 -translate-x-1/2 text-[9px] font-black tabular-nums text-red-500 sm:text-[11px]">
+          −{wrathPen}
+        </div>
+      )}
+      <div className={`flex flex-col items-start leading-[0.9] ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
+        {isGrovelsSuit ? (
+          <span className={`${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}>
+            Grovel
+          </span>
         ) : (
-          <SuitGlyph suit={suit} className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10" />
+          <>
+            <span className={`${cornerText} font-black font-mono tracking-tighter`}>{cornerRank}</span>
+            {isJoker ? (
+              <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
+            ) : (
+              <SuitGlyph suit={suit} className={cornerGlyph} />
+            )}
+          </>
         )}
       </div>
-      <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${SUIT_COLORS[suit]} opacity-[0.12]`}>
-        {isJoker ? (
-          <SuitGlyph suit="Joker" className="text-5xl sm:text-8xl w-[2.8rem] h-[2.8rem] sm:w-[5.5rem] sm:h-[5.5rem] text-purple-600" />
+
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div
+          className={`${centerGlyph} ${isSwordsSuit ? 'opacity-[0.24]' : 'opacity-[0.08]'} ${SUIT_COLORS[suit] ?? 'text-red-500'}`}
+        >
+          {isGrovelsSuit ? (
+            <SuitGlyph suit="Grovels" className={`text-violet-500/35 ${centerGlyph}`} />
+          ) : isJoker ? (
+            <SuitGlyph suit="Joker" className={`text-purple-600 ${centerGlyph}`} />
+          ) : (
+            <SuitGlyph suit={suit} className={centerGlyph} />
+          )}
+        </div>
+      </div>
+
+      <div className={`flex flex-col items-start leading-[0.9] self-end rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
+        {isGrovelsSuit ? (
+          <span className={`${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}>
+            Grovel
+          </span>
         ) : (
-          <SuitGlyph suit={suit} className="text-5xl sm:text-8xl w-[2.8rem] h-[2.8rem] sm:w-[5.5rem] sm:h-[5.5rem]" />
+          <>
+            <span className={`${cornerText} font-black font-mono tracking-tighter`}>{cornerRank}</span>
+            {isJoker ? (
+              <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
+            ) : (
+              <SuitGlyph suit={suit} className={cornerGlyph} />
+            )}
+          </>
         )}
       </div>
-      <div className={`flex flex-col items-start leading-[0.7] self-end rotate-180 ${SUIT_COLORS[suit]}`}>
-        <span className="text-sm sm:text-xl font-black font-mono tracking-tighter">{value}</span>
-        {isJoker ? (
-          <SuitGlyph suit="Joker" className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10 text-purple-500" />
-        ) : (
-          <SuitGlyph suit={suit} className="text-lg sm:text-3xl w-6 h-6 sm:w-10 sm:h-10" />
-        )}
-      </div>
+      {detailTooltip && tipOpen && (
+        <div
+          ref={popRef}
+          style={tooltipStyle}
+          className="rounded-lg border border-violet-800/80 bg-stone-950/98 px-3 py-2 text-[11px] font-semibold leading-snug text-violet-50 shadow-xl"
+        >
+          {detailTooltip}
+        </div>
+      )}
     </motion.div>
   );
 };
@@ -229,18 +394,20 @@ export const PowerCardVisual: React.FC<{
   small?: boolean;
   /** Wide min-width + centered title clamp for Priestess-style pick rows */
   panel?: boolean;
+  /** Tower blocked — greyed but hover still shows text */
   destroyed?: boolean;
 }> = ({ cardId, revealed = true, onClick, selected, disabled, small = false, panel = false, destroyed = false }) => {
-  const card = MAJOR_ARCANA[cardId];
-  const tip = card ? `${card.name}: ${card.description}` : '';
+  const curseDef = isCurseCardId(cardId) ? CURSES[cardId] : undefined;
+  const card = curseDef ? null : MAJOR_ARCANA[cardId];
+  const tip = curseDef
+    ? `${curseDef.sin} — ${curseDef.name}: ${curseDef.description}`
+    : card
+      ? `${card.name}: ${card.description}`
+      : '';
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [tipOpen, setTipOpen] = useState(false);
   const tooltipStyle = usePowerTooltipPosition(tipOpen && !disabled, rootRef, popRef);
-  const IconComponent = useMemo(() => {
-    const icons: Record<string, any> = { Sparkles, Wand2, Eye, Crown, Shield, BookOpen, Heart, RefreshCw, Scale, Anchor, Skull, Waves, Flame, ZapOff, Star, Moon, Sun, Globe, BookType, FastForward, BicepsFlexed, Lamp, Gavel };
-    return icons[card.icon] || Sparkles;
-  }, [card.icon]);
 
   const dimClass = panel
     ? 'w-[6.875rem] sm:w-[7.5rem] min-h-[10rem] max-w-[8rem] text-[10px] p-2.5 pt-3 justify-start gap-2'
@@ -248,21 +415,59 @@ export const PowerCardVisual: React.FC<{
       ? 'w-18 h-28 text-[9px] p-3'
       : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px] p-3';
   const titleClassPanel =
-    'text-[7px] sm:text-[8px] leading-tight line-clamp-3 break-words hyphens-auto text-center normal-case px-0.5 w-full min-h-[2.75rem] flex items-center justify-center border-b border-slate-800/70 pb-1.5 text-slate-800 font-bold tracking-tight';
-  const titleClassDefault = `font-black border-b-2 border-slate-800 w-full pb-1 px-1 uppercase tracking-tighter leading-[0.9] text-slate-800 ${small ? 'text-[8px]' : 'text-[18px] sm:text-[32px]'}`;
+    'text-[7px] sm:text-[8px] leading-tight line-clamp-3 break-words hyphens-auto text-center normal-case px-0.5 w-full min-h-[2.75rem] flex items-center justify-center border-b pb-1.5 font-bold tracking-tight';
+  const titleClassPanelStd = `${titleClassPanel} border-slate-800/70 text-slate-800`;
+  const titleClassPanelCurse = `${titleClassPanel} border-red-800/70 text-red-200`;
+  const titleClassDefault = `font-black border-b-2 w-full pb-1 px-1 uppercase tracking-tighter leading-[0.9] ${small ? 'text-[8px]' : 'text-[18px] sm:text-[32px]'}`;
+  const titleClassDefaultStd = `${titleClassDefault} border-slate-800 text-slate-800`;
+  const titleClassDefaultCurse = `${titleClassDefault} border-red-800 text-red-300`;
+
+  if (!curseDef && !card) {
+    return (
+      <div className={`${small ? 'w-14 h-22' : 'w-32 h-52'} rounded-lg border border-slate-700 bg-slate-900 text-[10px] text-slate-500 flex items-center justify-center`}>
+        ?
+      </div>
+    );
+  }
 
   if (!revealed) {
     const backW = panel ? 'w-[7rem] sm:w-[7.75rem] h-36' : small ? 'w-14 h-22' : 'w-32 h-52 sm:w-40 sm:h-64';
+    const backCurse = curseDef
+      ? 'bg-zinc-950 border-2 border-red-900/70 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:9px_9px]'
+      : 'bg-slate-300 border-2 border-slate-400 bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px]';
     return (
       <motion.div
         whileHover={!disabled ? { scale: 1.1, rotateY: 10 } : {}}
         onClick={onClick}
-        className={`${backW} bg-slate-300 border-2 border-slate-400 rounded-lg shadow-lg flex items-center justify-center relative overflow-hidden bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px] perspective-1000 ${selected ? 'ring-4 ring-yellow-400' : ''} ${disabled ? 'opacity-50 grayscale' : 'cursor-pointer'}`}
+        className={`${backW} rounded-lg shadow-lg flex items-center justify-center relative overflow-hidden perspective-1000 ${backCurse} ${selected ? 'ring-4 ring-yellow-400' : ''} ${disabled ? 'opacity-75 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'}`}
       >
-        <div className="text-slate-500 font-black text-2xl sm:text-4xl">🃳</div>
+        <div className={`absolute inset-0 bg-linear-to-br ${curseDef ? 'from-red-950/40 to-transparent' : 'from-slate-400/20 to-transparent'}`} />
+        <div className="relative z-10 flex items-center justify-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
+          {curseDef ? (
+            <CursePowerIcon
+              curseId={cardId}
+              className={`${small ? 'h-7 w-7' : 'h-11 w-11 sm:h-12 sm:w-12'} ${cursePowerIconClass(cardId)}`}
+            />
+          ) : card ? (
+            <MajorArcanaIconGlyph
+              iconName={card.icon}
+              className={`${small ? 'h-7 w-7' : 'h-11 w-11 sm:h-12 sm:w-12'} text-slate-600`}
+              size={small ? 26 : 44}
+            />
+          ) : (
+            <span className="font-black text-slate-500">?</span>
+          )}
+        </div>
       </motion.div>
     );
   }
+
+  const faceShell = curseDef
+    ? 'bg-zinc-950 border-4 border-red-900 text-red-400 shadow-[0_0_40px_rgba(127,29,29,0.35)]'
+    : 'bg-slate-50 border-4 border-slate-800 text-slate-800';
+  const gloss = curseDef
+    ? 'from-red-950/30 to-transparent'
+    : 'from-white/20 to-slate-900/5';
 
   return (
     <motion.div
@@ -279,100 +484,95 @@ export const PowerCardVisual: React.FC<{
       onFocus={() => !disabled && setTipOpen(true)}
       onBlur={() => setTipOpen(false)}
       onClick={onClick}
-      className={`${dimClass} group relative bg-slate-50 border-4 border-slate-800 rounded-2xl shadow-2xl flex flex-col items-center text-center justify-between overflow-visible ${selected ? 'ring-4 ring-yellow-400 border-yellow-500' : ''} ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35' : ''} transition-shadow origin-center`}
+      className={`${dimClass} group relative rounded-2xl shadow-2xl flex flex-col items-center text-center justify-between overflow-visible ${faceShell} ${selected ? 'ring-4 ring-yellow-400 border-yellow-500' : ''} ${disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow origin-center`}
     >
-      <div className="absolute top-0 left-0 w-full h-full bg-linear-to-b from-white/20 to-slate-900/5 pointer-events-none rounded-[13px] overflow-hidden" />
+      <div className={`absolute top-0 left-0 w-full h-full bg-linear-to-b ${gloss} pointer-events-none rounded-[13px] overflow-hidden`} />
+
       <div className={`flex flex-col items-center gap-0.5 z-10 w-full ${panel ? 'mb-0' : 'mb-1'}`}>
-        <span className={panel ? titleClassPanel : titleClassDefault}>{card.name}</span>
+        <span className={curseDef ? (panel ? titleClassPanelCurse : titleClassDefaultCurse) : panel ? titleClassPanelStd : titleClassDefaultStd}>
+          {curseDef ? curseDef.name : card!.name}
+        </span>
         {!small && !panel && (
-          <span className="font-mono text-slate-400 font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70">Power card</span>
+          <span
+            className={`font-mono font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70 mt-1 ${curseDef ? 'text-red-500' : 'text-slate-400'}`}
+          >
+            {curseDef ? curseDef.sin : 'Power card'}
+          </span>
         )}
       </div>
+
       <div
-        className={`z-10 bg-slate-900 shrink-0 ${panel ? 'p-2 my-1' : small ? 'p-1.5' : 'p-4 sm:p-6'} rounded-full border-2 border-slate-800 shadow-xl group-hover:scale-105 transition-transform ${panel ? '' : 'my-2'}`}
+        className={`z-10 shrink-0 rounded-full border-2 shadow-xl group-hover:scale-105 transition-transform ${panel ? 'p-2 my-1' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : 'my-2'} ${curseDef ? 'bg-black border-red-800' : 'bg-slate-900 border-slate-800'}`}
       >
-        <IconComponent className="text-yellow-400" size={panel ? 22 : small ? 16 : 40} />
+        {curseDef ? (
+          <CursePowerIcon
+            curseId={cardId}
+            className={`${small ? 'h-4 w-4' : panel ? 'h-[22px] w-[22px]' : 'h-10 w-10'} ${cursePowerIconClass(cardId)}`}
+          />
+        ) : (
+          <MajorArcanaIconGlyph
+            iconName={card!.icon}
+            className="text-yellow-400"
+            size={panel ? 22 : small ? 16 : 40}
+          />
+        )}
       </div>
-      <div className={`text-slate-700 font-bold leading-snug z-10 w-full px-2 mt-auto ${panel || small ? 'hidden' : 'block'}`}>
-        <p className={`text-slate-500 font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em]`}>{card.description}</p>
+
+      <div className={`font-bold leading-snug z-10 w-full px-2 mt-auto ${curseDef ? 'text-red-200' : 'text-slate-700'} ${panel || small ? 'hidden' : 'block'}`}>
+        <p className={`font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em] ${curseDef ? 'text-red-300/95' : 'text-slate-500'}`}>
+          {curseDef ? curseDef.description : card!.description}
+        </p>
       </div>
-      <div className={`mt-auto pt-3 font-black text-slate-400 uppercase tracking-[0.3em] ${panel || small ? 'hidden' : 'block text-[8px] sm:text-[10px]'}`}>{cardId} / 21</div>
+
+      <div className={`mt-auto pt-3 font-black uppercase tracking-[0.3em] ${curseDef ? 'text-red-500' : 'text-slate-400'} ${panel || small ? 'hidden' : 'block text-[8px] sm:text-[10px]'}`}>
+        {curseDef ? 'Curse' : `${cardId} / 21`}
+      </div>
+
       {!disabled &&
         typeof document !== 'undefined' &&
         createPortal(
           <div
             ref={popRef}
             style={tooltipStyle}
-            className="rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md"
+            className={`rounded-xl px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${
+              curseDef ? 'border border-red-600/50 bg-zinc-950/98' : 'border border-yellow-500/40 bg-slate-950/98'
+            } ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
             aria-hidden={!tipOpen}
           >
             <div className="flex gap-3 items-start text-left">
-              <div className="shrink-0 rounded-lg bg-slate-900 p-2 border border-slate-700">
-                <IconComponent className="text-yellow-400" size={panel ? 24 : small ? 20 : 26} />
+              <div className={`shrink-0 rounded-lg p-2 border ${curseDef ? 'bg-black border-red-900' : 'bg-slate-900 border-slate-700'}`}>
+                {curseDef ? (
+                  <CursePowerIcon
+                    curseId={cardId}
+                    className={`h-[26px] w-[26px] ${cursePowerIconClass(cardId)}`}
+                  />
+                ) : (
+                  <MajorArcanaIconGlyph
+                    iconName={card!.icon}
+                    className="text-yellow-400"
+                    size={panel ? 24 : small ? 20 : 26}
+                  />
+                )}
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
-                <p className="text-yellow-400/95 font-black text-[11px] uppercase tracking-wide border-b border-yellow-500/25 pb-1 mb-1.5">
-                  {card.name}
+                <p
+                  className={`font-black text-[11px] uppercase tracking-wide border-b pb-1 mb-1.5 ${
+                    curseDef ? 'text-red-400 border-red-600/30' : 'text-yellow-400/95 border-yellow-500/25'
+                  }`}
+                >
+                  {curseDef ? curseDef.name : card!.name}
                 </p>
-                <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{card.description}</p>
+                <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{curseDef ? curseDef.description : card!.description}</p>
               </div>
             </div>
           </div>,
           document.body,
         )}
+      {destroyed && small && (
+        <span className="absolute bottom-0 left-0 right-0 text-[5px] font-black uppercase tracking-tighter text-center text-orange-100 bg-black/60 py-0.5 pointer-events-none z-[60]">
+          Blocked
+        </span>
+      )}
     </motion.div>
-  );
-};
-
-export const TargetSuitWheel: React.FC<{
-  suit: Suit | null;
-  isSpinning: boolean;
-  offset?: number;
-  availableSuits?: readonly Suit[];
-}> = ({ suit, isSpinning, offset = 0.5, availableSuits = SUITS }) => {
-  const rotation = useMemo(() => {
-    const suitIndex = availableSuits.indexOf(suit || availableSuits[0]);
-    const sliceAngle = 360 / availableSuits.length;
-    const centerOffset = sliceAngle / 2;
-    const jitter = ((offset - 0.5) * (sliceAngle * 0.8));
-    return -(360 * 8 + suitIndex * sliceAngle + centerOffset - jitter);
-  }, [suit, offset, availableSuits]);
-
-  return (
-    <div className="relative w-48 h-48 flex items-center justify-center">
-      <div className="absolute -top-6 z-10 text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]"><div className="w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[12px] border-t-yellow-400" /></div>
-      <motion.div animate={{ rotate: rotation }} transition={isSpinning ? { duration: 5, ease: [0.22, 1, 0.36, 1] } : { duration: 0 }} className="w-full h-full rounded-full border-8 border-emerald-950 overflow-hidden bg-emerald-950 relative shadow-[0_0_60px_rgba(0,0,0,0.9)]">
-        <svg viewBox="0 0 100 100" className="w-full h-full">
-          {availableSuits.map((s, i) => {
-            const angle = 360 / availableSuits.length;
-            const startAngle = i * angle;
-            const endAngle = (i + 1) * angle;
-            const x1 = 50 + 50 * Math.cos((startAngle - 90) * Math.PI / 180);
-            const y1 = 50 + 50 * Math.sin((startAngle - 90) * Math.PI / 180);
-            const x2 = 50 + 50 * Math.cos((endAngle - 90) * Math.PI / 180);
-            const y2 = 50 + 50 * Math.sin((endAngle - 90) * Math.PI / 180);
-            const centerAngle = startAngle + angle / 2;
-            const fillColor = s === 'Moons' ? '#000000' : (s === 'Stars' ? '#1e1b4b' : (s === 'Diamonds' || s === 'Hearts' ? '#0f172a' : '#f8fafc'));
-            const markFill =
-              s === 'Moons'
-                ? '#ffffff'
-                : s === 'Stars'
-                  ? '#facc15'
-                  : s === 'Diamonds' || s === 'Hearts'
-                    ? '#ef4444'
-                    : '#0f172a';
-            return (
-              <g key={s}>
-                <path d={`M 50 50 L ${x1} ${y1} A 50 50 0 ${angle > 180 ? 1 : 0} 1 ${x2} ${y2} Z`} fill={fillColor} stroke="#1e293b" strokeWidth="0.5" />
-                <g transform={`rotate(${centerAngle} 50 50)`}>
-                  <SuitWheelMarkerG suit={s} size={11} x={50} y={19} fill={markFill} />
-                </g>
-              </g>
-            );
-          })}
-        </svg>
-        <div className="absolute inset-0 m-auto w-12 h-12 bg-emerald-900 rounded-full border-4 border-emerald-800 flex items-center justify-center z-20 shadow-inner"><Skull className="w-5 h-5 text-emerald-400" /></div>
-      </motion.div>
-    </div>
   );
 };

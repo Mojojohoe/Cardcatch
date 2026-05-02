@@ -46,6 +46,8 @@ export const createFixtureRoom = (): RoomData => ({
     difficulty: 'Normal',
     disableJokers: false,
     disablePowerCards: false,
+    enableCurseCards: true,
+    curseCardsInPowerDeck: false,
     enableDesperation: false,
     desperationStarterTierEnabled: true,
     preydatorDesperationSeats: 'guest',

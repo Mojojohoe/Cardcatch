@@ -1,5 +1,5 @@
 /**
- * React shell for the standalone coinflip/demo (coinflip/dist).
+ * React embed for the in-app CSS 3D coin (styles in ./coinflip.css).
  * Mirrors script.js: set --flips, strip .anim then add after a tick so keyframes rerun.
  */
 

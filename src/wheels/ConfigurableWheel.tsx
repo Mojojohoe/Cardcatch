@@ -68,7 +68,9 @@ export const ConfigurableWheel: React.FC<ConfigurableWheelProps> = ({
   const totalW = segments.reduce((a, s) => a + s.weight, 0) || 1;
 
   return (
-    <div className={`relative mx-auto ${sizeClass} ${className}`}>
+    <div
+      className={`relative isolate mx-auto aspect-square shrink-0 min-h-0 min-w-0 ${sizeClass} ${className}`.trim()}
+    >
       {decorativeRings && (
         <>
           <div className="animate-[spin_20s_linear_infinite] pointer-events-none absolute -inset-4 rounded-full border border-purple-500/10" />
@@ -94,7 +96,7 @@ export const ConfigurableWheel: React.FC<ConfigurableWheelProps> = ({
           duration: spinning ? definition.spinDurationSeconds : 0.22,
           ease: [0.12, 0, 0, 1],
         }}
-        className="relative size-full overflow-hidden rounded-full shadow-[0_0_40px_rgba(0,0,0,0.35)]"
+        className="absolute inset-0 overflow-hidden rounded-full shadow-[0_0_40px_rgba(0,0,0,0.35)]"
         style={{
           border: `${borderW}px solid ${definition.outerEdgeColor}`,
         }}

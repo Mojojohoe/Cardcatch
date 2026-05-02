@@ -1,8 +1,28 @@
+# Dependencies
 node_modules/
+
+# Outputs
 build/
 dist/
+*.tsbuildinfo
+
+# Test / coverage
 coverage/
-.DS_Store
-*.log
+
+# Env (keep example)
 .env*
 !.env.example
+
+# Logs & OS
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# IDE / editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Vite
+vite.config.ts.timestamp-*.mjs

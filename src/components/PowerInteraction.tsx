@@ -23,9 +23,14 @@ export interface PendingDecisionView {
 export const FortuneWheelVisual: React.FC<{
   spinning: boolean;
   offset: number;
+  /** Width / max-width utilities; wheel stays square via ConfigurableWheel’s aspect-ratio. */
   sizeClass?: string;
-}> = ({ spinning, offset, sizeClass = 'w-72 h-72' }) => (
-  <div className={`relative ${sizeClass} mx-auto`}>
+}> = ({
+  spinning,
+  offset,
+  sizeClass = 'w-full max-w-[min(18rem,100%)] sm:max-w-[20rem]',
+}) => (
+  <div className={`mx-auto min-w-0 ${sizeClass}`}>
     <ConfigurableWheel
       definition={fortuneWheelDefinition}
       segments={FORTUNE_WHEEL_SEGMENTS}
@@ -52,12 +57,20 @@ function reason(opt: string, decision: PendingDecisionView): string | null {
 }
 
 export const PowerDecisionModal: React.FC<{
+  compactPane?: boolean;
   decision: PendingDecisionView;
   priestessLockedCard?: string | null;
   priestessHand?: string[];
   tableSuit?: Suit | null;
   onSubmit: (option: string, wheelOffset?: number, priestessSwapToCard?: string | null) => void;
-}> = ({ decision, priestessLockedCard = null, priestessHand = [], tableSuit = null, onSubmit }) => {
+}> = ({
+  compactPane = false,
+  decision,
+  priestessLockedCard = null,
+  priestessHand = [],
+  tableSuit = null,
+  onSubmit,
+}) => {
   const [wheelOffsetPreview] = useState(0.25);
   const [priestessSwapIndex, setPriestessSwapIndex] = useState<number | null>(null);
   const [dockBottom, setDockBottom] = useState(false);
@@ -70,19 +83,34 @@ export const PowerDecisionModal: React.FC<{
   const headerAccent = tableSuit ? SUIT_COLORS[tableSuit as string] ?? 'text-yellow-400' : 'text-yellow-400';
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-6">
-      <div className="absolute inset-0 bg-black/82 backdrop-blur-[2px]" aria-hidden />
+    <div
+      className={`absolute inset-0 z-[200] flex min-h-0 flex-col p-0 sm:p-6 ${dockBottom ? 'justify-end' : 'justify-end sm:justify-center'}`}
+    >
+      <div className="pointer-events-auto absolute inset-0 bg-black/82 backdrop-blur-[2px]" aria-hidden />
+      {dockBottom && (
+        <button
+          type="button"
+          onClick={() => setDockBottom(false)}
+          title="Expand panel"
+          className="pointer-events-auto absolute left-1/2 top-3 z-[260] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/25 bg-slate-900/95 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-amber-200 shadow-[0_8px_28px_rgba(0,0,0,0.55)]"
+        >
+          <ChevronUp className="h-4 w-4" aria-hidden /> Expand
+        </button>
+      )}
       <AnimatePresence>
         <motion.div
           key="panel"
           initial={{ y: 48, opacity: 0 }}
-          animate={{
-            y: dockBottom ? '72vh' : 0,
-            opacity: 1,
-          }}
+          animate={{ y: 0, opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-          className="relative z-10 mx-auto flex max-h-[min(92vh,52rem)] w-full max-w-lg flex-col overflow-y-auto rounded-t-3xl border border-white/20 bg-slate-950/97 p-5 shadow-[0_-20px_80px_rgba(0,0,0,0.55)] sm:rounded-[2rem] sm:border-2 sm:p-8"
+          className={`relative z-10 mx-auto flex min-h-0 w-full max-w-lg flex-col overflow-y-auto rounded-t-3xl border border-white/20 bg-slate-950/97 p-5 shadow-[0_-20px_80px_rgba(0,0,0,0.55)] sm:rounded-[2rem] sm:border-2 sm:p-8 ${
+            dockBottom
+              ? compactPane
+                ? 'max-h-[min(46%,21rem)] sm:max-h-[min(52%,23rem)]'
+                : 'max-h-[min(58%,52rem)] sm:max-h-[min(72%,52rem)]'
+              : 'max-h-[min(92vh,52rem)]'
+          }`}
         >
           <div className="absolute right-3 top-3 z-40 sm:right-4 sm:top-4">
             <button
@@ -202,12 +230,14 @@ export const PowerDecisionModal: React.FC<{
                   <div key={opt} className="mb-6 space-y-4 rounded-3xl border border-amber-500/25 bg-black/55 p-4">
                     {!why && (
                       <>
-                        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-center">
-                          <FortuneWheelVisual
-                            spinning={false}
-                            offset={wheelOffsetPreview}
-                            sizeClass="w-64 h-64 sm:w-80 sm:h-80"
-                          />
+                        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-center">
+                          <div className="mx-auto min-w-0 shrink-0 sm:mx-0">
+                            <FortuneWheelVisual
+                              spinning={false}
+                              offset={wheelOffsetPreview}
+                              sizeClass="w-[min(16rem,100%)] max-w-[min(16rem,88vw)] sm:w-[min(18rem,42vw)]"
+                            />
+                          </div>
                           <button
                             type="button"
                             onClick={() => onSubmit('SPIN_WHEEL', Math.random())}

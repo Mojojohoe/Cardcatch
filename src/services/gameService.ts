@@ -11,8 +11,32 @@ import {
   ResolutionEvent,
   PendingPowerDecision,
   ChatMessageEntry,
+  ActiveCurseState,
+  SlothDreamResult,
 } from '../types';
-import { DESPERATION_GAME_SLICES, FORTUNE_GAME_SLICES } from '../wheels/presets';
+import { DESPERATION_GAME_SLICES, FORTUNE_GAME_SLICES, SLOTH_DREAM_GAME_SLICES } from '../wheels/presets';
+import {
+  CURSE_GLUTTONY,
+  CURSE_GREED,
+  CURSE_LUST,
+  CURSE_PRIDE,
+  CURSE_ENVY,
+  CURSE_SLOTH,
+  CURSE_WRATH,
+  CURSES,
+  curseEffectActive,
+  getHeartValueUnderLust,
+  gluttonyCurseActive,
+  greedCurseActive,
+  greedTaxAmount,
+  isCurseCardId,
+  isMajorArcanaId,
+  lustCurseActive,
+  envyCurseActive,
+  prideCurseActive,
+  wrathCurseActive,
+  slothCurseActive,
+} from '../curses';
 
 export const createDeck = (disableJokers: boolean): string[] => {
   const deck: string[] = [];
@@ -37,15 +61,176 @@ export const shuffle = <T>(array: T[]): T[] => {
   return newArray;
 };
 
-export const getCardValue = (cardStr: string): number => {
+export const getCardValue = (cardStr: string, lustHeartRules = false, greedTax = false): number => {
   if (cardStr.startsWith('Joker')) return 20; // Beat Ace (14)
-  const value = cardStr.split('-')[1];
-  if (value === 'A') return 14;
-  if (value === 'K') return 13;
-  if (value === 'Q') return 12;
-  if (value === 'J') return 11;
-  return parseInt(value);
+  const [suit, value] = cardStr.split('-');
+  if (suit === 'Grovels') return 0;
+  if (suit === 'Swords') return 0;
+  if (suit === 'Crowns' && value === 'E') return 17;
+  let base: number;
+  if (lustHeartRules && suit === 'Hearts') {
+    base = getHeartValueUnderLust(cardStr);
+  } else if (value === 'A') base = 14;
+  else if (value === 'K') base = 13;
+  else if (value === 'Q') base = 12;
+  else if (value === 'J') base = 11;
+  else base = parseInt(value);
+  if (greedTax) {
+    if (suit === 'Diamonds') base = Math.max(0, base - 1);
+    else if (suit === 'Coins') base = Math.max(0, base - 2);
+  }
+  return base;
 };
+
+/** Special playable card while Pride is active — clash rank 1; ends Pride when played. */
+export const GROVEL_CARD_ID = 'Grovels-1';
+
+/** Wrath agents by round index (1–5): card id, display title, corner letter, clash penalty. */
+export const WRATH_MINION_BY_ROUND = [
+  { id: 'Swords-T', title: 'Thug of Swords', letter: 'T', magnitude: 1 },
+  { id: 'Swords-B', title: 'Bandit of Swords', letter: 'B', magnitude: 2 },
+  { id: 'Swords-H', title: 'Highwayman of Swords', letter: 'H', magnitude: 3 },
+  { id: 'Swords-C', title: 'Champion of Swords', letter: 'C', magnitude: 4 },
+  { id: 'Swords-W', title: 'Warlord of Swords', letter: 'W', magnitude: 5 },
+] as const;
+
+export function wrathMinionCardForRound(wrathRound: number): string {
+  const clamped = Math.min(Math.max(wrathRound, 1), 5);
+  return WRATH_MINION_BY_ROUND[clamped - 1].id;
+}
+
+export function getWrathMagnitude(minionCardId: string): number {
+  const row = WRATH_MINION_BY_ROUND.find((r) => r.id === minionCardId);
+  return row?.magnitude ?? 0;
+}
+
+export function describeWrathMinionTitle(minionCardId: string): string {
+  const row = WRATH_MINION_BY_ROUND.find((r) => r.id === minionCardId);
+  return row?.title ?? minionCardId;
+}
+
+export function isCardBlockedByPride(
+  cardStr: string,
+  prideCeilingCard: string | undefined | null,
+  lustHeartRules: boolean,
+  greedTaxActive: boolean,
+): boolean {
+  if (!prideCeilingCard) return false;
+  if (cardStr === GROVEL_CARD_ID) return false;
+  const pc = parseCard(cardStr);
+  if (pc.isJoker) return false;
+  const ceilingParsed = parseCard(prideCeilingCard);
+  if (ceilingParsed.isJoker) return false;
+  if (pc.suit !== ceilingParsed.suit) return false;
+  return (
+    getCardValue(cardStr, lustHeartRules, greedTaxActive) >=
+    getCardValue(prideCeilingCard, lustHeartRules, greedTaxActive)
+  );
+}
+
+export function handHasLegalPridePlay(
+  hand: readonly string[],
+  prideCeilingCard: string | undefined | null,
+  lustHeartRules: boolean,
+  greedTaxActive: boolean,
+): boolean {
+  if (!prideCeilingCard) return true;
+  return hand.some((c) => !isCardBlockedByPride(c, prideCeilingCard, lustHeartRules, greedTaxActive));
+}
+
+/** Green-Eyed Monster HP when Envy curse first hits the table. */
+export const ENVY_MONSTER_START_HP = 10;
+
+const SLOTH_DREAM_LABEL_TO_RESULT: Record<string, SlothDreamResult> = {
+  NOTHING: 'NOTHING',
+  STARS: 'STARS',
+  MOONS: 'MOONS',
+  STARS_AND_MOONS: 'STARS_AND_MOONS',
+  SUN: 'SUN',
+};
+
+/** Map wheel offset ∈ [0,1) in weight-space to Sloth dream outcome (for resolution + tests). */
+export function pickSlothDreamResult(offset: number): SlothDreamResult {
+  const slices = SLOTH_DREAM_GAME_SLICES;
+  const total = slices.reduce((a, s) => a + s.weight, 0) || 1;
+  const t = Math.max(0, Math.min(0.999999, offset)) * total;
+  let acc = 0;
+  for (const s of slices) {
+    acc += s.weight;
+    if (t < acc) {
+      return SLOTH_DREAM_LABEL_TO_RESULT[s.label] ?? 'NOTHING';
+    }
+  }
+  return 'SUN';
+}
+
+/** Marks hand slots sealed by envy ( multiset: first occurrences in scan order consume sealed counts ). */
+export function envyGreedySealSlots(hand: readonly string[], sealedIds: readonly string[]): boolean[] {
+  const need = new Map<string, number>();
+  for (const c of sealedIds) need.set(c, (need.get(c) ?? 0) + 1);
+  const out = hand.map(() => false);
+  for (let i = 0; i < hand.length; i++) {
+    const c = hand[i];
+    const n = need.get(c) ?? 0;
+    if (n > 0) {
+      need.set(c, n - 1);
+      out[i] = true;
+    }
+  }
+  return out;
+}
+
+export function mergeEnvySealDeltas(
+  prev: Record<string, string[]> | undefined,
+  delta: Record<string, string[]> | undefined,
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (prev) {
+    for (const [uid, xs] of Object.entries(prev)) {
+      if (xs.length) out[uid] = [...xs];
+    }
+  }
+  if (delta) {
+    for (const [uid, xs] of Object.entries(delta)) {
+      if (!xs.length) continue;
+      out[uid] = [...(out[uid] ?? []), ...xs];
+    }
+  }
+  return out;
+}
+
+export function handHasLegalEnvyPlay(
+  hand: readonly string[],
+  uid: string,
+  sealedCards: Record<string, string[]> | undefined,
+): boolean {
+  const slots = envyGreedySealSlots(hand, sealedCards?.[uid] ?? []);
+  return hand.some((_, i) => !slots[i]);
+}
+
+export function envyFreeCopiesInHand(
+  hand: readonly string[],
+  uid: string,
+  cardId: string,
+  sealedCards: Record<string, string[]> | undefined,
+): number {
+  const slots = envyGreedySealSlots(hand, sealedCards?.[uid] ?? []);
+  let n = 0;
+  for (let i = 0; i < hand.length; i++) {
+    if (hand[i] === cardId && !slots[i]) n++;
+  }
+  return n;
+}
+
+/** True if the player may commit this card id while Envy is active (some copy is not seal-blocked). */
+export function envyAllowsPlayCardId(
+  hand: readonly string[],
+  uid: string,
+  cardId: string,
+  sealedCards: Record<string, string[]> | undefined,
+): boolean {
+  return envyFreeCopiesInHand(hand, uid, cardId, sealedCards) > 0;
+}
 
 export const parseCard = (cardStr: string): { suit: string, value: string, isJoker: boolean } => {
   if (cardStr.startsWith('Joker')) {
@@ -66,6 +251,9 @@ const RANK_WORDS: Record<string, string> = {
 export const describeCardPlain = (cardStr: string): string => {
   const p = parseCard(cardStr);
   if (p.isJoker) return 'a Joker';
+  if (p.suit === 'Swords') return `the ${describeWrathMinionTitle(cardStr)}`;
+  if (p.suit === 'Grovels') return 'Grovel';
+  if (p.suit === 'Crowns' && p.value === 'E') return 'the Emperor of Crowns';
   const rk = RANK_WORDS[p.value] ?? p.value;
   return `the ${rk} of ${p.suit}`;
 };
@@ -75,16 +263,62 @@ function sentenceCard(cardStr: string): string {
   return mid.replace(/^the /, 'The ').replace(/^a /, 'A ');
 }
 
-function isOnTargetField(cardStr: string, targetSuit: Suit): boolean {
+function isOnTargetField(cardStr: string, targetSuit: Suit, greedJointDiamondsCoins = false): boolean {
   const p = parseCard(cardStr);
   if (p.isJoker) return false;
-  if (p.suit === targetSuit) return true;
+  if (p.suit === 'Grovels') return false;
   if (targetSuit === 'Stars') return true;
+  if (p.suit === targetSuit) return true;
+  if (greedJointDiamondsCoins && targetSuit === 'Diamonds' && p.suit === 'Coins') return true;
   return false;
 }
 
+/** Highest table-suit non-Joker envy candidate; random tie-break. Uses `isOnTargetField` (incl. Greed joint trump). */
+export function pickEnvyCovetedForRound(
+  players: Record<string, PlayerData>,
+  p1Uid: string,
+  p2Uid: string,
+  targetSuit: Suit,
+  sealedCards: Record<string, string[]> | undefined,
+  lustHeartRules: boolean,
+  greedTaxActive: boolean,
+  greedJointTrump: boolean,
+): { uid: string; cardId: string; handIndex: number } | null {
+  type Cand = { uid: string; cardId: string; handIndex: number; v: number };
+  const cands: Cand[] = [];
+  const consider = (uid: string) => {
+    const hand = players[uid].hand;
+    const sealedSlots = envyGreedySealSlots(hand, sealedCards?.[uid] ?? []);
+    for (let i = 0; i < hand.length; i++) {
+      if (sealedSlots[i]) continue;
+      const cid = hand[i];
+      if (cid === GROVEL_CARD_ID) continue;
+      const pc = parseCard(cid);
+      if (pc.isJoker) continue;
+      if (!isOnTargetField(cid, targetSuit, greedJointTrump)) continue;
+      const v = getCardValue(cid, lustHeartRules, greedTaxActive);
+      cands.push({ uid, cardId: cid, handIndex: i, v });
+    }
+  };
+  consider(p1Uid);
+  consider(p2Uid);
+  if (cands.length === 0) return null;
+  const best = Math.max(...cands.map((c) => c.v));
+  const top = cands.filter((c) => c.v === best);
+  return top[Math.floor(Math.random() * top.length)]!;
+}
+
 /** Main trick winner when p1 plays `cr1` and p2 plays `cr2` (Hermit swaps = p1 Hermit candidate). */
-export function evaluateTrickClash(cr1: string, cr2: string, targetSuit: Suit): 'p1' | 'p2' | 'draw' {
+export function evaluateTrickClash(
+  cr1: string,
+  cr2: string,
+  targetSuit: Suit,
+  lustHeartRules = false,
+  greedTaxActive = false,
+  greedJointDiamondsCoins = false,
+  clashValuePenaltyCr1 = 0,
+  clashValuePenaltyCr2 = 0,
+): 'p1' | 'p2' | 'draw' {
   const pr1 = parseCard(cr1);
   const pr2 = parseCard(cr2);
   if (pr1.isJoker && pr2.isJoker) return 'draw';
@@ -92,22 +326,24 @@ export function evaluateTrickClash(cr1: string, cr2: string, targetSuit: Suit): 
   if (pr1.isJoker && !pr2.isJoker) {
     if (targetSuit === 'Stars') return 'p1';
     if (targetSuit === 'Moons') return pr2.suit === 'Moons' ? 'p1' : 'p2';
-    return pr2.suit === targetSuit ? 'p1' : 'p2';
+    return isOnTargetField(cr2, targetSuit, greedJointDiamondsCoins) ? 'p1' : 'p2';
   }
   if (pr2.isJoker && !pr1.isJoker) {
     if (targetSuit === 'Stars') return 'p2';
     if (targetSuit === 'Moons') return pr1.suit === 'Moons' ? 'p2' : 'p1';
-    return pr1.suit === targetSuit ? 'p2' : 'p1';
+    return isOnTargetField(cr1, targetSuit, greedJointDiamondsCoins) ? 'p2' : 'p1';
   }
 
-  const p1Target = pr1.suit === targetSuit || (targetSuit === 'Stars' && !pr1.isJoker);
-  const p2Target = pr2.suit === targetSuit || (targetSuit === 'Stars' && !pr2.isJoker);
+  const p1Target = isOnTargetField(cr1, targetSuit, greedJointDiamondsCoins);
+  const p2Target = isOnTargetField(cr2, targetSuit, greedJointDiamondsCoins);
 
   if (p1Target && !p2Target) return 'p1';
   if (!p1Target && p2Target) return 'p2';
 
-  const v1 = getCardValue(cr1);
-  const v2 = getCardValue(cr2);
+  const raw1 = getCardValue(cr1, lustHeartRules, greedTaxActive);
+  const raw2 = getCardValue(cr2, lustHeartRules, greedTaxActive);
+  const v1 = parseCard(cr1).isJoker ? raw1 : Math.max(0, raw1 - clashValuePenaltyCr1);
+  const v2 = parseCard(cr2).isJoker ? raw2 : Math.max(0, raw2 - clashValuePenaltyCr2);
   if (v1 > v2) return 'p1';
   if (v2 > v1) return 'p2';
   return 'draw';
@@ -116,12 +352,20 @@ export function evaluateTrickClash(cr1: string, cr2: string, targetSuit: Suit): 
 /**
  * One-line reason the winning card beats the losing card (winner card first), aligned with evaluateTrickClash.
  */
-export function explainPlainClash(winningCardStr: string, losingCardStr: string, targetSuit: Suit): string {
+export function explainPlainClash(
+  winningCardStr: string,
+  losingCardStr: string,
+  targetSuit: Suit,
+  lustHeartRules = false,
+  greedTaxActive = false,
+  greedJointDiamondsCoins = false,
+): string {
   const prW = parseCard(winningCardStr);
   const prL = parseCard(losingCardStr);
   const targ = targetSuit;
   const lMid = describeCardPlain(losingCardStr);
-  const wMid = describeCardPlain(winningCardStr);
+  const trumpLabel =
+    greedJointDiamondsCoins && targ === 'Diamonds' ? 'Diamonds or Coins' : `${targ}`;
 
   if (prW.isJoker && prL.isJoker) return 'Both played a Joker — tie.';
 
@@ -132,7 +376,7 @@ export function explainPlainClash(winningCardStr: string, losingCardStr: string,
     if (targ === 'Moons') {
       return `A Joker wins — ${sentenceCard(losingCardStr)} is Moons on a Moons table.`;
     }
-    return `A Joker wins over ${sentenceCard(losingCardStr)} — it matched table suit (${targ}).`;
+    return `A Joker wins over ${sentenceCard(losingCardStr)} — it matched table suit (${trumpLabel}).`;
   }
 
   if (!prW.isJoker && prL.isJoker) {
@@ -142,22 +386,28 @@ export function explainPlainClash(winningCardStr: string, losingCardStr: string,
     if (targ === 'Moons') {
       return `${sentenceCard(winningCardStr)} is not Moons on a Moons table — that beats a Joker.`;
     }
-    return `${sentenceCard(winningCardStr)} did not match table suit (${targ}); that beats a Joker (Frogs, Coins, Bones never count as trump).`;
+    return `${sentenceCard(winningCardStr)} did not match table suit (${trumpLabel}); that beats a Joker (Frogs, Bones never count as trump).`;
   }
 
-  const wField = isOnTargetField(winningCardStr, targ);
-  const lField = isOnTargetField(losingCardStr, targ);
-  const wv = getCardValue(winningCardStr);
-  const lv = getCardValue(losingCardStr);
+  const wField = isOnTargetField(winningCardStr, targ, greedJointDiamondsCoins);
+  const lField = isOnTargetField(losingCardStr, targ, greedJointDiamondsCoins);
+  const wv = getCardValue(winningCardStr, lustHeartRules, greedTaxActive);
+  const lv = getCardValue(losingCardStr, lustHeartRules, greedTaxActive);
 
   if (wField && !lField)
-    return `${sentenceCard(winningCardStr)} matched table suit (${targ}); ${lMid} did not — table suit wins.`;
+    return `${sentenceCard(winningCardStr)} matched table suit (${trumpLabel}); ${lMid} did not — table suit wins.`;
   if (wv !== lv) {
-    const scope = wField ? `both on table suit (${targ})` : `neither matched table suit (${targ}), so ranks decide`;
+    const scope = wField ? `both on table suit (${trumpLabel})` : `neither matched table suit (${trumpLabel}), so ranks decide`;
     return `${sentenceCard(winningCardStr)} (${wv}) beats ${lMid} (${lv}) — ${scope}.`;
   }
-  const tieScope = wField ? `both on (${targ})` : `neither matched (${targ})`;
+  const tieScope = wField ? `both on (${trumpLabel})` : `neither matched (${trumpLabel})`;
   return `${sentenceCard(winningCardStr)} and ${lMid} tie — ${tieScope}.`;
+}
+
+function labelCommittedPowerOrCurse(id: number | null): string {
+  if (id === null) return 'None';
+  if (isCurseCardId(id)) return CURSES[id]?.name ?? 'Curse';
+  return MAJOR_ARCANA[id]?.name ?? `Power ${id}`;
 }
 
 type GameEvent = 
@@ -172,6 +422,8 @@ type GameEvent =
   | { type: 'CHEAT_POWER', uid: string, powerCardId: number }
   | { type: 'CHEAT_TRIM_DECK', uid: string, removeCount: number }
   | { type: 'CHEAT_DISCARD_HAND_CARD', uid: string, cardId: string }
+  | { type: 'CHEAT_ACTIVATE_CURSE'; uid: string; curseId: number }
+  | { type: 'CHEAT_CLEAR_ACTIVE_CURSES'; uid: string }
   | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null }
   | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number; priestessSwapToCard?: string | null }
   | { type: 'SET_LOBBY_READY', uid: string, ready: boolean }
@@ -191,6 +443,8 @@ const normalizeGameSettings = (raw: Partial<GameSettings> | GameSettings): GameS
     difficulty: (raw.difficulty ?? 'Normal') as GameSettings['difficulty'],
     disableJokers: Boolean(raw.disableJokers),
     disablePowerCards: Boolean(raw.disablePowerCards),
+    enableCurseCards: raw.enableCurseCards !== false,
+    curseCardsInPowerDeck: Boolean(raw.curseCardsInPowerDeck),
     enableDesperation: Boolean(raw.enableDesperation),
     desperationStarterTierEnabled: raw.desperationStarterTierEnabled !== false,
     preydatorDesperationSeats: preydOk ? raw.preydatorDesperationSeats! : 'guest',
@@ -213,6 +467,8 @@ const loadSettings = (): GameSettings => {
     difficulty: 'Normal',
     disableJokers: false,
     disablePowerCards: false,
+    enableCurseCards: true,
+    curseCardsInPowerDeck: false,
     enableDesperation: false,
     desperationStarterTierEnabled: true,
     tiers: ['TIER 0']
@@ -324,7 +580,8 @@ export class GameService {
       draftTurn: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      chatMessages: []
+      chatMessages: [],
+      activeCurses: [],
     };
 
     this.onStateChange?.(this.state);
@@ -447,6 +704,14 @@ export class GameService {
       } else if (event.type === 'CHEAT_DISCARD_HAND_CARD') {
         if (remoteUid) {
           this.handleCheatDiscardHandCard(remoteUid, event.cardId);
+        }
+      } else if (event.type === 'CHEAT_ACTIVATE_CURSE') {
+        if (remoteUid) {
+          this.handleCheatActivateCurse(event.curseId);
+        }
+      } else if (event.type === 'CHEAT_CLEAR_ACTIVE_CURSES') {
+        if (remoteUid) {
+          this.handleCheatClearActiveCurses();
         }
       } else if (event.type === 'PLAY_POWER_CARD') {
         if (remoteUid) {
@@ -611,7 +876,30 @@ export class GameService {
     const hostHand = deck.splice(0, hostHandSize);
     const guestHand = deck.splice(0, guestHandSize);
 
-    const powerDeck = shuffle(Array.from({ length: 22 }, (_, i) => i));
+    let powerDeck = shuffle(Array.from({ length: 22 }, (_, i) => i));
+    if (
+      !settings.disablePowerCards &&
+      settings.enableCurseCards &&
+      settings.curseCardsInPowerDeck
+    ) {
+      powerDeck.push(
+        CURSE_LUST,
+        CURSE_LUST,
+        CURSE_GLUTTONY,
+        CURSE_GLUTTONY,
+        CURSE_GREED,
+        CURSE_GREED,
+        CURSE_PRIDE,
+        CURSE_PRIDE,
+        CURSE_ENVY,
+        CURSE_ENVY,
+        CURSE_WRATH,
+        CURSE_WRATH,
+        CURSE_SLOTH,
+        CURSE_SLOTH,
+      );
+      powerDeck = shuffle(powerDeck);
+    }
     const draftSets: number[][] = [];
     if (!settings.disablePowerCards) {
       for (let i = 0; i < 3; i++) {
@@ -662,6 +950,25 @@ export class GameService {
     const player = this.state.players[uid];
     if (player.confirmed) return;
     if (!player.hand.includes(cardId)) return;
+
+    const curseOk = this.state.settings.enableCurseCards !== false;
+    const lustHr = curseOk && lustCurseActive(this.state.activeCurses);
+    const greedTx = curseOk && greedCurseActive(this.state.activeCurses);
+    if (
+      curseOk &&
+      prideCurseActive(this.state.activeCurses) &&
+      this.state.prideCeilingCard &&
+      isCardBlockedByPride(cardId, this.state.prideCeilingCard, lustHr, greedTx)
+    ) {
+      return;
+    }
+    if (
+      curseOk &&
+      envyCurseActive(this.state.activeCurses) &&
+      !envyAllowsPlayCardId(player.hand, uid, cardId, this.state.envySealedCards)
+    ) {
+      return;
+    }
 
     const updatedPlayers = { ...this.state.players };
     updatedPlayers[uid] = {
@@ -839,6 +1146,139 @@ export class GameService {
     }
   }
 
+  async cheatActivateCurseOnTable(curseId: number) {
+    if (!isCurseCardId(curseId)) return;
+    if (this.isHost) {
+      this.handleCheatActivateCurse(curseId);
+    } else {
+      this.sendEvent({ type: 'CHEAT_ACTIVATE_CURSE', uid: this.myUid, curseId });
+    }
+  }
+
+  async cheatClearActiveCursesOnTable() {
+    if (this.isHost) {
+      this.handleCheatClearActiveCurses();
+    } else {
+      this.sendEvent({ type: 'CHEAT_CLEAR_ACTIVE_CURSES', uid: this.myUid });
+    }
+  }
+
+  /** Dev: initial `ActiveCurseState` entries mirroring legal post-resolution state. */
+  private freshCheatedActiveCurseLayer(curseId: number): ActiveCurseState {
+    switch (curseId) {
+      case CURSE_LUST:
+        return { id: CURSE_LUST, lustAccumulated: 0 };
+      case CURSE_GLUTTONY:
+        return { id: CURSE_GLUTTONY, gluttonyPhase: 0, gluttonyNoHeartStreak: 0 };
+      case CURSE_GREED:
+        return { id: CURSE_GREED, greedCrown: 0 };
+      case CURSE_PRIDE:
+        return { id: CURSE_PRIDE };
+      case CURSE_WRATH:
+        return { id: CURSE_WRATH, wrathRound: 1 };
+      case CURSE_ENVY:
+        return { id: CURSE_ENVY, envyMonsterHp: ENVY_MONSTER_START_HP };
+      case CURSE_SLOTH:
+        return { id: CURSE_SLOTH };
+      default:
+        return { id: curseId };
+    }
+  }
+
+  private handleCheatActivateCurse(curseId: number) {
+    if (!this.state?.players || !this.isHost || !isCurseCardId(curseId)) return;
+    if (this.state.settings.enableCurseCards === false) return;
+    const okStatuses: RoomData['status'][] = ['playing', 'powering', 'results'];
+    if (!okStatuses.includes(this.state.status)) return;
+
+    const layer = this.freshCheatedActiveCurseLayer(curseId);
+    let nextActive = [...(this.state.activeCurses ?? [])];
+    const ix = nextActive.findIndex((c) => c.id === curseId);
+    if (ix >= 0) nextActive[ix] = layer;
+    else nextActive.push(layer);
+
+    let deck = [...this.state.deck];
+    let greedInjected = this.state.greedInjectedCoins;
+    if (curseId === CURSE_GREED && (!greedInjected || greedInjected.length === 0)) {
+      const coinCards = VALUES.map((v) => `Coins-${v}`);
+      greedInjected = coinCards;
+      deck.push(...coinCards);
+      deck = shuffle(deck);
+    }
+
+    let prideCeilingCard = this.state.prideCeilingCard ?? null;
+    if (curseId === CURSE_PRIDE) {
+      const ts = this.state.targetSuit ?? SUITS[Math.floor(Math.random() * SUITS.length)];
+      prideCeilingCard = `${ts}-${VALUES[Math.floor(Math.random() * VALUES.length)]}`;
+    }
+
+    const uids = Object.keys(this.state.players);
+    let wrathTargetUid = this.state.wrathTargetUid ?? null;
+    let wrathMinionCard = this.state.wrathMinionCard ?? null;
+    if (curseId === CURSE_WRATH && uids.length >= 2) {
+      wrathTargetUid = uids[Math.floor(Math.random() * uids.length)];
+      wrathMinionCard = wrathMinionCardForRound(1);
+    }
+
+    let availableSuits = [...(this.state.availableSuits ?? SUITS)];
+    let slothSavedAvailableSuits = this.state.slothSavedAvailableSuits ?? null;
+    if (curseId === CURSE_SLOTH) {
+      if (!slothCurseActive(this.state.activeCurses ?? []) && availableSuits.length > 0) {
+        slothSavedAvailableSuits = [...availableSuits];
+      }
+      availableSuits = ['Stars', 'Moons'];
+    }
+
+    this.state = {
+      ...this.state,
+      activeCurses: nextActive,
+      deck,
+      greedInjectedCoins: greedInjected,
+      prideCeilingCard,
+      wrathTargetUid,
+      wrathMinionCard,
+      availableSuits,
+      slothSavedAvailableSuits,
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
+  private handleCheatClearActiveCurses() {
+    if (!this.state?.players || !this.isHost) return;
+    const okStatuses: RoomData['status'][] = ['playing', 'powering', 'results'];
+    if (!okStatuses.includes(this.state.status)) return;
+    const hadSloth = slothCurseActive(this.state.activeCurses ?? []);
+
+    let availableSuits =
+      hadSloth && this.state.slothSavedAvailableSuits?.length
+        ? [...this.state.slothSavedAvailableSuits]
+        : [...(this.state.availableSuits ?? SUITS)];
+
+    let deck = [...this.state.deck];
+    const greedy = new Set(this.state.greedInjectedCoins ?? []);
+    if (greedy.size > 0) {
+      deck = deck.filter((c) => !greedy.has(c));
+    }
+
+    this.state = {
+      ...this.state,
+      activeCurses: [],
+      prideCeilingCard: null,
+      wrathTargetUid: null,
+      wrathMinionCard: null,
+      greedInjectedCoins: undefined,
+      envyCovet: null,
+      envySealedCards: {},
+      envyBothGrovelTrap: false,
+      slothSavedAvailableSuits: null,
+      availableSuits,
+      deck,
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
   async submitPowerDecision(option: string, wheelOffset?: number, priestessSwapToCard?: string | null) {
     if (this.isHost) {
       this.handleSubmitPowerDecision(this.myUid, option, wheelOffset, priestessSwapToCard);
@@ -921,6 +1361,20 @@ export class GameService {
 
   private handlePlayPowerCard(uid: string, powerCardId: number | null) {
     if (!this.state || !this.state.players[uid]) return;
+    if (
+      powerCardId !== null &&
+      isCurseCardId(powerCardId) &&
+      this.state.settings.enableCurseCards === false
+    ) {
+      return;
+    }
+    if (
+      powerCardId !== null &&
+      isCurseCardId(powerCardId) &&
+      curseEffectActive(this.state.activeCurses)
+    ) {
+      return;
+    }
     if (powerCardId !== null && !this.state.players[uid].powerCards.includes(powerCardId)) return;
     const updatedPlayers = { ...this.state.players };
     updatedPlayers[uid] = {
@@ -1036,6 +1490,11 @@ export class GameService {
         continue;
       }
 
+      if (isCurseCardId(power)) {
+        decisions[uid] = null;
+        continue;
+      }
+
       if (power === 1) {
         const opponentHasJoker = players[oppUid].hand.some(c => c.startsWith('Joker'));
         decisions[uid] = {
@@ -1059,7 +1518,7 @@ export class GameService {
         let priestessPowerCandidates: number[] | null = null;
         let priestessPeekStashPowerId: number | null | undefined = undefined;
         let priestessPeekStashEmpty = false;
-        if (oppUsesPower && realPowerId !== null) {
+        if (oppUsesPower && realPowerId !== null && isMajorArcanaId(realPowerId)) {
           const draftPool = [...new Set(draftAppearances)];
           const pool = [...new Set([...draftPool, realPowerId])];
           const others = pool.filter(id => id !== realPowerId);
@@ -1143,6 +1602,14 @@ export class GameService {
         player.hand.includes(priestessSwapToCard)
       ) {
         swapAccepted = priestessSwapToCard;
+        const curseOk = this.state.settings.enableCurseCards !== false;
+        if (
+          curseOk &&
+          envyCurseActive(this.state.activeCurses ?? []) &&
+          envyFreeCopiesInHand(player.hand, uid, swapAccepted, this.state.envySealedCards) <= 0
+        ) {
+          swapAccepted = null;
+        }
       }
       current.priestessSwapToCard = swapAccepted;
     }
@@ -1318,6 +1785,7 @@ export class GameService {
     const p2Decision = pendingDecisions[p2Uid];
     
     let winnerUid: string | 'draw' = 'draw';
+    let clashDestroyedForOutcome: Record<string, boolean> = { [p1Uid]: false, [p2Uid]: false };
     let coinFlip: string | undefined = undefined;
     const events: ResolutionEvent[] = [];
     const summonedCards: Record<string, string> = {};
@@ -1326,6 +1794,7 @@ export class GameService {
       [p1Uid]: [],
       [p2Uid]: []
     };
+    let envyRoundFx: NonNullable<RoomData['lastOutcome']>['envyRoundFx'] = undefined;
     const blockedPowers: Record<string, boolean> = { [p1Uid]: false, [p2Uid]: false };
 
     // Phase 1: Pre-activation
@@ -1339,19 +1808,22 @@ export class GameService {
     }
 
     const resolvePowerPre = (pUid: string, oUid: string, p: number | null, oPower: number | null) => {
-      if (p === 16) { // Tower
+      if (p === 16) {
+        // Tower blocks opponent majors and curse cards alike.
         if (oPower !== null && oPower !== 16) {
-          const destroyedName = MAJOR_ARCANA[oPower]?.name ?? `Power ${oPower}`;
+          const destroyedName = isCurseCardId(oPower)
+            ? (CURSES[oPower]?.name ?? 'Curse')
+            : (MAJOR_ARCANA[oPower]?.name ?? `Power ${oPower}`);
           events.push({
             type: 'POWER_TRIGGER',
             uid: pUid,
             powerCardId: 16,
-            message: `${players[pUid].name}'s Tower blocks ${players[oUid].name}'s power card.`,
+            message: `${players[pUid].name}'s Tower blocks ${players[oUid].name}'s committed card.`,
           });
           events.push({
             type: 'POWER_DESTROYED',
             uid: oUid,
-            powerCardId: oPower,
+            powerCardId: isMajorArcanaId(oPower) ? oPower : undefined,
             message: `${players[oUid].name}'s ${destroyedName} is destroyed.`,
           });
           blockedPowers[oUid] = true;
@@ -1371,6 +1843,180 @@ export class GameService {
     if (power1 === 16 && power2 === 16) {
       if (coinFlip === 'Host') blockedPowers[p2Uid] = true;
       else blockedPowers[p1Uid] = true;
+    }
+
+    const curseClashSuppressed: Record<string, boolean> = { [p1Uid]: false, [p2Uid]: false };
+    const curseEnabled = roomData.settings.enableCurseCards !== false;
+    if (
+      curseEnabled &&
+      committedPower1 !== null &&
+      committedPower2 !== null &&
+      isCurseCardId(committedPower1) &&
+      isCurseCardId(committedPower2) &&
+      !blockedPowers[p1Uid] &&
+      !blockedPowers[p2Uid]
+    ) {
+      const p1WinsClash = Math.random() > 0.5;
+      const winnerUid = p1WinsClash ? p1Uid : p2Uid;
+      const loserUid = p1WinsClash ? p2Uid : p1Uid;
+      curseClashSuppressed[loserUid] = true;
+      events.push({
+        type: 'COIN_FLIP',
+        message: `${players[winnerUid].name} wins the curse clash — their curse takes hold; ${players[loserUid].name}'s curse is spent.`,
+      });
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: loserUid,
+        message: `${players[loserUid].name}'s curse was overwhelmed and dissipates.`,
+      });
+    }
+
+    const lustHeartRules =
+      curseEnabled &&
+      (lustCurseActive(roomData.activeCurses ?? []) ||
+        (committedPower1 === CURSE_LUST && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) ||
+        (committedPower2 === CURSE_LUST && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]));
+
+    const greedWasActive = curseEnabled && greedCurseActive(roomData.activeCurses ?? []);
+    const greedTaxActive = greedWasActive;
+
+    if (curseEnabled && committedPower1 === CURSE_LUST && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p1Uid,
+        message: `${players[p1Uid].name} invokes the curse of Lust.`,
+      });
+    }
+    if (curseEnabled && committedPower2 === CURSE_LUST && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p2Uid,
+        message: `${players[p2Uid].name} invokes the curse of Lust.`,
+      });
+    }
+    if (curseEnabled && committedPower1 === CURSE_GLUTTONY && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p1Uid,
+        message: `${players[p1Uid].name} invokes the curse of Gluttony.`,
+      });
+    }
+    if (curseEnabled && committedPower2 === CURSE_GLUTTONY && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p2Uid,
+        message: `${players[p2Uid].name} invokes the curse of Gluttony.`,
+      });
+    }
+    if (curseEnabled && committedPower1 === CURSE_GREED && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p1Uid,
+        message: `${players[p1Uid].name} invokes the curse of Greed.`,
+      });
+    }
+    if (curseEnabled && committedPower2 === CURSE_GREED && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p2Uid,
+        message: `${players[p2Uid].name} invokes the curse of Greed.`,
+      });
+    }
+    if (curseEnabled && committedPower1 === CURSE_PRIDE && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p1Uid,
+        message: `${players[p1Uid].name} invokes the curse of Pride.`,
+      });
+    }
+    if (curseEnabled && committedPower2 === CURSE_PRIDE && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p2Uid,
+        message: `${players[p2Uid].name} invokes the curse of Pride.`,
+      });
+    }
+    if (curseEnabled && committedPower1 === CURSE_WRATH && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p1Uid,
+        message: `${players[p1Uid].name} invokes the curse of Wrath.`,
+      });
+    }
+    if (curseEnabled && committedPower2 === CURSE_WRATH && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p2Uid,
+        message: `${players[p2Uid].name} invokes the curse of Wrath.`,
+      });
+    }
+    if (curseEnabled && committedPower1 === CURSE_ENVY && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p1Uid,
+        message: `${players[p1Uid].name} invokes the curse of Envy.`,
+      });
+    }
+    if (curseEnabled && committedPower2 === CURSE_ENVY && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p2Uid,
+        message: `${players[p2Uid].name} invokes the curse of Envy.`,
+      });
+    }
+    if (curseEnabled && committedPower1 === CURSE_SLOTH && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p1Uid,
+        message: `${players[p1Uid].name} invokes the curse of Sloth.`,
+      });
+    }
+    if (curseEnabled && committedPower2 === CURSE_SLOTH && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]) {
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid: p2Uid,
+        message: `${players[p2Uid].name} invokes the curse of Sloth.`,
+      });
+    }
+
+    const envyActiveThisResolution = curseEnabled && envyCurseActive(roomData.activeCurses ?? []);
+    let envySealDeltaEarly: Record<string, string[]> = {};
+    const envyCovetEventsEarly: ResolutionEvent[] = [];
+
+    if (envyActiveThisResolution && roomData.envyCovet) {
+      const ec = roomData.envyCovet;
+      const locked = engageLocks[ec.uid];
+      const playedCoveted = locked === ec.cardId;
+      const absorbedEarly = playedCoveted
+        ? getCardValue(ec.cardId, lustHeartRules, greedTaxActive)
+        : 0;
+      if (playedCoveted) {
+        envyCovetEventsEarly.push({
+          type: 'ENVY_COVET',
+          uid: ec.uid,
+          cardId: ec.cardId,
+          envyDamage: absorbedEarly,
+          message: `The Green-Eyed Monster coveted ${absorbedEarly} from ${players[ec.uid].name}'s ${sentenceCard(ec.cardId)}!`,
+        });
+      } else if (players[ec.uid].hand.includes(ec.cardId)) {
+        envyCovetEventsEarly.push({
+          type: 'ENVY_COVET',
+          uid: ec.uid,
+          cardId: ec.cardId,
+          message: `The Green-Eyed Monster seethes — ${players[ec.uid].name} withheld ${sentenceCard(ec.cardId)}. Envy seals it.`,
+        });
+        envySealDeltaEarly = { [ec.uid]: [ec.cardId] };
+      } else {
+        envyCovetEventsEarly.push({
+          type: 'ENVY_COVET',
+          message: `The Green-Eyed Monster roars — ${sentenceCard(ec.cardId)} cannot be grasped.`,
+        });
+      }
+    } else if (envyActiveThisResolution) {
+      envyCovetEventsEarly.push({
+        type: 'ENVY_COVET',
+        message: 'The Green-Eyed Monster finds no coveted prey in the open hands.',
+      });
     }
 
     const priestessFront: ResolutionEvent[] = [];
@@ -1394,6 +2040,23 @@ export class GameService {
         players[uid].hand.includes(rawSwap)
       ) {
         finalCard = rawSwap;
+      }
+      if (
+        curseEnabled &&
+        prideCurseActive(roomData.activeCurses) &&
+        roomData.prideCeilingCard &&
+        isCardBlockedByPride(finalCard, roomData.prideCeilingCard, lustHeartRules, greedTaxActive)
+      ) {
+        finalCard = locked;
+      }
+      if (
+        curseEnabled &&
+        envyCurseActive(roomData.activeCurses) &&
+        rawSwap &&
+        rawSwap !== locked &&
+        envyFreeCopiesInHand(players[uid].hand, uid, rawSwap, roomData.envySealedCards) <= 0
+      ) {
+        finalCard = locked;
       }
       const oppName = decision?.priestessOpponentName || 'Opponent';
       const oppUsed = Boolean(decision?.priestessOpponentUsesPower);
@@ -1450,7 +2113,7 @@ export class GameService {
 
     applyPriestessConsult(p1Uid, p1Decision, true);
     applyPriestessConsult(p2Uid, p2Decision, false);
-    events.splice(0, 0, ...priestessFront);
+    events.splice(0, 0, ...envyCovetEventsEarly, ...priestessFront);
 
     // Magician steal runs early; Fool / field powers run before Frogify so swaps apply first.
     const applyMagicianSteal = (uid: string, oppUid: string, decision?: PendingPowerDecision | null) => {
@@ -1621,7 +2284,28 @@ export class GameService {
       }
     }
 
-    const hermitSwap = (pUid: string, oCard: string) => {
+    const greedJointTrump = greedWasActive && targetSuit === 'Diamonds';
+
+    const wrathActive =
+      curseEnabled &&
+      wrathCurseActive(roomData.activeCurses) &&
+      roomData.wrathTargetUid &&
+      roomData.wrathMinionCard;
+    const wrathMag = wrathActive ? getWrathMagnitude(roomData.wrathMinionCard!) : 0;
+    const wrathTargetUidForPenalty = wrathActive ? roomData.wrathTargetUid! : null;
+    const wrathPen = (card: string, ownerUid: string) =>
+      wrathTargetUidForPenalty === ownerUid &&
+      !parseCard(card).isJoker &&
+      card !== GROVEL_CARD_ID
+        ? wrathMag
+        : 0;
+
+    const hermitEffectiveRank = (cardStr: string, ownerUid: string, pen: number) => {
+      if (parseCard(cardStr).isJoker) return getCardValue(cardStr, lustHeartRules, greedTaxActive);
+      return Math.max(0, getCardValue(cardStr, lustHeartRules, greedTaxActive) - pen);
+    };
+
+    const hermitSwap = (pUid: string, oUid: string, oCard: string) => {
       const p = players[pUid];
       const pool = p.hand.filter(card => card !== p.currentMove);
 
@@ -1631,8 +2315,36 @@ export class GameService {
         return nonJoker ?? cands[0];
       };
 
+      const prideAllowsHermit = (card: string) =>
+        !curseEnabled ||
+        !prideCurseActive(roomData.activeCurses) ||
+        !roomData.prideCeilingCard ||
+        !isCardBlockedByPride(card, roomData.prideCeilingCard, lustHeartRules, greedTaxActive);
+
+      const envyAllowsHermitPick = (card: string) =>
+        !curseEnabled ||
+        !envyCurseActive(roomData.activeCurses) ||
+        envyFreeCopiesInHand(p.hand, pUid, card, roomData.envySealedCards) > 0;
+
       const winCandidates = pool.filter(
-        card => evaluateTrickClash(card, oCard, targetSuit) === 'p1'
+        card =>
+          prideAllowsHermit(card) &&
+          envyAllowsHermitPick(card) &&
+          evaluateTrickClash(
+            card,
+            oCard,
+            targetSuit,
+            lustHeartRules,
+            greedTaxActive,
+            greedJointTrump,
+            wrathPen(card, pUid),
+            wrathPen(oCard, oUid),
+          ) === 'p1',
+      );
+      winCandidates.sort(
+        (a, b) =>
+          hermitEffectiveRank(b, pUid, wrathPen(b, pUid)) -
+          hermitEffectiveRank(a, pUid, wrathPen(a, pUid)),
       );
       const winPick = pickPreferNonJoker(winCandidates);
       if (winPick) {
@@ -1640,7 +2352,24 @@ export class GameService {
       }
 
       const drawCandidates = pool.filter(
-        card => evaluateTrickClash(card, oCard, targetSuit) === 'draw'
+        card =>
+          prideAllowsHermit(card) &&
+          envyAllowsHermitPick(card) &&
+          evaluateTrickClash(
+            card,
+            oCard,
+            targetSuit,
+            lustHeartRules,
+            greedTaxActive,
+            greedJointTrump,
+            wrathPen(card, pUid),
+            wrathPen(oCard, oUid),
+          ) === 'draw',
+      );
+      drawCandidates.sort(
+        (a, b) =>
+          hermitEffectiveRank(b, pUid, wrathPen(b, pUid)) -
+          hermitEffectiveRank(a, pUid, wrathPen(a, pUid)),
       );
       const drawPick = pickPreferNonJoker(drawCandidates);
       if (drawPick) {
@@ -1653,7 +2382,7 @@ export class GameService {
         if (blockedPowers[p1Uid]) {
           events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit was blocked by Tower.` });
         } else {
-          const better = hermitSwap(p1Uid, c2);
+          const better = hermitSwap(p1Uid, p2Uid, c2);
           if (better.card) {
             c1 = better.card;
             events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit found a ${better.reason === 'win' ? 'winning' : 'drawing'} line.` });
@@ -1667,7 +2396,7 @@ export class GameService {
         if (blockedPowers[p2Uid]) {
           events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit was blocked by Tower.` });
         } else {
-          const better = hermitSwap(p2Uid, c1);
+          const better = hermitSwap(p2Uid, p1Uid, c1);
           if (better.card) {
             c2 = better.card;
             events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit found a ${better.reason === 'win' ? 'winning' : 'drawing'} line.` });
@@ -1687,29 +2416,96 @@ export class GameService {
           message: 'Temperance forced transparency and balance.',
         });
     } else {
-        const res = evaluateTrickClash(c1, c2, targetSuit);
+        const wp1 = wrathPen(c1, p1Uid);
+        const wp2 = wrathPen(c2, p2Uid);
+        if (wrathActive && roomData.wrathMinionCard) {
+          const blade = sentenceCard(roomData.wrathMinionCard);
+          if (wrathTargetUidForPenalty === p1Uid && parseCard(c1).isJoker) {
+            events.push({
+              type: 'POWER_TRIGGER',
+              message: `${blade} spared the fool.`,
+            });
+          }
+          if (wrathTargetUidForPenalty === p2Uid && parseCard(c2).isJoker) {
+            events.push({
+              type: 'POWER_TRIGGER',
+              message: `${blade} spared the fool.`,
+            });
+          }
+        }
+        const res = evaluateTrickClash(
+          c1,
+          c2,
+          targetSuit,
+          lustHeartRules,
+          greedTaxActive,
+          greedJointTrump,
+          wp1,
+          wp2,
+        );
         const s1 = summonedCards[p1Uid];
         const s2 = summonedCards[p2Uid];
 
         if (s1 && s2) {
-          const r1 = evaluateTrickClash(s1, s2, targetSuit);
+          const r1 = evaluateTrickClash(
+            s1,
+            s2,
+            targetSuit,
+            lustHeartRules,
+            greedTaxActive,
+            greedJointTrump,
+            0,
+            0,
+          );
           const rMain = res;
           if (rMain === 'p1' || r1 === 'p1') winnerUid = p1Uid;
           else if (rMain === 'p2' || r1 === 'p2') winnerUid = p2Uid;
           else winnerUid = 'draw';
         } else if (s1) {
-          const resSummon = evaluateTrickClash(s1, c2, targetSuit);
+          const resSummon = evaluateTrickClash(
+            s1,
+            c2,
+            targetSuit,
+            lustHeartRules,
+            greedTaxActive,
+            greedJointTrump,
+            0,
+            wp2,
+          );
           if (res === 'p1' || resSummon === 'p1') winnerUid = p1Uid;
           else if (res === 'p2' && resSummon === 'p2') winnerUid = p2Uid;
           else winnerUid = 'draw';
         } else if (s2) {
-          const resSummon = evaluateTrickClash(s2, c1, targetSuit);
+          const resSummon = evaluateTrickClash(
+            s2,
+            c1,
+            targetSuit,
+            lustHeartRules,
+            greedTaxActive,
+            greedJointTrump,
+            0,
+            wp1,
+          );
           if (res === 'p2' || resSummon === 'p2') winnerUid = p2Uid;
           else if (res === 'p1' && resSummon === 'p1') winnerUid = p1Uid;
           else winnerUid = 'draw';
         } else {
           winnerUid = res === 'p1' ? p1Uid : (res === 'p2' ? p2Uid : 'draw');
         }
+
+        const refreshClashPenaltyDestroy = () => {
+          for (const uid of [p1Uid, p2Uid] as const) {
+            const card = uid === p1Uid ? c1 : c2;
+            const pen = uid === p1Uid ? wp1 : wp2;
+            const pc = parseCard(card);
+            if (pc.isJoker || card === GROVEL_CARD_ID || pen <= 0) clashDestroyedForOutcome[uid] = false;
+            else {
+              const eff = Math.max(0, getCardValue(card, lustHeartRules, greedTaxActive) - pen);
+              clashDestroyedForOutcome[uid] = eff === 0;
+            }
+          }
+        };
+        refreshClashPenaltyDestroy();
 
         let wheelDjLock = false;
 
@@ -1772,9 +2568,12 @@ export class GameService {
             c2 = 'Joker-2';
             winnerUid = 'draw';
             wheelDjLock = true;
+            clashDestroyedForOutcome[p1Uid] = false;
+            clashDestroyedForOutcome[p2Uid] = false;
           } else if (outcomeLabel === 'JACKPOT') {
             if (uid === p1Uid) c1 = 'Coins-10';
             else c2 = 'Coins-10';
+            clashDestroyedForOutcome[uid] = false;
           } else if (outcomeLabel === 'POWER_CARD') {
             gains[uid].push({ type: 'draw', id: 'random-power' });
           } else if (outcomeLabel === 'LOSE_2_CARDS') {
@@ -1790,6 +2589,17 @@ export class GameService {
 
         for (const w of wheels) {
           applyWheelStep(w.uid, w.res);
+        }
+
+        for (const uid of [p1Uid, p2Uid] as const) {
+          if (!clashDestroyedForOutcome[uid]) continue;
+          const cid = uid === p1Uid ? c1 : c2;
+          events.push({
+            type: 'CLASH_DESTROYED',
+            uid,
+            cardId: cid,
+            message: `${players[uid].name}'s play shatters — clash rank broken to nothing.`,
+          });
         }
 
         if (power1 === 13 && power2 === 13 && !blockedPowers[p1Uid] && !blockedPowers[p2Uid]) {
@@ -1942,8 +2752,175 @@ export class GameService {
        else {
           const winnerCardStr = winnerUid === p1Uid ? c1 : c2;
           const loserCardStr = winnerUid === p1Uid ? c2 : c1;
-          finalMessage = `${wName} wins — ${explainPlainClash(winnerCardStr, loserCardStr, targetSuit)}`;
+          finalMessage = `${wName} wins — ${explainPlainClash(
+            winnerCardStr,
+            loserCardStr,
+            targetSuit,
+            lustHeartRules,
+            greedTaxActive,
+            greedJointTrump,
+          )}`;
        }
+    }
+
+    if (envyActiveThisResolution) {
+      const entry = roomData.activeCurses?.find((c) => c.id === CURSE_ENVY);
+      const hpStart =
+        typeof entry?.envyMonsterHp === 'number' ? entry.envyMonsterHp : ENVY_MONSTER_START_HP;
+      const cov = roomData.envyCovet;
+      const playedCovetedFeed = cov ? engageLocks[cov.uid] === cov.cardId : false;
+      const absorbedClashFx = cov && playedCovetedFeed ? getCardValue(cov.cardId, lustHeartRules, greedTaxActive) : 0;
+      const hpAfterFeed = hpStart + absorbedClashFx;
+      const departedDoubleGrovel =
+        Boolean(roomData.envyBothGrovelTrap) &&
+        c1 === GROVEL_CARD_ID &&
+        c2 === GROVEL_CARD_ID;
+
+      const strikes: { uid: string; damage: number; hpAfter: number }[] = [];
+      const envyStrikePack: ResolutionEvent[] = [];
+      let hp = hpAfterFeed;
+
+      if (!departedDoubleGrovel) {
+        for (const uid of [p1Uid, p2Uid] as const) {
+          const card = uid === p1Uid ? c1 : c2;
+          const damage = Math.max(0, getCardValue(card, lustHeartRules, greedTaxActive));
+          hp = Math.max(0, hp - damage);
+          strikes.push({ uid, damage, hpAfter: hp });
+          const plain = sentenceCard(card);
+          envyStrikePack.push({
+            type: 'ENVY_STRIKE',
+            uid,
+            cardId: card,
+            message:
+              damage <= 0
+                ? `${players[uid].name}'s ${plain} swipes at the Green-Eyed Monster — no bite.`
+                : `${players[uid].name}'s ${plain} strikes the Green-Eyed Monster for ${damage}! (${hp} HP remaining)`,
+            envyDamage: damage,
+            envyHpAfter: hp,
+          });
+        }
+      }
+
+      if (departedDoubleGrovel) {
+        envyStrikePack.push({
+          type: 'ENVY_DEPARTS',
+          message:
+            'There is nothing left to covet. The Green-Eyed Monster slips away, sated on shame alone.',
+        });
+      } else if (hp <= 0) {
+        envyStrikePack.push({
+          type: 'ENVY_DEFEATED',
+          message: 'The Green-Eyed Monster was defeated!',
+          envyHpAfter: hp,
+        });
+      }
+
+      events.push(...envyStrikePack);
+      envyRoundFx = {
+        covetUid: cov?.uid ?? null,
+        covetCardId: cov?.cardId ?? null,
+        covetHandIndex: cov?.handIndex ?? null,
+        playedCoveted: playedCovetedFeed,
+        absorbedClash: absorbedClashFx,
+        newSeals: { ...envySealDeltaEarly },
+        monsterHpStart: hpStart,
+        monsterHpAfterFeed: hpAfterFeed,
+        strikes,
+        monsterHpEnd: departedDoubleGrovel ? hpAfterFeed : hp,
+        defeated: !departedDoubleGrovel && hp <= 0,
+        departedDoubleGrovel,
+      };
+    }
+
+    let slothDreamFx: NonNullable<RoomData['lastOutcome']>['slothDreamFx'] = undefined;
+    const slothActiveThisResolution =
+      curseEnabled && slothCurseActive(roomData.activeCurses ?? []);
+    if (slothActiveThisResolution) {
+      const spinOffset = Math.random();
+      const dreamResult = pickSlothDreamResult(spinOffset);
+      slothDreamFx = { result: dreamResult, spinOffset };
+      events.push({
+        type: 'SLOTH_DREAM',
+        message: 'Sloth is dreaming of…',
+        slothDreamSpinOffset: spinOffset,
+      });
+
+      const toStars = (card: string) => {
+        if (card === GROVEL_CARD_ID) return card;
+        const pc = parseCard(card);
+        if (pc.isJoker || pc.suit === 'Stars') return card;
+        return `Stars-${pc.value}`;
+      };
+      const toMoons = (card: string) => {
+        if (card === GROVEL_CARD_ID) return card;
+        const pc = parseCard(card);
+        if (pc.isJoker || pc.suit === 'Moons') return card;
+        return `Moons-${pc.value}`;
+      };
+      const pushStar = (uid: string, prev: string, next: string) => {
+        if (prev === next) return;
+        events.push({
+          type: 'TRANSFORM',
+          uid,
+          cardId: next,
+          powerCardId: 17,
+          message: `${players[uid].name}'s card became a Star!`,
+        });
+      };
+      const pushMoon = (uid: string, prev: string, next: string) => {
+        if (prev === next) return;
+        events.push({
+          type: 'TRANSFORM',
+          uid,
+          cardId: next,
+          powerCardId: 18,
+          message: `${players[uid].name}'s card became a Moon!`,
+        });
+      };
+
+      if (dreamResult === 'STARS') {
+        const o1 = c1;
+        const o2 = c2;
+        c1 = toStars(c1);
+        c2 = toStars(c2);
+        pushStar(p1Uid, o1, c1);
+        pushStar(p2Uid, o2, c2);
+      } else if (dreamResult === 'MOONS') {
+        const o1 = c1;
+        const o2 = c2;
+        c1 = toMoons(c1);
+        c2 = toMoons(c2);
+        pushMoon(p1Uid, o1, c1);
+        pushMoon(p2Uid, o2, c2);
+      } else if (dreamResult === 'STARS_AND_MOONS') {
+        if (Math.random() < 0.5) {
+          const o1 = c1;
+          const o2 = c2;
+          c1 = toStars(c1);
+          c2 = toMoons(c2);
+          pushStar(p1Uid, o1, c1);
+          pushMoon(p2Uid, o2, c2);
+        } else {
+          const o1 = c1;
+          const o2 = c2;
+          c1 = toMoons(c1);
+          c2 = toStars(c2);
+          pushMoon(p1Uid, o1, c1);
+          pushStar(p2Uid, o2, c2);
+        }
+      } else if (dreamResult === 'NOTHING') {
+        events.push({
+          type: 'SLOTH_DREAM',
+          message: 'The dream lingers quietly — nothing changes.',
+          slothDreamResult: 'NOTHING',
+        });
+      } else if (dreamResult === 'SUN') {
+        events.push({
+          type: 'SLOTH_DREAM',
+          message: 'Sloth has awoken. The dream ends.',
+          slothDreamResult: 'SUN',
+        });
+      }
     }
 
     // Phase 4: Post-Resolution Gains Determination
@@ -1975,8 +2952,8 @@ export class GameService {
     if (committedPower2 === 12 && !blockedPowers[p2Uid]) gains[p2Uid].push({ type: 'draw', id: 3 });
     if (power1 === 2 && winnerUid === p2Uid) gains[p1Uid].push({ type: 'draw', id: 1 });
     if (power2 === 2 && winnerUid === p1Uid) gains[p2Uid].push({ type: 'draw', id: 1 });
-    if (power1 === 19) gains[p1Uid].push({ type: 'card', id: c1 }); // Copy own card
-    if (power2 === 19) gains[p2Uid].push({ type: 'card', id: c2 }); // Copy own card
+    if (power1 === 19) gains[p1Uid].push({ type: 'card', id: initialCardsPlayed[p1Uid] ?? c1 });
+    if (power2 === 19) gains[p2Uid].push({ type: 'card', id: initialCardsPlayed[p2Uid] ?? c2 });
     if (power1 === 18) {
       for (let i = 0; i < 2; i++) {
         const val = VALUES[Math.floor(Math.random() * VALUES.length)];
@@ -2039,6 +3016,93 @@ export class GameService {
       });
     }
 
+    let lustRoundFx: NonNullable<RoomData['lastOutcome']>['lustRoundFx'] = undefined;
+    if (curseEnabled && lustHeartRules) {
+      const prevLust = roomData.activeCurses?.find((c) => c.id === CURSE_LUST)?.lustAccumulated ?? 0;
+      const contributions: { uid: string; card: string; doubledValue: number }[] = [];
+      let add = 0;
+      for (const uid of [p1Uid, p2Uid]) {
+        const card = uid === p1Uid ? c1 : c2;
+        if (parseCard(card).suit === 'Hearts') {
+          const v = getCardValue(card, true);
+          const doubled = v * 2;
+          add += doubled;
+          contributions.push({ uid, card, doubledValue: doubled });
+        }
+      }
+      const nextRaw = prevLust + add;
+      const sated = nextRaw >= 150;
+      lustRoundFx = {
+        contributions,
+        previousMeter: prevLust,
+        nextMeter: sated ? 0 : nextRaw,
+        sated,
+      };
+      if (sated) {
+        events.push({
+          type: 'POWER_TRIGGER',
+          message: 'Lust has been sated.',
+        });
+      }
+    }
+
+    let gluttonyPersistence: NonNullable<RoomData['lastOutcome']>['gluttonyPersistence'] = undefined;
+    const gluttonyWasActive = curseEnabled && gluttonyCurseActive(roomData.activeCurses);
+    const gluttonyEntry = roomData.activeCurses?.find((c) => c.id === CURSE_GLUTTONY);
+    if (gluttonyWasActive && gluttonyEntry) {
+      const anyHeart = parseCard(c1).suit === 'Hearts' || parseCard(c2).suit === 'Hearts';
+      let phase = gluttonyEntry.gluttonyPhase ?? 0;
+      let streak = gluttonyEntry.gluttonyNoHeartStreak ?? 0;
+      let remove = false;
+      if (anyHeart) {
+        phase = Math.max(0, phase - 1);
+        streak = 0;
+      } else {
+        streak += 1;
+        if (streak >= 2) {
+          streak = 0;
+          phase += 1;
+          if (phase > 2) {
+            remove = true;
+            events.push({
+              type: 'POWER_TRIGGER',
+              message: 'Gluttony has wasted away.',
+            });
+          }
+        }
+      }
+      gluttonyPersistence = remove
+        ? { remove: true, phase: 0, streak: 0 }
+        : { remove: false, phase, streak };
+    }
+
+    let greedPersistence: NonNullable<RoomData['lastOutcome']>['greedPersistence'] = undefined;
+    if (greedWasActive) {
+      const prev = roomData.activeCurses?.find((c) => c.id === CURSE_GREED)?.greedCrown ?? 0;
+      const tax = greedTaxAmount(c1) + greedTaxAmount(c2);
+      const nextCrown = Math.min(17, prev + tax);
+      const removeReason = nextCrown >= 17 ? ('crown' as const) : null;
+      greedPersistence = { nextCrown, taxThisRound: tax, removeReason };
+      if (removeReason === 'crown') {
+        events.push({
+          type: 'POWER_TRIGGER',
+          message: 'The Tyrant is dead. Only their crown remains.',
+        });
+      }
+    }
+
+    let wrathFx: NonNullable<RoomData['lastOutcome']>['wrathFx'] = undefined;
+    if (wrathActive && roomData.wrathTargetUid && roomData.wrathMinionCard) {
+      wrathFx = {
+        targetUid: roomData.wrathTargetUid,
+        minionCard: roomData.wrathMinionCard,
+        magnitude: wrathMag,
+        sparedJoker:
+          (wrathTargetUidForPenalty === p1Uid && parseCard(c1).isJoker) ||
+          (wrathTargetUidForPenalty === p2Uid && parseCard(c2).isJoker),
+      };
+    }
+
     return {
       targetSuit,
       winnerUid,
@@ -2046,15 +3110,23 @@ export class GameService {
       cardsPlayed: { [p1Uid]: c1, [p2Uid]: c2 },
       initialCardsPlayed,
       powerCardsPlayed: {
-        [p1Uid]: committedPower1 !== null ? MAJOR_ARCANA[committedPower1].name : 'None',
-        [p2Uid]: committedPower2 !== null ? MAJOR_ARCANA[committedPower2].name : 'None',
+        [p1Uid]: labelCommittedPowerOrCurse(committedPower1),
+        [p2Uid]: labelCommittedPowerOrCurse(committedPower2),
       },
       powerCardIdsPlayed: { [p1Uid]: committedPower1, [p2Uid]: committedPower2 },
       powerCardTowerBlocked: { [p1Uid]: blockedPowers[p1Uid], [p2Uid]: blockedPowers[p2Uid] },
+      curseClashSuppressed,
       coinFlip,
       events,
       summonedCards,
-      gains
+      gains,
+      lustRoundFx,
+      gluttonyPersistence,
+      greedPersistence,
+      wrathFx,
+      envyRoundFx,
+      slothDreamFx,
+      clashDestroyedByPenalty: { ...clashDestroyedForOutcome },
     };
   }
 
@@ -2107,7 +3179,31 @@ export class GameService {
 
     const winnerUid = outcome.winnerUid;
     const temperanceActive = Object.values(outcome.powerCardIdsPlayed).includes(14);
-    
+    const curseOk = roomData.settings.enableCurseCards !== false;
+    const gluttonyWasActiveForRound = curseOk && gluttonyCurseActive(roomData.activeCurses);
+
+    let nextTyrant: RoomData['tyrantCrownPending'] = roomData.tyrantCrownPending;
+    let nextGreedInjected: RoomData['greedInjectedCoins'] = roomData.greedInjectedCoins;
+    let outcomeForState: NonNullable<RoomData['lastOutcome']> = outcome;
+
+    const greedPlayed =
+      curseOk &&
+      ((outcome.powerCardIdsPlayed[p1Uid] === CURSE_GREED &&
+        !outcome.powerCardTowerBlocked?.[p1Uid] &&
+        !outcome.curseClashSuppressed?.[p1Uid]) ||
+        (outcome.powerCardIdsPlayed[p2Uid] === CURSE_GREED &&
+          !outcome.powerCardTowerBlocked?.[p2Uid] &&
+          !outcome.curseClashSuppressed?.[p2Uid]));
+
+    const pridePlayed =
+      curseOk &&
+      ((outcome.powerCardIdsPlayed[p1Uid] === CURSE_PRIDE &&
+        !outcome.powerCardTowerBlocked?.[p1Uid] &&
+        !outcome.curseClashSuppressed?.[p1Uid]) ||
+        (outcome.powerCardIdsPlayed[p2Uid] === CURSE_PRIDE &&
+          !outcome.powerCardTowerBlocked?.[p2Uid] &&
+          !outcome.curseClashSuppressed?.[p2Uid]));
+
     // NOTE: Power-card post-round gains are authored in `calculateOutcome(...).gains`
     // and applied below in the generic gains pass. Keep this section side-effect free
     // to avoid duplicate grants (e.g. Chariot, Empress, Sun).
@@ -2188,19 +3284,34 @@ export class GameService {
       }
     });
 
-    const availableSuits = [...(roomData.availableSuits || SUITS)];
-    uids.forEach(uid => {
+    const slothDreamEnds =
+      curseOk &&
+      outcome.slothDreamFx?.result === 'SUN' &&
+      slothCurseActive(roomData.activeCurses ?? []);
+
+    let availableSuits = [...(roomData.availableSuits || SUITS)];
+    if (slothDreamEnds) {
+      const saved = roomData.slothSavedAvailableSuits;
+      availableSuits = saved && saved.length > 0 ? [...saved] : [...SUITS];
+    }
+
+    uids.forEach((uid) => {
       const power = outcome.powerCardIdsPlayed[uid];
       if (power === 17 && !availableSuits.includes('Stars')) {
         availableSuits.push('Stars');
       }
       if (power === 18 && !availableSuits.includes('Moons')) {
         availableSuits.push('Moons');
-        // Add all moon cards to deck for future draws
-        const moonCards = VALUES.map(v => `Moons-${v}`);
+        const moonCards = VALUES.map((v) => `Moons-${v}`);
         newDeck.push(...moonCards);
       }
     });
+
+    if (greedPlayed) {
+      const coinCards = VALUES.map((v) => `Coins-${v}`);
+      nextGreedInjected = coinCards;
+      newDeck.push(...shuffle([...coinCards]));
+    }
 
     if (newDeck.length > roomData.deck.length) {
       // If we added cards, reshuffle
@@ -2209,11 +3320,18 @@ export class GameService {
       newDeck.push(...shuffledDeck);
     }
 
-    if (temperanceActive) {
-      // Temperance returns played suit cards (power cards remain consumed).
-      uids.forEach(uid => {
+    if (temperanceActive || gluttonyWasActiveForRound) {
+      uids.forEach((uid) => {
         const cardToReturn = outcome.initialCardsPlayed?.[uid] || outcome.cardsPlayed[uid];
-        if (cardToReturn) updatedPlayers[uid].hand.push(cardToReturn);
+        if (!cardToReturn) return;
+        const pc = parseCard(cardToReturn);
+        const heartUnderGluttony = gluttonyWasActiveForRound && pc.suit === 'Hearts';
+        const boneCard = `Bones-${pc.value}`;
+        if (temperanceActive) {
+          updatedPlayers[uid].hand.push(heartUnderGluttony ? boneCard : cardToReturn);
+        } else if (heartUnderGluttony) {
+          updatedPlayers[uid].hand.push(boneCard);
+        }
       });
     }
 
@@ -2230,7 +3348,353 @@ export class GameService {
       }
     }
 
-    const targetSuit = availableSuits[Math.floor(Math.random() * availableSuits.length)];
+    if (curseOk && nextTyrant && winnerUid !== 'draw') {
+      updatedPlayers[winnerUid].hand.push('Crowns-E');
+      nextTyrant = undefined;
+    }
+
+    let nextActiveCurses: ActiveCurseState[] = curseOk ? [...(roomData.activeCurses ?? [])] : [];
+    let nextSlothSaved: Suit[] | null | undefined = roomData.slothSavedAvailableSuits ?? null;
+    let nextEnvySealed = mergeEnvySealDeltas(roomData.envySealedCards, outcome.envyRoundFx?.newSeals);
+    if (outcome.envyRoundFx?.defeated || outcome.envyRoundFx?.departedDoubleGrovel) {
+      nextEnvySealed = {};
+    }
+
+    const lustPlayed =
+      curseOk &&
+      ((outcome.powerCardIdsPlayed[p1Uid] === CURSE_LUST &&
+        !outcome.powerCardTowerBlocked?.[p1Uid] &&
+        !outcome.curseClashSuppressed?.[p1Uid]) ||
+        (outcome.powerCardIdsPlayed[p2Uid] === CURSE_LUST &&
+          !outcome.powerCardTowerBlocked?.[p2Uid] &&
+          !outcome.curseClashSuppressed?.[p2Uid]));
+    if (lustPlayed) {
+      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_LUST);
+      if (ix < 0) nextActiveCurses.push({ id: CURSE_LUST, lustAccumulated: 0 });
+    }
+
+    const gluttonyPlayed =
+      curseOk &&
+      ((outcome.powerCardIdsPlayed[p1Uid] === CURSE_GLUTTONY &&
+        !outcome.powerCardTowerBlocked?.[p1Uid] &&
+        !outcome.curseClashSuppressed?.[p1Uid]) ||
+        (outcome.powerCardIdsPlayed[p2Uid] === CURSE_GLUTTONY &&
+          !outcome.powerCardTowerBlocked?.[p2Uid] &&
+          !outcome.curseClashSuppressed?.[p2Uid]));
+    if (gluttonyPlayed) {
+      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_GLUTTONY);
+      const fresh: ActiveCurseState = { id: CURSE_GLUTTONY, gluttonyPhase: 0, gluttonyNoHeartStreak: 0 };
+      if (ix >= 0) nextActiveCurses[ix] = fresh;
+      else nextActiveCurses.push(fresh);
+    }
+    if (greedPlayed) {
+      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_GREED);
+      const fresh: ActiveCurseState = { id: CURSE_GREED, greedCrown: 0 };
+      if (ix >= 0) nextActiveCurses[ix] = fresh;
+      else nextActiveCurses.push(fresh);
+    }
+    if (pridePlayed) {
+      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_PRIDE);
+      const fresh: ActiveCurseState = { id: CURSE_PRIDE };
+      if (ix >= 0) nextActiveCurses[ix] = fresh;
+      else nextActiveCurses.push(fresh);
+    }
+
+    const envyPlayed =
+      curseOk &&
+      ((outcome.powerCardIdsPlayed[p1Uid] === CURSE_ENVY &&
+        !outcome.powerCardTowerBlocked?.[p1Uid] &&
+        !outcome.curseClashSuppressed?.[p1Uid]) ||
+        (outcome.powerCardIdsPlayed[p2Uid] === CURSE_ENVY &&
+          !outcome.powerCardTowerBlocked?.[p2Uid] &&
+          !outcome.curseClashSuppressed?.[p2Uid]));
+
+    if (envyPlayed) {
+      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_ENVY);
+      const fresh: ActiveCurseState = { id: CURSE_ENVY, envyMonsterHp: ENVY_MONSTER_START_HP };
+      if (ix >= 0) nextActiveCurses[ix] = fresh;
+      else nextActiveCurses.push(fresh);
+    }
+
+    if (curseOk && outcome.slothDreamFx?.result === 'SUN' && slothCurseActive(roomData.activeCurses ?? [])) {
+      nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_SLOTH);
+      nextSlothSaved = null;
+    }
+
+    const slothPlayed =
+      curseOk &&
+      ((outcome.powerCardIdsPlayed[p1Uid] === CURSE_SLOTH &&
+        !outcome.powerCardTowerBlocked?.[p1Uid] &&
+        !outcome.curseClashSuppressed?.[p1Uid]) ||
+        (outcome.powerCardIdsPlayed[p2Uid] === CURSE_SLOTH &&
+          !outcome.powerCardTowerBlocked?.[p2Uid] &&
+          !outcome.curseClashSuppressed?.[p2Uid]));
+
+    if (slothPlayed) {
+      const hadSlothAtStart = slothCurseActive(roomData.activeCurses ?? []);
+      const dreamSunEnded = outcome.slothDreamFx?.result === 'SUN';
+      if (!hadSlothAtStart || dreamSunEnded) {
+        nextSlothSaved = [...availableSuits];
+      }
+      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_SLOTH);
+      const fresh: ActiveCurseState = { id: CURSE_SLOTH };
+      if (ix >= 0) nextActiveCurses[ix] = fresh;
+      else nextActiveCurses.push(fresh);
+    }
+
+    const wrathWasActiveAtStart = curseOk && wrathCurseActive(roomData.activeCurses);
+    const wrathRoundAtStart = roomData.activeCurses?.find((c) => c.id === CURSE_WRATH)?.wrathRound ?? 1;
+
+    const wrathPlayed =
+      curseOk &&
+      ((outcome.powerCardIdsPlayed[p1Uid] === CURSE_WRATH &&
+        !outcome.powerCardTowerBlocked?.[p1Uid] &&
+        !outcome.curseClashSuppressed?.[p1Uid]) ||
+        (outcome.powerCardIdsPlayed[p2Uid] === CURSE_WRATH &&
+          !outcome.powerCardTowerBlocked?.[p2Uid] &&
+          !outcome.curseClashSuppressed?.[p2Uid]));
+
+    if (wrathPlayed) {
+      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_WRATH);
+      const fresh: ActiveCurseState = { id: CURSE_WRATH, wrathRound: 1 };
+      if (ix >= 0) nextActiveCurses[ix] = fresh;
+      else nextActiveCurses.push(fresh);
+    }
+
+    if (wrathWasActiveAtStart && !wrathPlayed) {
+      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_WRATH);
+      if (ix >= 0) {
+        if (wrathRoundAtStart >= 5) {
+          nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_WRATH);
+          outcomeForState = {
+            ...outcomeForState,
+            events: [
+              ...outcomeForState.events,
+              {
+                type: 'POWER_TRIGGER',
+                message: 'Wrath ends — the Warlord was the last stroke.',
+              },
+            ],
+          };
+        } else {
+          nextActiveCurses[ix] = {
+            ...nextActiveCurses[ix],
+            wrathRound: wrathRoundAtStart + 1,
+          };
+        }
+      }
+    }
+
+    const prideEndedByGrovel =
+      curseOk &&
+      prideCurseActive(roomData.activeCurses) &&
+      (outcome.cardsPlayed[p1Uid] === GROVEL_CARD_ID || outcome.cardsPlayed[p2Uid] === GROVEL_CARD_ID);
+    if (prideEndedByGrovel) {
+      nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_PRIDE);
+      uids.forEach((uid) => {
+        updatedPlayers[uid].hand = updatedPlayers[uid].hand.filter((c) => c !== GROVEL_CARD_ID);
+      });
+      outcomeForState = {
+        ...outcomeForState,
+        events: [
+          ...outcomeForState.events,
+          { type: 'POWER_TRIGGER', message: 'Pride ends — someone groveled.' },
+        ],
+      };
+    }
+
+    if (curseOk && outcome.gluttonyPersistence) {
+      if (outcome.gluttonyPersistence.remove) {
+        nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_GLUTTONY);
+      } else {
+        const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_GLUTTONY);
+        if (ix >= 0) {
+          nextActiveCurses[ix] = {
+            ...nextActiveCurses[ix],
+            gluttonyPhase: outcome.gluttonyPersistence.phase,
+            gluttonyNoHeartStreak: outcome.gluttonyPersistence.streak,
+          };
+        }
+      }
+    }
+
+    if (curseOk && outcome.lustRoundFx) {
+      const { nextMeter, sated } = outcome.lustRoundFx;
+      if (sated) {
+        nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_LUST);
+      } else {
+        const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_LUST);
+        if (ix >= 0) {
+          nextActiveCurses[ix] = { ...nextActiveCurses[ix], lustAccumulated: nextMeter };
+        } else if (lustCurseActive(roomData.activeCurses ?? []) || lustPlayed) {
+          nextActiveCurses.push({ id: CURSE_LUST, lustAccumulated: nextMeter });
+        }
+      }
+    }
+
+    if (curseOk && outcome.envyRoundFx && envyCurseActive(nextActiveCurses)) {
+      const fx = outcome.envyRoundFx;
+      if (fx.defeated || fx.departedDoubleGrovel) {
+        nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_ENVY);
+      } else {
+        const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_ENVY);
+        if (ix >= 0) {
+          nextActiveCurses[ix] = { ...nextActiveCurses[ix], envyMonsterHp: fx.monsterHpEnd };
+        }
+      }
+    }
+
+    const stripGreedInjectedFromDeck = () => {
+      if (!nextGreedInjected?.length) return;
+      const rm = new Set(nextGreedInjected);
+      const filtered = newDeck.filter((c) => !rm.has(c));
+      newDeck.length = 0;
+      newDeck.push(...filtered);
+      nextGreedInjected = undefined;
+    };
+
+    const finishGreedCurse = (crownTotal: number) => {
+      nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_GREED);
+      stripGreedInjectedFromDeck();
+      if (winnerUid === 'draw') {
+        nextTyrant = { crownTotal };
+      } else {
+        updatedPlayers[winnerUid].hand.push('Crowns-E');
+      }
+    };
+
+    if (curseOk && outcome.greedPersistence && greedCurseActive(roomData.activeCurses)) {
+      if (outcome.greedPersistence.removeReason !== 'crown') {
+        const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_GREED);
+        if (ix >= 0) {
+          nextActiveCurses[ix] = { ...nextActiveCurses[ix], greedCrown: outcome.greedPersistence.nextCrown };
+        }
+      }
+    }
+
+    if (
+      curseOk &&
+      outcome.greedPersistence?.removeReason === 'crown' &&
+      greedCurseActive(roomData.activeCurses)
+    ) {
+      finishGreedCurse(outcome.greedPersistence.nextCrown);
+    }
+
+    if (curseOk && greedCurseActive(nextActiveCurses) && outcome.greedPersistence?.removeReason !== 'crown') {
+      let diamCoin = 0;
+      for (const c of newDeck) {
+        const p = parseCard(c);
+        if (!p.isJoker && (p.suit === 'Diamonds' || p.suit === 'Coins')) diamCoin += 1;
+      }
+      for (const uid of uids) {
+        for (const c of updatedPlayers[uid].hand) {
+          const p = parseCard(c);
+          if (!p.isJoker && (p.suit === 'Diamonds' || p.suit === 'Coins')) diamCoin += 1;
+        }
+      }
+      if (diamCoin === 0) {
+        const entry = nextActiveCurses.find((c) => c.id === CURSE_GREED);
+        finishGreedCurse(entry?.greedCrown ?? 0);
+        outcomeForState = {
+          ...outcome,
+          events: [
+            ...outcome.events,
+            { type: 'POWER_TRIGGER', message: 'The Tyrant is dead. Only their crown remains.' },
+          ],
+        };
+      }
+    }
+
+    if (curseOk && slothCurseActive(nextActiveCurses)) {
+      availableSuits = ['Stars', 'Moons'];
+    }
+
+    const lustForWheel = curseOk && lustCurseActive(nextActiveCurses);
+    const greedForWheel = curseOk && greedCurseActive(nextActiveCurses);
+    const suitWeights = availableSuits.map((s) => {
+      let w = s === 'Hearts' && lustForWheel ? 3 : 1;
+      if (greedForWheel && (s === 'Hearts' || s === 'Clubs' || s === 'Spades')) {
+        w *= 0.5;
+      }
+      return w;
+    });
+    const totalW = suitWeights.reduce((a, b) => a + b, 0) || 1;
+    const wheelOffset = Math.random();
+    const r = wheelOffset * totalW;
+    let accPick = 0;
+    let targetSuit = availableSuits[availableSuits.length - 1];
+    for (let i = 0; i < availableSuits.length; i++) {
+      accPick += suitWeights[i];
+      if (r < accPick) {
+        targetSuit = availableSuits[i];
+        break;
+      }
+    }
+
+    let nextPrideCeiling: string | null = null;
+    if (curseOk && prideCurseActive(nextActiveCurses)) {
+      const rank = VALUES[Math.floor(Math.random() * VALUES.length)];
+      nextPrideCeiling = `${targetSuit}-${rank}`;
+    }
+
+    if (!curseOk || (!prideCurseActive(nextActiveCurses) && !envyCurseActive(nextActiveCurses))) {
+      uids.forEach((uid) => {
+        updatedPlayers[uid].hand = updatedPlayers[uid].hand.filter((c) => c !== GROVEL_CARD_ID);
+      });
+    } else if (nextPrideCeiling) {
+      const lustNext = curseOk && lustCurseActive(nextActiveCurses);
+      const greedNext = curseOk && greedCurseActive(nextActiveCurses);
+      for (const uid of uids) {
+        const hand = updatedPlayers[uid].hand;
+        if (hand.includes(GROVEL_CARD_ID)) continue;
+        if (!handHasLegalPridePlay(hand, nextPrideCeiling, lustNext, greedNext)) {
+          updatedPlayers[uid].hand = [...hand, GROVEL_CARD_ID];
+        }
+      }
+    }
+
+    let nextEnvyBothTrap = false;
+    if (curseOk && envyCurseActive(nextActiveCurses)) {
+      const lustNext = curseOk && lustCurseActive(nextActiveCurses);
+      const greedNext = curseOk && greedCurseActive(nextActiveCurses);
+      const p1Trap = !handHasLegalEnvyPlay(updatedPlayers[p1Uid].hand, p1Uid, nextEnvySealed);
+      const p2Trap = !handHasLegalEnvyPlay(updatedPlayers[p2Uid].hand, p2Uid, nextEnvySealed);
+      for (const uid of uids) {
+        const hand = updatedPlayers[uid].hand;
+        if (hand.includes(GROVEL_CARD_ID)) continue;
+        if (!handHasLegalEnvyPlay(hand, uid, nextEnvySealed)) {
+          updatedPlayers[uid].hand = [...hand, GROVEL_CARD_ID];
+        }
+      }
+      nextEnvyBothTrap = p1Trap && p2Trap;
+    }
+
+    let nextEnvyCovet: RoomData['envyCovet'] = null;
+    if (curseOk && envyCurseActive(nextActiveCurses)) {
+      const lustNext = curseOk && lustCurseActive(nextActiveCurses);
+      const greedNext = curseOk && greedCurseActive(nextActiveCurses);
+      const jointNext = greedNext && targetSuit === 'Diamonds';
+      nextEnvyCovet = pickEnvyCovetedForRound(
+        updatedPlayers,
+        p1Uid,
+        p2Uid,
+        targetSuit,
+        nextEnvySealed,
+        lustNext,
+        greedNext,
+        jointNext,
+      );
+    }
+
+    let nextWrathTarget: string | null = null;
+    let nextWrathMinion: string | null = null;
+    if (curseOk && wrathCurseActive(nextActiveCurses)) {
+      const wrathEntry = nextActiveCurses.find((c) => c.id === CURSE_WRATH);
+      const kr = wrathEntry?.wrathRound ?? 1;
+      nextWrathMinion = wrathMinionCardForRound(kr);
+      nextWrathTarget = Math.random() > 0.5 ? hostUid : guestUid;
+    }
+
     const nextStatus = (updatedPlayers[p1Uid].hand.length === 0 || updatedPlayers[p2Uid].hand.length === 0) ? 'finished' : 'playing';
     let winner = roomData.winner;
     if (nextStatus === 'finished' && !winner) {
@@ -2242,19 +3706,29 @@ export class GameService {
     return {
       ...roomData,
       players: updatedPlayers,
-      lastOutcome: outcome,
+      lastOutcome: outcomeForState,
       status: nextStatus,
       winner,
       currentTurn: roomData.currentTurn + 1,
       targetSuit,
       availableSuits,
-      wheelOffset: Math.random(),
+      wheelOffset,
       deck: newDeck,
       powerDeck,
       pendingPowerDecisions: {},
       engageMoves: null,
       awaitingPowerShowdown: false,
       famineActive,
+      activeCurses: curseOk ? nextActiveCurses : [],
+      tyrantCrownPending: nextTyrant,
+      greedInjectedCoins: nextGreedInjected,
+      prideCeilingCard: nextPrideCeiling,
+      wrathTargetUid: curseOk ? nextWrathTarget : null,
+      wrathMinionCard: curseOk ? nextWrathMinion : null,
+      envySealedCards: curseOk ? nextEnvySealed : {},
+      envyCovet: curseOk ? nextEnvyCovet : null,
+      envyBothGrovelTrap: curseOk ? nextEnvyBothTrap : false,
+      slothSavedAvailableSuits: curseOk ? nextSlothSaved ?? null : null,
       updatedAt: Date.now()
     };
   }
