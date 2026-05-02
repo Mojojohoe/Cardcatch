@@ -189,6 +189,10 @@ export interface ResolutionEvent {
   /** Card identity before CARD_EMPOWER / TRANSFORM (for resolution animations). */
   fromCardId?: string;
   powerCardId?: number;
+  /** Lust curse: thirst points credited from this player's engaged heart toward the meter. */
+  lustFeedPts?: number;
+  /** Brief “upgrade” pulse on this seat’s resolved card during Lust feed. */
+  lustSurgeHeart?: boolean;
   suit?: Suit;
   message: string;
   /** Envy strike: damage dealt this hit. */

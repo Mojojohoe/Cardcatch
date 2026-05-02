@@ -247,25 +247,23 @@ const CurseZonePanel: React.FC<{
   if (!lust && !gluttony && !greed && !pride && !envy && !wrath && !sloth)
     return <div className="w-12 sm:w-[4.75rem] shrink-0" aria-hidden />;
   return (
-    <div className="relative flex max-w-[6.5rem] shrink-0 flex-col items-center gap-2 pt-1 sm:max-w-[7rem]">
+    <div className="relative flex w-full max-w-[14rem] shrink-0 flex-col items-stretch gap-3 pt-1 sm:max-w-none">
       {lust && (
-        <motion.div
-          layout
-          className="relative w-full rounded-xl border-2 border-red-900/75 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]"
-        >
-          <Heart className="mx-auto h-5 w-5 sm:h-6 sm:w-6 text-red-500 drop-shadow-[0_0_14px_rgba(239,68,68,0.45)]" />
-          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-red-400">Lust</p>
-          <p className="text-center font-mono text-[9px] font-bold tabular-nums text-red-200">{lust.lustAccumulated ?? 0}/150</p>
+        <motion.div layout className="relative flex w-full flex-col items-center gap-1.5">
+          <PowerCardVisual cardId={CURSE_LUST} revealed matchHandCard disabled />
+          <p className="text-center text-[7px] font-black uppercase tracking-wider text-red-400">Lust</p>
+          <p className="text-center font-mono text-[10px] font-bold tabular-nums leading-tight text-red-200">
+            {lust.lustAccumulated ?? 0}
+            <span className="text-red-500/80">/150</span>{' '}
+            <span className="block text-[6px] font-bold uppercase tracking-wide text-red-400/90">Hunger</span>
+          </p>
         </motion.div>
       )}
       {gluttony && (
-        <motion.div
-          layout
-          className="relative w-full rounded-xl border-2 border-red-900/75 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]"
-        >
-          <UtensilsCrossed className="mx-auto h-5 w-5 sm:h-6 sm:w-6 text-red-500 drop-shadow-[0_0_14px_rgba(239,68,68,0.45)]" strokeWidth={2.2} />
-          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-red-400">Gluttony</p>
-          <p className="mt-1 px-0.5 text-center text-[6px] font-bold leading-snug normal-case text-red-200/95">
+        <motion.div layout className="relative flex w-full flex-col items-center gap-1.5">
+          <PowerCardVisual cardId={CURSE_GLUTTONY} revealed matchHandCard disabled />
+          <p className="text-center text-[7px] font-black uppercase tracking-wider text-red-400">Gluttony</p>
+          <p className="max-w-[12rem] px-0.5 text-center text-[7px] font-bold leading-snug normal-case text-red-200/95">
             {gluttonyMoodCopy(gluttony.gluttonyPhase ?? 0)}
           </p>
         </motion.div>
@@ -1331,6 +1329,19 @@ const ResolutionSequence: React.FC<{
             }
             break;
           case 'POWER_TRIGGER':
+            if (event.powerCardId === CURSE_LUST && (event.lustFeedPts ?? 0) > 0 && event.uid) {
+              setLustHeartBurst(true);
+              if (event.lustSurgeHeart) {
+                setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'upgrade' }));
+                await new Promise((r) => setTimeout(r, 460));
+                if (!active) return;
+                setResolutionCardMorph((m) => {
+                  const next = { ...m };
+                  delete next[event.uid!];
+                  return next;
+                });
+              }
+            }
             if (event.uid) {
                // Devil specific UI feedback
                if (event.powerCardId === 15) {
@@ -1401,7 +1412,7 @@ const ResolutionSequence: React.FC<{
               : event.type === 'CARD_EMPOWER' || event.type === 'TARGET_CHANGE'
                 ? 980
                 : event.type === 'POWER_TRIGGER'
-                  ? 1050
+                  ? (event.powerCardId === CURSE_LUST && (event.lustFeedPts ?? 0) > 0 ? 1320 : 1050)
                   : event.type === 'ENVY_COVET' || event.type === 'ENVY_STRIKE' || event.type === 'ENVY_DEFEATED' || event.type === 'ENVY_DEPARTS'
                   ? 1280
                   : event.type === 'SLOTH_DREAM'
@@ -1443,7 +1454,6 @@ const ResolutionSequence: React.FC<{
       });
       
       setEventIndex(events.length);
-      if (outcome.lustRoundFx?.contributions?.length) setLustHeartBurst(true);
       setIsDone(true);
       // Increased delay to 3.5s to let the final state sink in
       await new Promise(r => setTimeout(r, 3500));
@@ -2968,7 +2978,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 ))}
               </div>
 
-              <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-hidden pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-auto sm:max-w-[min(7.5rem,calc((100vw-2rem)*0.2))] sm:self-stretch sm:pb-2">
+              <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-hidden pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-auto sm:max-w-[min(11rem,calc((100vw-2rem)*0.28))] sm:self-stretch sm:pb-2">
                 <div className="flex max-h-[min(32vh,12.75rem)] w-full shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden pb-1 [-ms-overflow-style:auto] [scrollbar-gutter:stable]">
                   <CurseZonePanel
                     settings={room.settings}
@@ -3367,21 +3377,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </motion.div>
       )}
 
-      {/* Bottom strip (div9): your desperation ladder when you’re allowed to spin */}
+      {/* Bottom strip: hand & powers · desperation capsule last (napkin div9 under cards) */}
       <div className="mt-auto shrink-0 px-4 pb-4">
-        {(room.status === 'playing' || room.status === 'powering') &&
-          room.settings.enableDesperation &&
-          desperationSpinAllowed(room, myUid, me) && (
-            <div className="mx-auto mb-2 flex w-full max-w-md min-h-[2.5rem] flex-col items-center justify-center rounded-xl border border-purple-800/55 bg-purple-950/55 px-4 py-2 text-center shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
-              <span className="max-w-full text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
-                Desperation:{' '}
-                {me.desperationTier >= 0
-                  ? desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`
-                  : 'Off ladder until first in-match spin'}
-              </span>
-            </div>
-          )}
-
         <div className="mb-2 flex items-end justify-between">
            <div className="flex flex-col">
               <span className="text-[10px] font-bold opacity-50 uppercase tracking-tighter">Cards: {me.hand.length}</span>
@@ -3442,16 +3439,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
                 Your powers
               </span>
-              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-x-auto overflow-y-visible pb-0.5 -space-x-7 [scrollbar-width:thin] sm:justify-start sm:-space-x-9">
+              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-x-auto overflow-y-visible pb-1 -space-x-4 pl-1 [scrollbar-width:thin] sm:justify-start sm:-space-x-6 sm:pl-2">
                 {me.powerCards.map((pId, i) => (
-                  <PowerCardVisual
-                    key={`bottom-pow-${pId}-${i}`}
-                    cardId={pId}
-                    matchHandCard
-                    selected={selectedPowerCard === pId}
-                    onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
-                    disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
-                  />
+                  <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
+                    <PowerCardVisual
+                      cardId={pId}
+                      matchHandCard
+                      selected={selectedPowerCard === pId}
+                      onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
+                      disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -3530,6 +3528,19 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           </div>
         </div>
+
+        {(room.status === 'playing' || room.status === 'powering') &&
+          room.settings.enableDesperation &&
+          desperationSpinAllowed(room, myUid, me) && (
+            <div className="mx-auto mt-3 flex w-full max-w-md min-h-[2.5rem] flex-col items-center justify-center rounded-xl border border-purple-800/55 bg-purple-950/55 px-4 py-2 text-center shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
+              <span className="max-w-full text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
+                Desperation:{' '}
+                {me.desperationTier >= 0
+                  ? desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`
+                  : 'Off ladder until first in-match spin'}
+              </span>
+            </div>
+          )}
       </div>
 
       {/* Win Modal Mini */}

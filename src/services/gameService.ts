@@ -2520,6 +2520,50 @@ export class GameService {
         }
     }
 
+    /** Lust meter uses the heart each player locked in — not the post-power battlefield card (Stars, etc.). */
+    let lustRoundFx: NonNullable<RoomData['lastOutcome']>['lustRoundFx'] = undefined;
+    if (curseEnabled && lustHeartRules) {
+      const prevLust = roomData.activeCurses?.find((c) => c.id === CURSE_LUST)?.lustAccumulated ?? 0;
+      const contributions: { uid: string; card: string; lustPointsAdded: number }[] = [];
+      let add = 0;
+      for (const uid of [p1Uid, p2Uid]) {
+        const engaged = initialCardsPlayed[uid];
+        if (!engaged) continue;
+        if (parseCard(engaged).suit !== 'Hearts') continue;
+        const lustPts = Math.max(0, Math.round(getCardValue(engaged, true, greedTaxActive)));
+        add += lustPts;
+        contributions.push({ uid, card: engaged, lustPointsAdded: lustPts });
+      }
+      if (contributions.length > 0) {
+        const nextRaw = prevLust + add;
+        const sated = nextRaw >= 150;
+        lustRoundFx = {
+          contributions,
+          previousMeter: prevLust,
+          nextMeter: sated ? 0 : nextRaw,
+          sated,
+        };
+
+        for (const c of contributions) {
+          events.push({
+            type: 'POWER_TRIGGER',
+            uid: c.uid,
+            powerCardId: CURSE_LUST,
+            lustFeedPts: c.lustPointsAdded,
+            lustSurgeHeart: true,
+            message: `Gluttony's Lust drank ${c.lustPointsAdded} from ${players[c.uid].name}'s ${sentenceCard(c.card)}.`,
+          });
+        }
+        if (sated) {
+          events.push({
+            type: 'POWER_TRIGGER',
+            powerCardId: CURSE_LUST,
+            message: `Lust is sated this round (${add} hunger${contributions.length > 1 ? ' combined' : ''}) — Gluttony's thirst is cleared.`,
+          });
+        }
+      }
+    }
+
     // Phase 3: Resolution
     if (power1 === 14 || power2 === 14) {
         winnerUid = 'draw';
@@ -3128,36 +3172,6 @@ export class GameService {
         });
         for (let i = 0; i < n; i++) gains[uid].push({ type: 'draw', id: 'famine-bone' });
       });
-    }
-
-    let lustRoundFx: NonNullable<RoomData['lastOutcome']>['lustRoundFx'] = undefined;
-    if (curseEnabled && lustHeartRules) {
-      const prevLust = roomData.activeCurses?.find((c) => c.id === CURSE_LUST)?.lustAccumulated ?? 0;
-      const contributions: { uid: string; card: string; lustPointsAdded: number }[] = [];
-      let add = 0;
-      for (const uid of [p1Uid, p2Uid]) {
-        const card = uid === p1Uid ? c1 : c2;
-        if (parseCard(card).suit === 'Hearts') {
-          /** One application of lust-boosted heart clash value feeds the meter (was incorrectly doubled again before). */
-          const lustPts = Math.max(0, Math.round(getCardValue(card, true)));
-          add += lustPts;
-          contributions.push({ uid, card, lustPointsAdded: lustPts });
-        }
-      }
-      const nextRaw = prevLust + add;
-      const sated = nextRaw >= 150;
-      lustRoundFx = {
-        contributions,
-        previousMeter: prevLust,
-        nextMeter: sated ? 0 : nextRaw,
-        sated,
-      };
-      if (sated) {
-        events.push({
-          type: 'POWER_TRIGGER',
-          message: 'Lust has been sated.',
-        });
-      }
     }
 
     let gluttonyPersistence: NonNullable<RoomData['lastOutcome']>['gluttonyPersistence'] = undefined;
