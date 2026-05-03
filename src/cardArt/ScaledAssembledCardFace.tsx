@@ -27,18 +27,27 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const w = el.clientWidth;
-      if (w > 0) setScale(w / CARD_ART_WIDTH);
-    });
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const w = rect.width > 0.5 ? rect.width : el.clientWidth;
+      if (w > 0.5) setScale(w / CARD_ART_WIDTH);
+    };
+    measure();
+    const ro = new ResizeObserver(() => measure());
     ro.observe(el);
-    return () => ro.disconnect();
+    const raf1 = requestAnimationFrame(measure);
+    const raf2 = requestAnimationFrame(() => measure());
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, []);
 
   return (
     <div
       ref={wrapRef}
-      className={`relative w-full overflow-hidden rounded-[inherit] ${className ?? ''}`}
+      className={`relative min-w-0 w-full overflow-hidden rounded-[inherit] ${className ?? ''}`}
       style={{ aspectRatio: `${CARD_ART_WIDTH} / ${CARD_ART_HEIGHT}` }}
     >
       <div

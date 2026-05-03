@@ -470,6 +470,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               defaults={defaults}
               pipScale={pipScale}
               centrePictureScale={centrePictureScale}
+              textOpacity={faceTextOpacity}
             />
           )}
         </div>
@@ -557,6 +558,45 @@ function PictureInterior({
   );
 }
 
+/** Large centre suit + rank when Ace/God court rasters are missing or fail to load (e.g. pip fallback looked tiny). */
+function AceOrGodCentreFallback({
+  suit,
+  value,
+  pipScale,
+  defaults,
+  textOpacity,
+}: {
+  suit: string;
+  value: string;
+  pipScale: number;
+  defaults?: CardArtGlobalDefaults;
+  textOpacity: number;
+}) {
+  const rankFill = resolveSuitFaceTextColor(suit, defaults?.suitFaceTextColor);
+  const glyphScale = Math.max(pipScale, 1);
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1 px-[10%]">
+      <div
+        className="flex max-h-[52%] max-w-[62%] items-center justify-center"
+        style={{ transform: `scale(${glyphScale})` }}
+      >
+        <SuitGlyph suit={suit as any} className={`h-full w-full max-h-full max-w-full opacity-90 ${SUIT_COLORS[suit] ?? ''}`} />
+      </div>
+      <span
+        className="font-card-rank font-black"
+        style={{
+          fontSize: Math.round(CARD_ART_WIDTH * 0.2 * Math.max(pipScale, 0.85)),
+          color: rankFill,
+          opacity: textOpacity,
+          ...contrastTextShadow(rankFill),
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function CenterFill({
   card,
   suit,
@@ -565,6 +605,7 @@ function CenterFill({
   defaults,
   pipScale,
   centrePictureScale,
+  textOpacity,
 }: {
   card: string;
   suit: string;
@@ -573,6 +614,7 @@ function CenterFill({
   defaults?: CardArtGlobalDefaults;
   pipScale: number;
   centrePictureScale: number;
+  textOpacity: number;
 }) {
   const slots = resolvePipSlots(value, override, defaults);
   const aceOrGod = value === 'A' || value === 'G';
@@ -594,9 +636,13 @@ function CenterFill({
         pictureStem={centreStem}
         pictureScale={centrePictureScale}
         fallback={
-          <div className="pointer-events-none absolute inset-0 z-[2]">
-            <PipInterior suit={suit} value={value} override={override} defaults={defaults} pipScale={pipScale} />
-          </div>
+          <AceOrGodCentreFallback
+            suit={suit}
+            value={value}
+            pipScale={pipScale}
+            defaults={defaults}
+            textOpacity={textOpacity}
+          />
         }
       />
     );

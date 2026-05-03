@@ -116,6 +116,7 @@ import {
   CURSE_LUST,
   CURSE_PRIDE,
   CURSE_ENVY,
+  CURSE_GREEN_EYED_MONSTER,
   CURSE_SLOTH,
   CURSE_WRATH,
   CURSES,
@@ -139,9 +140,10 @@ const ENVY_COVET_CARD_TOOLTIP = 'The Green-Eyed Monster is envious of this card.
 const ENVY_SEALED_TOOLTIP = 'Envy has sealed this card — it cannot be played until the Green-Eyed Monster is defeated.';
 const ENVY_RESOLUTION_MONSTER_TOOLTIP = 'The Green-Eyed Monster must be stopped!';
 
-/** Round resolution: rank/suit ladder pacing (Lust heart path uses red-pink glow in `CardVisual`). */
-const RESOLUTION_UPGRADE_STEP_MS = 500;
-const RESOLUTION_UPGRADE_PROMPT_MS = 450;
+/** Round resolution: empower ladder — pause on each rank, then wiggle (see `ResolutionSequence` CARD_EMPOWER). */
+const RESOLUTION_UPGRADE_INTRO_MS = 320;
+const RESOLUTION_UPGRADE_PAUSE_MS = 200;
+const RESOLUTION_UPGRADE_WIGGLE_MS = 380;
 
 /** Pride barrier blocks plays of the barrier suit at or above its clash rank (Grovel exempt). */
 function envySealBlocksHandIndex(
@@ -840,7 +842,7 @@ const DevPowerMenu: React.FC<{
         <div className="mb-5 rounded-2xl border border-amber-500/40 bg-amber-950/25 p-4 space-y-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Curses · table zone</p>
           <p className="text-[10px] text-slate-400 leading-snug">
-            Activates curse effects as if resolved on the board (syncs via host). Clearing removes active curses, seals, wrath targets, greed coin injection from the pile, and restores Sloth suit list when applicable.
+            Activates curse effects as if resolved on the board (syncs via host). Use Envy for the table curse (Green-Eyed Monster is the same curse when played from hand). Clearing removes active curses, seals, wrath targets, greed coin injection from the pile, and restores Sloth suit list when applicable.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -853,7 +855,7 @@ const DevPowerMenu: React.FC<{
             </button>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {CURSE_IDS.map((curseId) => {
+            {CURSE_IDS.filter((id) => id !== CURSE_GREEN_EYED_MONSTER).map((curseId) => {
               const def = CURSES[curseId];
               return (
                 <button
@@ -1258,10 +1260,10 @@ const ResolutionSequence: React.FC<{
   const [towerScorch, setTowerScorch] = useState<Record<string, boolean>>({});
   const [resolutionFx, setResolutionFx] = useState<ResolutionFx>(null);
   const [lustHeartBurst, setLustHeartBurst] = useState(false);
-  /** Per-seat resolution morph overlay on the played card (`transform` = identity swap flip, `upgrade` = rank/suit flicker ladder). */
-  const [resolutionCardMorph, setResolutionCardMorph] = useState<
-    Record<string, 'transform' | 'upgrade' | 'lustUpgrade'>
-  >({});
+  /** Per-seat resolution morph on the played card (`transform` = identity flip only). */
+  const [resolutionCardMorph, setResolutionCardMorph] = useState<Record<string, 'transform'>>({});
+  /** Bumped after each empower step so `CardVisual` replays a short wiggle without dropping artwork mode. */
+  const [resolutionEmpowerWiggleTick, setResolutionEmpowerWiggleTick] = useState<Record<string, number>>({});
   const [resolutionEmpowerCaption, setResolutionEmpowerCaption] = useState<{ uid: string; text: string } | null>(null);
 
   const lustHeartParticles = useMemo(() => {
@@ -1375,7 +1377,6 @@ const ResolutionSequence: React.FC<{
                   ? lustHeartUpgradeSteps(event.fromCardId, event.cardId)
                   : playingCardUpgradeSteps(event.fromCardId, event.cardId)
               ).filter(Boolean);
-              const morphMode = heartsLustLadder ? ('lustUpgrade' as const) : ('upgrade' as const);
               if (steps.length > 1) {
                 setResolutionEmpowerCaption({
                   uid: event.uid!,
@@ -1383,21 +1384,27 @@ const ResolutionSequence: React.FC<{
                     event.message?.trim() ||
                     (heartsLustLadder ? 'Lust empowers this heart.' : 'Empowering.'),
                 });
-                setResolutionCardMorph((m) => ({ ...m, [event.uid!]: morphMode }));
-                await new Promise((r) => setTimeout(r, RESOLUTION_UPGRADE_PROMPT_MS));
+                await new Promise((r) => setTimeout(r, RESOLUTION_UPGRADE_INTRO_MS));
                 if (!active) return;
+                const uidK = event.uid!;
                 try {
                   for (let s = 0; s < steps.length; s++) {
                     const stepCard = steps[s];
-                    setCurrentCards((prev) => ({ ...prev, [event.uid!]: stepCard }));
-                    await new Promise((r) => setTimeout(r, RESOLUTION_UPGRADE_STEP_MS));
+                    setCurrentCards((prev) => ({ ...prev, [uidK]: stepCard }));
+                    await new Promise((r) => setTimeout(r, RESOLUTION_UPGRADE_PAUSE_MS));
+                    if (!active) return;
+                    setResolutionEmpowerWiggleTick((prev) => ({
+                      ...prev,
+                      [uidK]: (prev[uidK] ?? 0) + 1,
+                    }));
+                    await new Promise((r) => setTimeout(r, RESOLUTION_UPGRADE_WIGGLE_MS));
                     if (!active) return;
                   }
                 } finally {
                   setResolutionEmpowerCaption(null);
-                  setResolutionCardMorph((m) => {
-                    const next = { ...m };
-                    delete next[event.uid!];
+                  setResolutionEmpowerWiggleTick((prev) => {
+                    const next = { ...prev };
+                    delete next[uidK];
                     return next;
                   });
                 }
@@ -1421,12 +1428,13 @@ const ResolutionSequence: React.FC<{
             }
             if (event.powerCardId === CURSE_LUST && (event.lustFeedPts ?? 0) > 0 && event.uid) {
               if (event.lustSurgeHeart) {
-                setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'lustUpgrade' }));
-                await new Promise((r) => setTimeout(r, 720));
+                const u = event.uid!;
+                setResolutionEmpowerWiggleTick((prev) => ({ ...prev, [u]: (prev[u] ?? 0) + 1 }));
+                await new Promise((r) => setTimeout(r, 480));
                 if (!active) return;
-                setResolutionCardMorph((m) => {
-                  const next = { ...m };
-                  delete next[event.uid!];
+                setResolutionEmpowerWiggleTick((prev) => {
+                  const next = { ...prev };
+                  delete next[u];
                   return next;
                 });
               }
@@ -1980,6 +1988,7 @@ const ResolutionSequence: React.FC<{
                     lustHeartRulesActive={lustHeartResolution}
                     clashGhost={Boolean(postClashGhost[uid])}
                     resolutionMorph={resolutionCardMorph[uid] ?? null}
+                    resolutionWiggleTick={resolutionEmpowerWiggleTick[uid] ?? 0}
                   />
                   <AnimatePresence>
                     {resolutionFx?.kind === 'clash_shatter' && resolutionFx.uid === uid && (
@@ -3329,11 +3338,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           )}
 
             {(room.status === 'playing' || room.status === 'powering') && opponent ? (
-            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(10rem,36%)_minmax(0,1fr)_minmax(8.5rem,11rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:gap-x-3 md:gap-y-1.5">
+            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(0,13rem)_minmax(0,1fr)_minmax(6.5rem,9.5rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)_minmax(7rem,10rem)] sm:gap-x-3 md:gap-y-1.5">
               {/* Row 1 napkin sketch: spacer | opp hand | opp powers — deck stacks row2 col3 */}
               <div className="hidden min-h-[0.125rem] sm:col-start-1 sm:row-start-1 sm:block" aria-hidden />
               <div
-                className={`relative col-span-full min-h-0 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1 ${
+                className={`relative col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:w-full sm:max-w-[min(100%,36rem)] ${
                   opponentWheelDecisionSpinning ? 'min-h-[10rem] sm:min-h-[12rem]' : 'min-h-[11rem] sm:min-h-[12rem]'
                 }`}
               >
@@ -3385,7 +3394,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 ))}
               </div>
 
-              <aside className="relative z-[6] col-span-full flex min-h-min w-full min-w-0 flex-col items-center gap-2 overflow-visible pb-2 pt-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-auto sm:max-w-[min(30rem,calc((100vw-2rem)*0.42))] sm:self-stretch sm:pb-3">
+              <aside className="relative z-[6] col-span-full flex min-h-min w-full min-w-0 flex-col items-center gap-2 overflow-visible pb-2 pt-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-full sm:max-w-[15rem] sm:justify-self-start sm:self-stretch sm:pb-3">
                 <div className="flex w-full shrink-0 flex-col items-stretch overflow-visible px-0.5 py-2">
                   <CurseZonePanel
                     settings={room.settings}
@@ -3396,7 +3405,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 </div>
               </aside>
 
-              <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:px-3">
+              <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:w-full sm:max-w-[min(100%,36rem)] sm:px-3">
                 <div className="relative z-10 flex w-full min-w-0 flex-col items-center">
                {room.status === 'playing' &&
                  room.settings.enableCurseCards &&
@@ -3922,14 +3931,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
            </div>
         </div>
         <div
-          className={`flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-center xl:flex-nowrap ${
-            (room.status === 'playing' || room.status === 'powering') && me.powerCards.length
-              ? 'sm:gap-x-0 sm:gap-y-1 md:justify-between lg:justify-center xl:justify-center xl:gap-2'
-              : ''
+          className={`flex w-full flex-col items-stretch gap-3 sm:flex-row sm:flex-nowrap sm:items-end sm:justify-center sm:gap-x-3 xl:gap-4 ${
+            (room.status === 'playing' || room.status === 'powering') && me.powerCards.length ? '' : ''
           }`}
         >
           {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
-            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-7 pb-3 sm:max-w-[min(46vw,22rem)] sm:items-start md:-mr-3 xl:mr-0">
+            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-7 pb-3 sm:w-[min(46vw,22rem)] sm:max-w-[22rem] sm:shrink-0 sm:items-start">
               <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
                 Your powers
               </span>
@@ -3949,12 +3956,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           )}
           <div
-            className={`relative z-[12] flex min-h-[11rem] min-w-0 flex-1 flex-col justify-end sm:min-h-0 xl:flex-initial ${
-              (room.status === 'playing' || room.status === 'powering') && me.powerCards.length ? 'xl:max-w-max' : ''
+            className={`relative z-[12] flex min-h-[11rem] min-w-0 flex-1 flex-col justify-end sm:min-h-0 ${
+              (room.status === 'playing' || room.status === 'powering') && me.powerCards.length
+                ? 'sm:min-w-0 sm:flex-1'
+                : 'w-full'
             }`}
           >
             <div
-              className={`flex h-44 items-end justify-center -space-x-8 flex-nowrap transition-[filter,opacity] duration-300 sm:-space-x-12 ${
+              className={`flex h-44 w-full items-end justify-center -space-x-8 flex-nowrap transition-[filter,opacity] duration-300 sm:-space-x-12 ${
                 me.confirmed ? 'saturate-[0.68] brightness-95 opacity-[0.92]' : ''
               }`}
             >

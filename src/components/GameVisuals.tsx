@@ -349,8 +349,10 @@ export interface CardVisualProps {
   clashGhost?: boolean;
   /** Envy: playable coveted card glows green. */
   envyCovetedGlow?: boolean;
-  /** Round-resolution visual: distinguish identity flip vs rank/suit reinforcement. */
-  resolutionMorph?: 'transform' | 'upgrade' | 'lustUpgrade' | null;
+  /** Round-resolution: identity flip (Strength-style transform) only. */
+  resolutionMorph?: 'transform' | null;
+  /** Resolution empower / Lust surge: incremented to replay a short wiggle without swapping to vector art. */
+  resolutionWiggleTick?: number;
 }
 
 export const CardVisual: React.FC<CardVisualProps> = (props) => {
@@ -373,6 +375,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     clashGhost = false,
     envyCovetedGlow = false,
     resolutionMorph = null,
+    resolutionWiggleTick = 0,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -398,9 +401,10 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     cardArt &&
       cardArt.mode === 'raster' &&
       revealed &&
-      !resolutionMorph &&
+      resolutionMorph !== 'transform' &&
       (hasCustomRasterFace || isAssembledRasterCardId(card)),
   );
+  const playEmpowerWiggle = (resolutionWiggleTick ?? 0) > 0 && resolutionMorph !== 'transform';
   const faceTextOpacity = useMemo(
     () => resolvedFaceTextOpacity(cardArtOverride, cardArt?.defaults),
     [cardArtOverride, cardArt?.defaults],
@@ -572,12 +576,11 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         className={`
           ${faceWrap} ${useAssembledFace ? '' : 'shadow-xl'} flex flex-col justify-between overflow-hidden rounded-lg
           transition-[box-shadow] outline-none will-change-transform
-          ${presentation === 'deckPull' || resolutionMorph === 'transform' || resolutionMorph === 'upgrade' || resolutionMorph === 'lustUpgrade' ? 'perspective-[900px] origin-bottom' : ''}
+          ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
           ${useAssembledFace ? 'bg-transparent' : isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
           ${useAssembledFace ? (selected ? 'ring-4 ring-yellow-400/90 ring-offset-0 shadow-lg' : '') : selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
           ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
           ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
-          ${resolutionMorph === 'lustUpgrade' ? 'ring-2 ring-rose-400/90 shadow-[0_0_46px_rgba(251,113,133,0.58)]' : ''}
           ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}
           ${muted ? 'opacity-[0.42] saturate-[0.48] brightness-[0.88]' : ''}
           ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
@@ -591,7 +594,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         </div>
       )}
       <motion.div
-        key={`${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}`}
+        key={`${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}-${resolutionWiggleTick}`}
         className={`relative z-[1] flex flex-1 flex-col justify-between overflow-hidden rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : 'min-h-[5.5rem] sm:min-h-[8.25rem]'}`}
         style={{ transformStyle: 'preserve-3d' }}
         animate={
@@ -606,28 +609,15 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
                   'brightness(1)',
                 ],
               }
-            : resolutionMorph === 'lustUpgrade'
-              ? {
-                  rotate: [0, -12, 11, -8, 0],
-                  x: [0, -11, 9, -5, 0],
-                  scale: [1, 1.045, 0.93, 1.065, 1],
-                  filter: [
-                    'brightness(1)',
-                    'brightness(1.06)',
-                    'brightness(1.14)',
-                    'brightness(1.08)',
-                    'brightness(1)',
-                  ],
-                }
-              : resolutionMorph === 'upgrade'
-                ? { rotate: [0, -14, 10, -7, 0], x: [0, -10, 8, -4, 0], scale: [1, 1.04, 0.94, 1.06, 1] }
-                : {}
+            : playEmpowerWiggle
+              ? { rotate: [0, -9, 8, -7, 5, 0], x: [0, -5, 4, -3, 2, 0], scale: [1, 1.025, 0.98, 1.02, 0.995, 1] }
+              : {}
         }
         transition={
           resolutionMorph === 'transform'
             ? { duration: 0.92, times: [0, 0.48, 0.52, 1], ease: [0.22, 1, 0.36, 1] }
-            : resolutionMorph === 'lustUpgrade' || resolutionMorph === 'upgrade'
-              ? { duration: 0.48, ease: [0.22, 1, 0.36, 1] }
+            : playEmpowerWiggle
+              ? { duration: 0.38, ease: [0.22, 1, 0.36, 1] }
               : { duration: 0 }
         }
       >
@@ -793,7 +783,23 @@ export const PowerCardVisual: React.FC<{
   }
 
   const powerManifestKey = curseDef ? `curse-${cardId}` : `power-${cardId}`;
-  const powerManifestOv = cardArtPower?.manifest[powerManifestKey];
+  const manifestHasRaster = (ov: (typeof cardArtPower)['manifest'][string] | undefined) =>
+    Boolean(ov?.customDataUrl || ov?.customImageFile?.trim());
+  const powerManifestOv = (() => {
+    const m = cardArtPower?.manifest;
+    if (!curseDef || !m) return cardArtPower?.manifest[powerManifestKey];
+    if (cardId === CURSE_ENVY) {
+      const primary = m['curse-105'];
+      if (manifestHasRaster(primary)) return primary;
+      return m['curse-107'] ?? primary;
+    }
+    if (cardId === CURSE_GREEN_EYED_MONSTER) {
+      const primary = m['curse-107'];
+      if (manifestHasRaster(primary)) return primary;
+      return m['curse-105'] ?? primary;
+    }
+    return m[powerManifestKey];
+  })();
   const customPowerFaceUrl =
     powerManifestOv?.customDataUrl ??
     (powerManifestOv?.customImageFile?.trim()

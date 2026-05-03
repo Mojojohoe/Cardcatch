@@ -429,6 +429,18 @@ function sentenceCard(cardStr: string): string {
   return mid.replace(/^the /, 'The ').replace(/^a /, 'A ');
 }
 
+/** Log / Hermit swap line: "Ace of Hearts", "Joker" — never "Joker of 1". */
+export function compactCardLabel(cardStr: string): string {
+  const p = parseCard(cardStr);
+  if (p.isJoker) return 'Joker';
+  if (p.suit === 'Grovels') return 'Grovel';
+  if (p.suit === 'Crowns' && p.value === 'E') return 'Emperor of Crowns';
+  if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) return 'God of Hearts';
+  if (p.suit === 'Swords') return describeWrathMinionTitle(cardStr);
+  const rk = RANK_WORDS[p.value] ?? p.value;
+  return `${rk} of ${p.suit}`;
+}
+
 function isOnTargetField(cardStr: string, targetSuit: Suit, greedJointDiamondsCoins = false): boolean {
   const p = parseCard(cardStr);
   if (p.isJoker) return false;
@@ -439,7 +451,50 @@ function isOnTargetField(cardStr: string, targetSuit: Suit, greedJointDiamondsCo
   return false;
 }
 
-/** Highest table-suit non-Joker envy candidate; random tie-break. Uses `isOnTargetField` (incl. Greed joint trump). */
+type EnvyCovetCand = { uid: string; cardId: string; handIndex: number; v: number };
+
+function collectEnvyCovetCandidates(
+  players: Record<string, PlayerData>,
+  p1Uid: string,
+  p2Uid: string,
+  targetSuit: Suit,
+  sealedCards: Record<string, string[]> | undefined,
+  lustHeartRules: boolean,
+  greedTaxActive: boolean,
+  greedJointTrump: boolean,
+  requireOnTargetField: boolean,
+): EnvyCovetCand[] {
+  const cands: EnvyCovetCand[] = [];
+  const consider = (uid: string) => {
+    const hand = players[uid]?.hand;
+    if (!hand) return;
+    const sealedSlots = envyGreedySealSlots(hand, sealedCards?.[uid] ?? []);
+    for (let i = 0; i < hand.length; i++) {
+      if (sealedSlots[i]) continue;
+      const cid = hand[i];
+      if (cid === GROVEL_CARD_ID) continue;
+      const pc = parseCard(cid);
+      if (pc.isJoker) continue;
+      if (requireOnTargetField && !isOnTargetField(cid, targetSuit, greedJointTrump)) continue;
+      const v = getCardValue(cid, lustHeartRules, greedTaxActive);
+      cands.push({ uid, cardId: cid, handIndex: i, v });
+    }
+  };
+  consider(p1Uid);
+  consider(p2Uid);
+  return cands;
+}
+
+function pickBestEnvyCovetRandomTie(cands: EnvyCovetCand[]): { uid: string; cardId: string; handIndex: number } {
+  const best = Math.max(...cands.map((c) => c.v));
+  const top = cands.filter((c) => c.v === best);
+  return top[Math.floor(Math.random() * top.length)]!;
+}
+
+/**
+ * Envy covet target: best clash value among table-suit (trump-field) cards in open hands;
+ * if none on suit, best among all eligible non-Joker cards (same sealed / Grovel rules).
+ */
 export function pickEnvyCovetedForRound(
   players: Record<string, PlayerData>,
   p1Uid: string,
@@ -450,28 +505,32 @@ export function pickEnvyCovetedForRound(
   greedTaxActive: boolean,
   greedJointTrump: boolean,
 ): { uid: string; cardId: string; handIndex: number } | null {
-  type Cand = { uid: string; cardId: string; handIndex: number; v: number };
-  const cands: Cand[] = [];
-  const consider = (uid: string) => {
-    const hand = players[uid].hand;
-    const sealedSlots = envyGreedySealSlots(hand, sealedCards?.[uid] ?? []);
-    for (let i = 0; i < hand.length; i++) {
-      if (sealedSlots[i]) continue;
-      const cid = hand[i];
-      if (cid === GROVEL_CARD_ID) continue;
-      const pc = parseCard(cid);
-      if (pc.isJoker) continue;
-      if (!isOnTargetField(cid, targetSuit, greedJointTrump)) continue;
-      const v = getCardValue(cid, lustHeartRules, greedTaxActive);
-      cands.push({ uid, cardId: cid, handIndex: i, v });
-    }
-  };
-  consider(p1Uid);
-  consider(p2Uid);
+  let cands = collectEnvyCovetCandidates(
+    players,
+    p1Uid,
+    p2Uid,
+    targetSuit,
+    sealedCards,
+    lustHeartRules,
+    greedTaxActive,
+    greedJointTrump,
+    true,
+  );
+  if (cands.length === 0) {
+    cands = collectEnvyCovetCandidates(
+      players,
+      p1Uid,
+      p2Uid,
+      targetSuit,
+      sealedCards,
+      lustHeartRules,
+      greedTaxActive,
+      greedJointTrump,
+      false,
+    );
+  }
   if (cands.length === 0) return null;
-  const best = Math.max(...cands.map((c) => c.v));
-  const top = cands.filter((c) => c.v === best);
-  return top[Math.floor(Math.random() * top.length)]!;
+  return pickBestEnvyCovetRandomTie(cands);
 }
 
 /** Main trick winner when p1 plays `cr1` and p2 plays `cr2` (Hermit swaps = p1 Hermit candidate). */
@@ -1387,9 +1446,15 @@ export class GameService {
 
     const layer = this.freshCheatedActiveCurseLayer(curseId);
     let nextActive = [...(this.state.activeCurses ?? [])];
-    const ix = nextActive.findIndex((c) => c.id === curseId);
-    if (ix >= 0) nextActive[ix] = layer;
-    else nextActive.push(layer);
+    const envyTableCheat = curseId === CURSE_ENVY || curseId === CURSE_GREEN_EYED_MONSTER;
+    if (envyTableCheat) {
+      nextActive = nextActive.filter((c) => c.id !== CURSE_ENVY);
+      nextActive.push(layer);
+    } else {
+      const ix = nextActive.findIndex((c) => c.id === curseId);
+      if (ix >= 0) nextActive[ix] = layer;
+      else nextActive.push(layer);
+    }
 
     let deck = [...this.state.deck];
     let greedInjected = this.state.greedInjectedCoins;
@@ -1423,6 +1488,29 @@ export class GameService {
       availableSuits = ['Stars', 'Moons'];
     }
 
+    let nextEnvyCovet: RoomData['envyCovet'] = null;
+    if (envyCurseActive(nextActive)) {
+      const cheatUids = Object.keys(this.state.players);
+      const p1Uid = this.myUid;
+      const p2Uid = cheatUids.find((id) => id !== p1Uid);
+      if (p2Uid) {
+        const tableSuit: Suit = this.state.targetSuit ?? 'Stars';
+        const lustHeartRules = lustCurseActive(nextActive);
+        const greedTaxActive = greedCurseActive(nextActive);
+        const joint = greedTaxActive && tableSuit === 'Diamonds';
+        nextEnvyCovet = pickEnvyCovetedForRound(
+          this.state.players,
+          p1Uid,
+          p2Uid,
+          tableSuit,
+          this.state.envySealedCards,
+          lustHeartRules,
+          greedTaxActive,
+          joint,
+        );
+      }
+    }
+
     this.state = {
       ...this.state,
       activeCurses: nextActive,
@@ -1433,6 +1521,7 @@ export class GameService {
       wrathMinionCard,
       availableSuits,
       slothSavedAvailableSuits,
+      envyCovet: nextEnvyCovet,
       updatedAt: Date.now(),
     };
     this.broadcastState();
@@ -2217,7 +2306,8 @@ export class GameService {
     } else if (envyActiveThisResolution) {
       envyCovetEventsEarly.push({
         type: 'ENVY_COVET',
-        message: 'The Green-Eyed Monster finds no coveted prey in the open hands.',
+        message:
+          'The Green-Eyed Monster finds no card to covet — only sealed slots, Grovels, or Jokers remain in the open hands.',
       });
     }
 
@@ -2652,7 +2742,7 @@ export class GameService {
           if (better.card) {
             c1 = better.card;
             events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit found a ${better.reason === 'win' ? 'winning' : 'drawing'} line.` });
-            events.push({ type: 'CARD_SWAP', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name} swapped to ${c1.replace('-', ' of ')}.` });
+            events.push({ type: 'CARD_SWAP', uid: p1Uid, cardId: c1, message: `${players[p1Uid].name} swapped to ${compactCardLabel(c1)}.` });
           } else {
             events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 9, message: `${players[p1Uid].name}'s Hermit could not find a winning or drawing card.` });
           }
@@ -2666,7 +2756,7 @@ export class GameService {
           if (better.card) {
             c2 = better.card;
             events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit found a ${better.reason === 'win' ? 'winning' : 'drawing'} line.` });
-            events.push({ type: 'CARD_SWAP', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name} swapped to ${c2.replace('-', ' of ')}.` });
+            events.push({ type: 'CARD_SWAP', uid: p2Uid, cardId: c2, message: `${players[p2Uid].name} swapped to ${compactCardLabel(c2)}.` });
           } else {
             events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 9, message: `${players[p2Uid].name}'s Hermit could not find a winning or drawing card.` });
           }
@@ -3896,10 +3986,8 @@ export class GameService {
           !outcome.curseClashSuppressed?.[p2Uid]));
 
     if (envyPlayed) {
-      const ix = nextActiveCurses.findIndex((c) => c.id === CURSE_ENVY);
-      const fresh: ActiveCurseState = { id: CURSE_ENVY, envyMonsterHp: ENVY_MONSTER_START_HP };
-      if (ix >= 0) nextActiveCurses[ix] = fresh;
-      else nextActiveCurses.push(fresh);
+      nextActiveCurses = nextActiveCurses.filter((c) => c.id !== CURSE_ENVY);
+      nextActiveCurses.push({ id: CURSE_ENVY, envyMonsterHp: ENVY_MONSTER_START_HP });
     }
 
     if (curseOk && outcome.slothDreamFx?.result === 'SUN' && slothCurseActive(roomData.activeCurses ?? [])) {
@@ -4033,7 +4121,10 @@ export class GameService {
     if (curseOk && outcome.devilForcedCurseId !== undefined && !hadCurseEnteringApply) {
       const cid = outcome.devilForcedCurseId;
       const layer = createFreshCurseState(cid);
-      const ixC = nextActiveCurses.findIndex((c) => c.id === cid);
+      const ixC =
+        cid === CURSE_ENVY || cid === CURSE_GREEN_EYED_MONSTER
+          ? nextActiveCurses.findIndex((c) => c.id === CURSE_ENVY)
+          : nextActiveCurses.findIndex((c) => c.id === cid);
       if (ixC >= 0) nextActiveCurses[ixC] = layer;
       else nextActiveCurses.push(layer);
 

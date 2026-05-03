@@ -80,6 +80,15 @@ test('Envy: picks highest table-suit candidate; sealed copies skipped', () => {
   assert.equal(pick?.cardId, 'Hearts-10');
 });
 
+test('Envy: when no card on table suit, covets highest clash value in any suit', () => {
+  const players = createFixturePlayers();
+  players.host.hand = ['Hearts-A', 'Clubs-2'];
+  players.guest.hand = ['Diamonds-3', 'Spades-4'];
+  const pick = pickEnvyCovetedForRound(players, 'host', 'guest', 'Moons', {}, false, false, false);
+  assert.equal(pick?.uid, 'host');
+  assert.equal(pick?.cardId, 'Hearts-A');
+});
+
 test('Envy: hand has no legal play when every slot is sealed (Grovel exempt path is separate)', () => {
   const hand = ['Hearts-10', 'Diamonds-8'];
   assert.equal(handHasLegalEnvyPlay(hand, 'host', {}), true);

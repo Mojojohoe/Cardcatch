@@ -73,7 +73,7 @@ export const CURSES: Record<number, CurseDefinition> = {
     sin: 'Envy',
     name: 'Envy',
     description:
-      'While Envy holds the table, the Green-Eyed Monster covets the highest table-suit card in play (Jokers ignored). Feed it that card or envy seals it. Each round your plays strike the monster’s HP; at 0 the curse ends. Grovel can free a trapped hand without ending Envy.',
+      'While Envy holds the table, the Green-Eyed Monster covets the highest clash-value card on the table suit among open hands (Jokers and Grovels ignored); if none on suit, the highest such card in any suit. Feed it that card or envy seals it. Each round your plays strike the monster’s HP; at 0 the curse ends. Grovel can free a trapped hand without ending Envy.',
   },
   [CURSE_GREEN_EYED_MONSTER]: {
     id: CURSE_GREEN_EYED_MONSTER,
