@@ -1,8 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { parseCard } from '../services/gameService';
 import { SuitGlyph } from '../components/SuitGlyphs';
 import { SUIT_COLORS } from '../suitPresentation';
-import { cardArtAssetUrl } from './paths';
+import {
+  cardArtAssetUrl,
+  cardBackgroundUrlCandidates,
+  pictureCardUrlCandidates,
+  suitRasterUrlCandidates,
+} from './paths';
 import type { CardArtOverride } from './types';
 import type { PipGridCell } from './types';
 import { defaultPipCellsForRank, pipGridCellToFraction } from './pipLayouts';
@@ -30,9 +35,13 @@ function PipImage({
   y: number;
   maxSideFrac: number;
 }) {
-  const src = cardArtAssetUrl(`Suit${suit}.png`);
-  const [broken, setBroken] = useState(false);
-  const color = SUIT_COLORS[suit] ?? 'text-red-600';
+  const candidates = useMemo(() => suitRasterUrlCandidates(suit), [suit]);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setAttempt(0);
+  }, [suit]);
+
   const style: React.CSSProperties = {
     position: 'absolute',
     left: `${x * 100}%`,
@@ -41,21 +50,54 @@ function PipImage({
     height: `${maxSideFrac * 100}%`,
     transform: 'translate(-50%, -50%)',
   };
-  if (broken) {
+
+  const color = SUIT_COLORS[suit] ?? 'text-red-600';
+  if (attempt >= candidates.length) {
     return (
       <div className={`pointer-events-none flex items-center justify-center ${color}`} style={style}>
         <SuitGlyph suit={suit as any} className="h-full w-full" />
       </div>
     );
   }
+
   return (
     <img
-      src={src}
+      src={candidates[attempt]}
       alt=""
       draggable={false}
-      onError={() => setBroken(true)}
+      onError={() => setAttempt((a) => a + 1)}
       className="pointer-events-none object-contain"
       style={style}
+    />
+  );
+}
+
+function CornerSuitRaster({ suit, sizePx }: { suit: string; sizePx: number }) {
+  const candidates = useMemo(() => suitRasterUrlCandidates(suit), [suit]);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setAttempt(0);
+  }, [suit]);
+
+  if (attempt >= candidates.length) {
+    return (
+      <SuitGlyph
+        suit={suit as any}
+        className="opacity-95"
+        style={{ width: sizePx, height: sizePx }}
+      />
+    );
+  }
+
+  return (
+    <img
+      src={candidates[attempt]}
+      alt=""
+      draggable={false}
+      onError={() => setAttempt((a) => a + 1)}
+      className="pointer-events-none object-contain opacity-95"
+      style={{ width: sizePx, height: sizePx }}
     />
   );
 }
@@ -64,8 +106,14 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override }) =>
   const p = useMemo(() => parseCard(card), [card]);
   const { suit, value } = p;
 
-  const bgSrc = cardArtAssetUrl('CardBasicLight.png');
-  const [bgBroken, setBgBroken] = useState(false);
+  const bgCandidates = useMemo(() => cardBackgroundUrlCandidates(), []);
+  const [bgAttempt, setBgAttempt] = useState(0);
+
+  useEffect(() => {
+    setBgAttempt(0);
+  }, [card]);
+
+  const bgKnownMissing = bgAttempt >= bgCandidates.length;
 
   const customFullBleed =
     override?.customDataUrl ||
@@ -73,7 +121,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override }) =>
 
   const [customBroken, setCustomBroken] = useState(!customFullBleed);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setCustomBroken(!customFullBleed);
   }, [customFullBleed]);
 
@@ -96,22 +144,24 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override }) =>
 
   const pictureRank = value === 'J' || value === 'Q' || value === 'K' || value === 'A';
 
+  const cornerGlyphPx = CARD_ART_WIDTH * 0.12;
+
   return (
     <div
       className="relative overflow-hidden rounded-[inherit]"
       style={{
         width: CARD_ART_WIDTH,
         height: CARD_ART_HEIGHT,
-        background: bgBroken ? 'linear-gradient(145deg,#fafafa,#e4e4e7)' : undefined,
+        background: bgKnownMissing ? 'linear-gradient(145deg,#fafafa,#e4e4e7)' : undefined,
       }}
     >
-      {!bgBroken && (
+      {!bgKnownMissing && (
         <img
-          src={bgSrc}
+          src={bgCandidates[bgAttempt]}
           alt=""
-          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
           draggable={false}
-          onError={() => setBgBroken(true)}
+          onError={() => setBgAttempt((a) => a + 1)}
         />
       )}
 
@@ -120,32 +170,24 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override }) =>
         style={{ left: CORNER_SIDE, top: CORNER_TOP }}
       >
         <span
-          className="font-card-rank font-black"
+          className="font-card-rank font-black text-zinc-900"
           style={{ fontSize: Math.round(CARD_ART_WIDTH * 0.085) }}
         >
           {value}
         </span>
-        <SuitGlyph
-          suit={suit as any}
-          className="opacity-95"
-          style={{ width: CARD_ART_WIDTH * 0.12, height: CARD_ART_WIDTH * 0.12 }}
-        />
+        <CornerSuitRaster suit={suit} sizePx={cornerGlyphPx} />
       </div>
       <div
         className={`pointer-events-none absolute z-[2] flex flex-col items-start leading-[0.85] rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-600'}`}
         style={{ right: CORNER_SIDE, bottom: CORNER_TOP }}
       >
         <span
-          className="font-card-rank font-black"
+          className="font-card-rank font-black text-zinc-900"
           style={{ fontSize: Math.round(CARD_ART_WIDTH * 0.085) }}
         >
           {value}
         </span>
-        <SuitGlyph
-          suit={suit as any}
-          className="opacity-95"
-          style={{ width: CARD_ART_WIDTH * 0.12, height: CARD_ART_WIDTH * 0.12 }}
-        />
+        <CornerSuitRaster suit={suit} sizePx={cornerGlyphPx} />
       </div>
 
       {pictureRank ? (
@@ -158,18 +200,22 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override }) =>
 };
 
 function PictureInterior({ suit, value, cardId }: { suit: string; value: string; cardId: string }) {
-  const pictureSrc = cardArtAssetUrl(`${cardId}.png`);
-  const [useFallback, setUseFallback] = useState(false);
+  const candidates = useMemo(() => pictureCardUrlCandidates(cardId), [cardId]);
+  const [attempt, setAttempt] = useState(0);
 
-  if (!useFallback) {
+  useEffect(() => {
+    setAttempt(0);
+  }, [cardId]);
+
+  if (attempt < candidates.length) {
     return (
       <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]">
         <img
-          src={pictureSrc}
+          src={candidates[attempt]}
           alt=""
           className="max-h-[72%] max-w-full object-contain drop-shadow"
           draggable={false}
-          onError={() => setUseFallback(true)}
+          onError={() => setAttempt((a) => a + 1)}
         />
       </div>
     );

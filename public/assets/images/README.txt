@@ -1,15 +1,15 @@
-Card art assets (served at /assets/images/ in dev and production).
+Card art assets are loaded from THIS folder (public/assets/images).
 
-Required for assembled suit cards (see Card Creator in the app):
+IMPORTANT: `npm run dev` only serves files under `public/`. Assets that exist only under
+`dist/assets/images` after a build are NOT available during development — copy or symlink
+them here while you work. Production builds copy `public/` into `dist/`, so the same paths work.
 
-  CardBasicLight.png    — card face background (256×374 recommended)
-  SuitHearts.png        — pip / corner suit glyph source
-  SuitDiamonds.png
-  SuitClubs.png
-  SuitSpades.png
+Assembled mode tries, in order: .png, .webp, .jpg for each asset name.
 
-Optional picture-card art (one image per card, same aspect ratio):
+  CardBasicLight.png   — card face background (256×374 recommended)
+  SuitHearts.png       — suit symbols (corners + pip court); same pattern:
+  SuitDiamonds.png, SuitClubs.png, SuitSpades.png
 
-  Hearts-J.png, Hearts-Q.png, …  (pattern: {Suit}-{Rank}.png matching game ids like Hearts-K)
+Picture cards (optional full art):
 
-Copy your files from dist/assets/images into this public folder while developing so Vite serves them.
+  Hearts-J.png, Hearts-K.png, …  (game id with hyphen, e.g. Spades-A.png)
