@@ -1,6 +1,7 @@
 import type { ResolutionEvent } from '../types';
 import {
   CURSE_ENVY,
+  CURSE_GREEN_EYED_MONSTER,
   CURSE_GLUTTONY,
   CURSE_GREED,
   CURSE_LUST,
@@ -38,7 +39,8 @@ export function resolutionLogLineClass(evt: ResolutionEvent): string {
     if (p === CURSE_LUST) return 'text-pink-400 drop-shadow-[0_0_10px_rgba(244,114,182,0.22)]';
     if (p === CURSE_GREED) return 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.2)]';
     if (p === CURSE_GLUTTONY) return 'text-orange-400 drop-shadow-[0_0_10px_rgba(251,146,60,0.2)]';
-    if (p === CURSE_ENVY) return 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.22)]';
+    if (p === CURSE_ENVY || p === CURSE_GREEN_EYED_MONSTER)
+      return 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.22)]';
     if (p === CURSE_WRATH) return 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.18)]';
     if (p === CURSE_PRIDE) return 'text-slate-100 drop-shadow-[0_0_8px_rgba(248,250,252,0.15)]';
     if (p === CURSE_SLOTH) return 'text-sky-400 drop-shadow-[0_0_10px_rgba(56,189,248,0.2)]';

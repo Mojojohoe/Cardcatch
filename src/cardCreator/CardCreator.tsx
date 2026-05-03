@@ -190,6 +190,8 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (bc.anchorXPct != null) next.anchorXPct = bc.anchorXPct;
     if (bc.anchorYPct != null) next.anchorYPct = bc.anchorYPct;
     if (bc.maxWidthPct != null) next.maxWidthPct = bc.maxWidthPct;
+    if (bc.mirrorDual === true) next.mirrorDual = true;
+    if (bc.color?.trim()) next.color = bc.color.trim();
     return Object.keys(next).length > 0 ? next : undefined;
   };
 
@@ -373,7 +375,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
           <p className="mb-1 text-[9px] font-black uppercase text-slate-500">Curses</p>
           <p className="mb-2 text-[8px] leading-snug text-slate-600">
-            curse-105 = Envy / green-eyed monster (face-up curse art). Listed with sin name · title.
+            curse IDs 105 = Envy, 107 = Green-Eyed Monster (same table rules; distinct card art/title).
           </p>
           <div className="mb-3 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
             {CURSE_MANIFEST_KEYS.map((rowId) => {
@@ -542,7 +544,8 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <div className="rounded border border-slate-800 p-3 text-[11px] text-slate-400">
                         <p className="mb-2 font-bold text-slate-300">Overlay caption (shows when Background only is on)</p>
                         <p className="mb-2 text-[10px] text-slate-500">
-                          Merged over Defaults caption. Anchor 50/50 is card centre (transform-centered).
+                          Per-card text merges over <strong className="text-slate-400">Defaults → Background-only caption defaults</strong>.
+                          Leave blank here to use defaults only (still movable there). Anchor 50/50 is card centre.
                         </p>
                         <textarea
                           value={draft?.backgroundCaption?.text ?? ''}
@@ -556,6 +559,25 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           placeholder="Optional printed text on this card…"
                           className="mb-2 w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-sans text-xs text-slate-200"
                         />
+                        <label className="mb-2 block max-w-md text-[11px] text-slate-400">
+                          Caption colour (CSS, optional — else suit preset)
+                          <input
+                            value={draft?.backgroundCaption?.color ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value.trim();
+                              setDraft((prev) => {
+                                const base = { ...(prev ?? {}) };
+                                const bc = { ...base.backgroundCaption };
+                                if (v) bc.color = v;
+                                else delete bc.color;
+                                base.backgroundCaption = Object.keys(bc).length ? bc : undefined;
+                                return Object.keys(base).length ? base : null;
+                              });
+                            }}
+                            placeholder="#hex or coral"
+                            className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-200"
+                          />
+                        </label>
                         <div className="flex flex-wrap gap-3">
                           <label className="text-slate-400">
                             Scale
@@ -634,6 +656,27 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             />
                           </label>
                         </div>
+                        <label className="mt-2 flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(draft?.backgroundCaption?.mirrorDual)}
+                            onChange={(e) =>
+                              setDraft((prev) => {
+                                const base = { ...(prev ?? {}) };
+                                const bc = { ...(base.backgroundCaption ?? {}) };
+                                if (e.target.checked) bc.mirrorDual = true;
+                                else delete bc.mirrorDual;
+                                base.backgroundCaption = Object.keys(bc).length ? bc : undefined;
+                                return Object.keys(base).length ? base : null;
+                              })
+                            }
+                            className="mt-0.5"
+                          />
+                          <span>
+                            <strong className="text-slate-300">Dual / mirrored caption</strong> — second copy through the
+                            card centre (rotate 180°), like opposite corner indices.
+                          </span>
+                        </label>
                       </div>
                     </div>
                   )}
@@ -861,9 +904,62 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         />
                       </label>
 
+                      <p className="mt-4 text-[11px] font-bold text-slate-300">Corner rank & caption text colour (per suit)</p>
+                      <p className="mb-2 text-[10px] text-slate-500">
+                        CSS colours (#hex or name). Blank uses the built‑in preset for each suit on assembled faces (corners,
+                        royalty rank fallback, background-only captions).
+                      </p>
+                      {(['Hearts', 'Diamonds', 'Clubs', 'Spades'] as const).map((suit) => (
+                        <label key={`tc-${suit}`} className="flex flex-col gap-1 text-[11px]">
+                          <span className="font-bold text-slate-300">{suit} text</span>
+                          <input
+                            value={draftDefaults.suitFaceTextColor?.[suit] ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value.trim();
+                              setDraftDefaults((prev) => {
+                                const nextMap = { ...prev.suitFaceTextColor };
+                                if (v) nextMap[suit] = v;
+                                else delete nextMap[suit];
+                                return {
+                                  ...prev,
+                                  suitFaceTextColor: Object.keys(nextMap).length ? nextMap : undefined,
+                                };
+                              });
+                            }}
+                            placeholder={`e.g. ${suit === 'Diamonds' ? '#ffffff' : '#…'}`}
+                            className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs"
+                          />
+                        </label>
+                      ))}
+                      {(['Stars', 'Moons', 'Frogs', 'Coins', 'Bones', 'Crowns', 'Grovels', 'Swords', 'Joker'] as const).map(
+                        (suit) => (
+                          <label key={`tc-${suit}`} className="flex flex-col gap-1 text-[11px]">
+                            <span className="font-bold text-slate-300">{suit} text</span>
+                            <input
+                              value={draftDefaults.suitFaceTextColor?.[suit] ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value.trim();
+                                setDraftDefaults((prev) => {
+                                  const nextMap = { ...prev.suitFaceTextColor };
+                                  if (v) nextMap[suit] = v;
+                                  else delete nextMap[suit];
+                                  return {
+                                    ...prev,
+                                    suitFaceTextColor: Object.keys(nextMap).length ? nextMap : undefined,
+                                  };
+                                });
+                              }}
+                              placeholder="blank = preset"
+                              className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs"
+                            />
+                          </label>
+                        ),
+                      )}
+
                       <p className="mt-4 text-[11px] font-bold text-slate-300">Background-only caption defaults</p>
                       <p className="mb-2 text-[10px] text-slate-500">
-                        Used when Background only + no caption on the card itself.
+                        Shown on any background-only card when the card does not override caption text. Anchors and dual
+                        mirror apply; you can mirror here and override only the string on a card.
                       </p>
                       <textarea
                         value={draftDefaults.backgroundCaptionDefaults?.text ?? ''}
@@ -880,6 +976,26 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         className="mb-2 w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
                         placeholder="Default overlay text…"
                       />
+                      <label className="mb-2 block max-w-md text-[11px] text-slate-400">
+                        Default caption colour (optional — overrides suit preset for captions)
+                        <input
+                          value={draftDefaults.backgroundCaptionDefaults?.color ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            setDraftDefaults((prev) => {
+                              const bc = { ...prev.backgroundCaptionDefaults };
+                              if (v) bc.color = v;
+                              else delete bc.color;
+                              return {
+                                ...prev,
+                                backgroundCaptionDefaults: Object.keys(bc).length ? bc : undefined,
+                              };
+                            });
+                          }}
+                          placeholder="blank = per suit colours above"
+                          className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-200"
+                        />
+                      </label>
                       <div className="flex flex-wrap gap-3">
                         <label className="text-[11px] text-slate-400">
                           Scale
@@ -935,6 +1051,28 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           />
                         </label>
                       </div>
+                      <label className="mt-2 flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(draftDefaults.backgroundCaptionDefaults?.mirrorDual)}
+                          onChange={(e) =>
+                            setDraftDefaults((prev) => {
+                              const d = { ...(prev.backgroundCaptionDefaults ?? {}) };
+                              if (e.target.checked) d.mirrorDual = true;
+                              else delete d.mirrorDual;
+                              return {
+                                ...prev,
+                                backgroundCaptionDefaults: Object.keys(d).length ? d : undefined,
+                              };
+                            })
+                          }
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <strong className="text-slate-300">Default dual / mirrored caption</strong> — applies unless a
+                          card turns this off via its own caption block.
+                        </span>
+                      </label>
                     </div>
                   )}
 
@@ -1113,9 +1251,10 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       </div>
 
                       <div>
-                        <p className="mb-2 text-[11px] font-bold text-slate-300">Corner text position</p>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Rank &amp; notifier corner offsets</p>
                         <p className="mb-2 text-xs text-slate-400">
-                          Offsets are % of card width (horizontal) and height (vertical). Applied to both corners.
+                          Rank offsets are % toward the interior from each corner anchor. Applied on both diagonal corners;
+                          symmetric mode uses the same sign on bottom-right toward the centre.
                         </p>
                         <div className="flex flex-wrap gap-3">
                           <label className="text-[11px] text-slate-400">
@@ -1139,7 +1278,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             />
                           </label>
                           <label className="text-[11px] text-slate-400">
-                            Offset X %
+                            Rank offset X %
                             <input
                               type="number"
                               step={0.5}
@@ -1157,7 +1296,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             />
                           </label>
                           <label className="text-[11px] text-slate-400">
-                            Offset Y %
+                            Rank offset Y %
                             <input
                               type="number"
                               step={0.5}
@@ -1172,6 +1311,69 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 }))
                               }
                               className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                        </div>
+                        <p className="mt-3 text-[11px] font-semibold text-slate-400">Notifier suit (small pip)</p>
+                        <p className="mb-2 text-[10px] leading-snug text-slate-500">
+                          Blank X ⇒ same inward shift as rank. Blank Y ⇒ auto stack beneath the rank glyph. Same symmetric
+                          bottom-corner rule as rank when enabled below.
+                        </p>
+                        <div className="flex flex-wrap gap-3">
+                          <label className="text-[11px] text-slate-400">
+                            Notifier offset X %
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="blank→rank X"
+                              value={
+                                draftDefaults.cornerText?.notifierOffsetLeftXPct !== undefined &&
+                                draftDefaults.cornerText?.notifierOffsetLeftXPct !== null
+                                  ? String(draftDefaults.cornerText.notifierOffsetLeftXPct)
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                setDraftDefaults((prev) => {
+                                  const ct = { ...prev.cornerText };
+                                  if (!raw.length) delete ct.notifierOffsetLeftXPct;
+                                  else {
+                                    const n = Number(raw);
+                                    if (!Number.isFinite(n)) return prev;
+                                    ct.notifierOffsetLeftXPct = n;
+                                  }
+                                  return { ...prev, cornerText: ct };
+                                });
+                              }}
+                              className="ml-2 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                            />
+                          </label>
+                          <label className="text-[11px] text-slate-400">
+                            Notifier offset Y %
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="blank→auto stack"
+                              value={
+                                draftDefaults.cornerText?.notifierOffsetTopYPct !== undefined &&
+                                draftDefaults.cornerText?.notifierOffsetTopYPct !== null
+                                  ? String(draftDefaults.cornerText.notifierOffsetTopYPct)
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                setDraftDefaults((prev) => {
+                                  const ct = { ...prev.cornerText };
+                                  if (!raw.length) delete ct.notifierOffsetTopYPct;
+                                  else {
+                                    const n = Number(raw);
+                                    if (!Number.isFinite(n)) return prev;
+                                    ct.notifierOffsetTopYPct = n;
+                                  }
+                                  return { ...prev, cornerText: ct };
+                                });
+                              }}
+                              className="ml-2 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
                             />
                           </label>
                         </div>

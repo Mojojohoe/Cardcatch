@@ -107,12 +107,20 @@ export function mergedBackgroundCaption(
 ): BackgroundCaptionConfig | undefined {
   const text = (overrideCap?.text?.trim() || defaultsCap?.text?.trim()) ?? '';
   if (!text) return undefined;
+  const colorRaw = overrideCap?.color?.trim() || defaultsCap?.color?.trim();
   return {
     text,
+    color: colorRaw || undefined,
     scale: overrideCap?.scale ?? defaultsCap?.scale,
     anchorXPct: overrideCap?.anchorXPct ?? defaultsCap?.anchorXPct ?? 50,
     anchorYPct: overrideCap?.anchorYPct ?? defaultsCap?.anchorYPct ?? 50,
     maxWidthPct: overrideCap?.maxWidthPct ?? defaultsCap?.maxWidthPct ?? 88,
+    mirrorDual:
+      overrideCap?.mirrorDual !== undefined
+        ? Boolean(overrideCap.mirrorDual)
+        : defaultsCap?.mirrorDual !== undefined
+          ? Boolean(defaultsCap.mirrorDual)
+          : false,
   };
 }
 

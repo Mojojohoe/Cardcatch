@@ -22,9 +22,11 @@ import {
   CURSE_LUST,
   CURSE_PRIDE,
   CURSE_ENVY,
+  CURSE_GREEN_EYED_MONSTER,
   CURSE_SLOTH,
   CURSE_WRATH,
   CURSES,
+  cursePlayedActivatesEnvyTable,
   curseEffectActive,
   gluttonyCurseActive,
   greedCurseActive,
@@ -248,6 +250,7 @@ export function createFreshCurseState(curseId: number): ActiveCurseState {
     case CURSE_WRATH:
       return { id: CURSE_WRATH, wrathRound: 1 };
     case CURSE_ENVY:
+    case CURSE_GREEN_EYED_MONSTER:
       return { id: CURSE_ENVY, envyMonsterHp: ENVY_MONSTER_START_HP };
     case CURSE_SLOTH:
       return { id: CURSE_SLOTH };
@@ -1100,7 +1103,7 @@ export class GameService {
         CURSE_PRIDE,
         CURSE_PRIDE,
         CURSE_ENVY,
-        CURSE_ENVY,
+        CURSE_GREEN_EYED_MONSTER,
         CURSE_WRATH,
         CURSE_WRATH,
         CURSE_SLOTH,
@@ -2133,18 +2136,34 @@ export class GameService {
         message: `${players[p2Uid].name} invokes the curse of Wrath.`,
       });
     }
-    if (curseEnabled && committedPower1 === CURSE_ENVY && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
+    if (
+      curseEnabled &&
+      cursePlayedActivatesEnvyTable(committedPower1) &&
+      !blockedPowers[p1Uid] &&
+      !curseClashSuppressed[p1Uid]
+    ) {
       events.push({
         type: 'POWER_TRIGGER',
         uid: p1Uid,
-        message: `${players[p1Uid].name} invokes the curse of Envy.`,
+        message:
+          committedPower1 === CURSE_GREEN_EYED_MONSTER
+            ? `${players[p1Uid].name} unleashes the Green-Eyed Monster.`
+            : `${players[p1Uid].name} invokes the curse of Envy.`,
       });
     }
-    if (curseEnabled && committedPower2 === CURSE_ENVY && !blockedPowers[p2Uid] && !curseClashSuppressed[p2Uid]) {
+    if (
+      curseEnabled &&
+      cursePlayedActivatesEnvyTable(committedPower2) &&
+      !blockedPowers[p2Uid] &&
+      !curseClashSuppressed[p2Uid]
+    ) {
       events.push({
         type: 'POWER_TRIGGER',
         uid: p2Uid,
-        message: `${players[p2Uid].name} invokes the curse of Envy.`,
+        message:
+          committedPower2 === CURSE_GREEN_EYED_MONSTER
+            ? `${players[p2Uid].name} unleashes the Green-Eyed Monster.`
+            : `${players[p2Uid].name} invokes the curse of Envy.`,
       });
     }
     if (curseEnabled && committedPower1 === CURSE_SLOTH && !blockedPowers[p1Uid] && !curseClashSuppressed[p1Uid]) {
@@ -3869,10 +3888,10 @@ export class GameService {
 
     const envyPlayed =
       curseOk &&
-      ((outcome.powerCardIdsPlayed[p1Uid] === CURSE_ENVY &&
+      ((cursePlayedActivatesEnvyTable(outcome.powerCardIdsPlayed[p1Uid]) &&
         !outcome.powerCardTowerBlocked?.[p1Uid] &&
         !outcome.curseClashSuppressed?.[p1Uid]) ||
-        (outcome.powerCardIdsPlayed[p2Uid] === CURSE_ENVY &&
+        (cursePlayedActivatesEnvyTable(outcome.powerCardIdsPlayed[p2Uid]) &&
           !outcome.powerCardTowerBlocked?.[p2Uid] &&
           !outcome.curseClashSuppressed?.[p2Uid]));
 

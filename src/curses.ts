@@ -6,6 +6,8 @@ export const CURSE_PRIDE = 103;
 export const CURSE_WRATH = 104;
 export const CURSE_ENVY = 105;
 export const CURSE_SLOTH = 106;
+/** Playable curse card; puts the same Envy table mechanics on the board as {@link CURSE_ENVY}. */
+export const CURSE_GREEN_EYED_MONSTER = 107;
 
 export const CURSE_IDS = [
   CURSE_LUST,
@@ -14,6 +16,7 @@ export const CURSE_IDS = [
   CURSE_PRIDE,
   CURSE_WRATH,
   CURSE_ENVY,
+  CURSE_GREEN_EYED_MONSTER,
   CURSE_SLOTH,
 ] as const;
 
@@ -70,7 +73,14 @@ export const CURSES: Record<number, CurseDefinition> = {
     sin: 'Envy',
     name: 'Envy',
     description:
-      'The Green-Eyed Monster covets the highest table-suit card in play (Jokers ignored). Feed it that card or the envy seals it. After each round your plays strike its HP; at 0 the curse ends. Grovel can free a trapped hand without ending Envy.',
+      'While Envy holds the table, the Green-Eyed Monster covets the highest table-suit card in play (Jokers ignored). Feed it that card or envy seals it. Each round your plays strike the monster’s HP; at 0 the curse ends. Grovel can free a trapped hand without ending Envy.',
+  },
+  [CURSE_GREEN_EYED_MONSTER]: {
+    id: CURSE_GREEN_EYED_MONSTER,
+    sin: 'Envy',
+    name: 'Green-Eyed Monster',
+    description:
+      'The creature itself: same curse as Envy — it covets the highest table-suit card showing (no Jokers), seals copies you refuse to feed, and loses HP each round until slain or the table breaks the spell.',
   },
   [CURSE_SLOTH]: {
     id: CURSE_SLOTH,
@@ -115,6 +125,11 @@ export function wrathCurseActive(active: readonly { id: number }[] | undefined):
 
 export function envyCurseActive(active: readonly { id: number }[] | undefined): boolean {
   return Boolean(active?.some((c) => c.id === CURSE_ENVY));
+}
+
+/** Power card IDs that summon the envy table curse (active entry is always stored as {@link CURSE_ENVY}). */
+export function cursePlayedActivatesEnvyTable(powerCardId: number | null | undefined): boolean {
+  return powerCardId === CURSE_ENVY || powerCardId === CURSE_GREEN_EYED_MONSTER;
 }
 
 export function slothCurseActive(active: readonly { id: number }[] | undefined): boolean {

@@ -40,6 +40,7 @@ import { ScaledAssembledCardFace } from '../cardArt/ScaledAssembledCardFace';
 import {
   CURSES,
   CURSE_ENVY,
+  CURSE_GREEN_EYED_MONSTER,
   CURSE_GLUTTONY,
   CURSE_GREED,
   CURSE_LUST,
@@ -152,6 +153,7 @@ export function cursePowerIconClass(curseId: number): string {
     case CURSE_WRATH:
       return 'text-red-500';
     case CURSE_ENVY:
+    case CURSE_GREEN_EYED_MONSTER:
       return 'text-emerald-400';
     case CURSE_SLOTH:
       return 'text-sky-400';
@@ -228,6 +230,7 @@ export function curseFaceChrome(curseId: number): {
         tooltipBorder: 'border-red-600/55',
       };
     case CURSE_ENVY:
+    case CURSE_GREEN_EYED_MONSTER:
       return {
         shell: 'border-emerald-500 text-emerald-200 shadow-[0_0_40px_rgba(16,185,129,0.38)]',
         gloss: 'from-emerald-950/40 to-transparent',
@@ -278,6 +281,12 @@ export function CursePowerIcon({ curseId, className }: { curseId: number; classN
       return <Swords className={cn} strokeWidth={2.2} aria-hidden />;
     case CURSE_ENVY:
       return <Eye className={cn} strokeWidth={2.35} aria-hidden />;
+    case CURSE_GREEN_EYED_MONSTER:
+      return (
+        <span className={`inline-flex items-center justify-center ${cn}`}>
+          <GreenEyedMonsterIcon className="h-[2.35rem] w-[1.65rem] max-h-full" />
+        </span>
+      );
     case CURSE_SLOTH:
       return <Cloud className={cn} strokeWidth={1.85} aria-hidden />;
     default:

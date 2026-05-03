@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { parseCard } from '../services/gameService';
 import { SuitGlyph } from '../components/SuitGlyphs';
-import { SUIT_COLORS } from '../suitPresentation';
+import { resolveSuitFaceTextColor, SUIT_COLORS } from '../suitPresentation';
 import {
   cardArtAssetUrl,
   pictureCardUrlCandidates,
@@ -119,27 +119,72 @@ function CornerSuitRaster({ suit, sizePx }: { suit: string; sizePx: number }) {
   );
 }
 
-function BackgroundCaptionLayer({ config }: { config: BackgroundCaptionConfig }) {
+function captionTypographyStyle(scale: number, maxW: number, rotate180: boolean): React.CSSProperties {
+  return {
+    transform: rotate180 ? 'translate(-50%, -50%) rotate(180deg)' : 'translate(-50%, -50%)',
+    fontSize: Math.max(8, Math.round(12 * scale * (CARD_ART_WIDTH / 256))),
+    width: `${maxW}%`,
+    maxWidth: `${maxW}%`,
+  };
+}
+
+function hexRgb(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Helps light numerals on bright faces and dark numerals on dark underlays without extra config. */
+function contrastTextShadow(fill: string): React.CSSProperties {
+  const rgb = /^#?[0-9a-f]{6}$/i.test(fill) ? hexRgb(fill.startsWith('#') ? fill : `#${fill}`) : null;
+  if (!rgb) return {};
+  const [r, g, b] = rgb;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  if (luminance > 0.7) {
+    return { textShadow: '0 0 5px rgba(0,0,0,.9), 0 1px 4px rgba(0,0,0,.82)' };
+  }
+  if (luminance < 0.26) {
+    return { textShadow: '0 0 4px rgba(255,255,255,.42), 0 1px 2px rgba(0,0,0,.55)' };
+  }
+  return {};
+}
+
+/** One or two blocks (dual mirrors through card centre like corner indices). */
+function BackgroundCaptionLayers({ config, textColor }: { config: BackgroundCaptionConfig; textColor: string }) {
   const t = config.text?.trim();
   if (!t) return null;
   const sx = config.scale ?? 1;
   const ax = config.anchorXPct ?? 50;
   const ay = config.anchorYPct ?? 50;
   const maxW = config.maxWidthPct ?? 88;
+  const mirror = Boolean(config.mirrorDual);
+  const shadow = contrastTextShadow(textColor);
+  const cls = 'pointer-events-none absolute z-[4] whitespace-pre-wrap px-1 text-center font-bold leading-tight tracking-tight';
+
   return (
-    <div
-      className="pointer-events-none absolute z-[4] whitespace-pre-wrap px-1 text-center font-bold leading-tight tracking-tight text-zinc-950 drop-shadow-[0_0_3px_rgba(255,255,255,0.95),0_1px_2px_rgba(0,0,0,0.25)]"
-      style={{
-        left: `${ax}%`,
-        top: `${ay}%`,
-        transform: 'translate(-50%, -50%)',
-        fontSize: Math.max(8, Math.round(12 * sx * (CARD_ART_WIDTH / 256))),
-        width: `${maxW}%`,
-        maxWidth: `${maxW}%`,
-      }}
-    >
-      {t}
-    </div>
+    <>
+      <div
+        className={cls}
+        style={{ left: `${ax}%`, top: `${ay}%`, color: textColor, ...captionTypographyStyle(sx, maxW, false), ...shadow }}
+      >
+        {t}
+      </div>
+      {mirror ? (
+        <div
+          className={cls}
+          style={{
+            left: `${100 - ax}%`,
+            top: `${100 - ay}%`,
+            color: textColor,
+            ...captionTypographyStyle(sx, maxW, true),
+            ...shadow,
+          }}
+        >
+          {t}
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -212,6 +257,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
     () => mergedBackgroundCaption(defaults?.backgroundCaptionDefaults, override?.backgroundCaption),
     [defaults?.backgroundCaptionDefaults, override?.backgroundCaption],
   );
+  const faceTextFill = resolveSuitFaceTextColor(bgSuitKey, defaults?.suitFaceTextColor);
 
   if (customFullBleed && !customBroken) {
     return (
@@ -226,7 +272,12 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
           draggable={false}
           onError={() => setCustomBroken(true)}
         />
-        {bgOnlyEarly && captionConfig ? <BackgroundCaptionLayer config={captionConfig} /> : null}
+        {bgOnlyEarly && captionConfig ? (
+          <BackgroundCaptionLayers
+            config={captionConfig}
+            textColor={captionConfig.color?.trim() || faceTextFill}
+          />
+        ) : null}
       </div>
     );
   }
@@ -236,12 +287,16 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   const notifierScale = resolveNotifierScale(rankForScale, defaults);
   const ct = defaults?.cornerText ?? {};
   const textScaleMul = (ct.scale ?? 1) * notifierScale;
-  const offLX = ct.offsetLeftXPct ?? 0;
-  const offTY = ct.offsetTopYPct ?? 0;
+  const rLX = ct.offsetLeftXPct ?? 0;
+  const rTY = ct.offsetTopYPct ?? 0;
+  const nLX = ct.notifierOffsetLeftXPct !== undefined && ct.notifierOffsetLeftXPct !== null ? ct.notifierOffsetLeftXPct : rLX;
+  const nTYExplicit = ct.notifierOffsetTopYPct !== undefined && ct.notifierOffsetTopYPct !== null;
+  const nTY = nTYExplicit ? (ct.notifierOffsetTopYPct ?? 0) : 0;
   const symmetricCorners = ct.symmetricCorners !== false;
 
   const cornerFontPx = Math.round(CARD_ART_WIDTH * 0.085 * textScaleMul);
   const cornerGlyphPx = CARD_ART_WIDTH * 0.12 * notifierScale;
+  const notifierStackPx = Math.round(cornerFontPx * 0.92);
 
   const bgOnly = bgOnlyEarly;
   const underlay = defaults?.faceUnderlayColor ?? '#000000';
@@ -275,28 +330,61 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
       {!bgOnly && (
         <>
           <div
-            className={`pointer-events-none absolute z-[3] flex flex-col items-start leading-[0.85] ${SUIT_COLORS[suit] ?? 'text-red-600'}`}
-            style={{ left: `calc(${CORNER_SIDE} + ${offLX}%)`, top: `calc(${CORNER_TOP} + ${offTY}%)` }}
+            className="pointer-events-none absolute z-[3] leading-[0.85]"
+            style={{
+              left: `calc(${CORNER_SIDE} + ${rLX}%)`,
+              top: `calc(${CORNER_TOP} + ${rTY}%)`,
+              color: faceTextFill,
+              ...contrastTextShadow(faceTextFill),
+            }}
           >
-            <span className="font-card-rank font-black text-zinc-900" style={{ fontSize: cornerFontPx }}>
+            <span className="font-card-rank font-black" style={{ fontSize: cornerFontPx }}>
               {cornerRankText}
             </span>
+          </div>
+          <div
+            className={`pointer-events-none absolute z-[3] ${SUIT_COLORS[suit] ?? 'text-red-600'}`}
+            style={{
+              left: `calc(${CORNER_SIDE} + ${nLX}%)`,
+              top: nTYExplicit
+                ? `calc(${CORNER_TOP} + ${nTY}%)`
+                : `calc(${CORNER_TOP} + ${rTY}% + ${notifierStackPx}px)`,
+            }}
+          >
             <CornerSuitRaster suit={suit} sizePx={cornerGlyphPx} />
           </div>
           <div
-            className={`pointer-events-none absolute z-[3] flex flex-col items-start leading-[0.85] rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-600'}`}
+            className="pointer-events-none absolute z-[3] leading-[0.85] rotate-180"
             style={{
               right: symmetricCorners
-                ? `calc(${CORNER_SIDE} + ${offLX}%)`
-                : `calc(${CORNER_SIDE} - ${offLX}%)`,
+                ? `calc(${CORNER_SIDE} + ${rLX}%)`
+                : `calc(${CORNER_SIDE} - ${rLX}%)`,
               bottom: symmetricCorners
-                ? `calc(${CORNER_TOP} + ${offTY}%)`
-                : `calc(${CORNER_TOP} - ${offTY}%)`,
+                ? `calc(${CORNER_TOP} + ${rTY}%)`
+                : `calc(${CORNER_TOP} - ${rTY}%)`,
+              color: faceTextFill,
+              ...contrastTextShadow(faceTextFill),
             }}
           >
-            <span className="font-card-rank font-black text-zinc-900" style={{ fontSize: cornerFontPx }}>
+            <span className="font-card-rank font-black" style={{ fontSize: cornerFontPx }}>
               {cornerRankText}
             </span>
+          </div>
+          <div
+            className={`pointer-events-none absolute z-[3] rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-600'}`}
+            style={{
+              right: symmetricCorners
+                ? `calc(${CORNER_SIDE} + ${nLX}%)`
+                : `calc(${CORNER_SIDE} - ${nLX}%)`,
+              bottom: nTYExplicit
+                ? symmetricCorners
+                  ? `calc(${CORNER_TOP} + ${nTY}%)`
+                  : `calc(${CORNER_TOP} - ${nTY}%)`
+                : symmetricCorners
+                  ? `calc(${CORNER_TOP} + ${rTY}% + ${notifierStackPx}px)`
+                  : `calc(${CORNER_TOP} - ${rTY}% + ${notifierStackPx}px)`,
+            }}
+          >
             <CornerSuitRaster suit={suit} sizePx={cornerGlyphPx} />
           </div>
         </>
@@ -319,7 +407,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               }
             />
           ) : royalPicture ? (
-            <PictureInterior suit={suit} value={value} cardId={card} pipScale={pipScale} />
+            <PictureInterior suit={suit} value={value} cardId={card} pipScale={pipScale} defaults={defaults} />
           ) : (
             <CenterFill
               card={card}
@@ -333,7 +421,12 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
         </div>
       )}
 
-      {bgOnly && captionConfig ? <BackgroundCaptionLayer config={captionConfig} /> : null}
+      {bgOnly && captionConfig ? (
+        <BackgroundCaptionLayers
+          config={captionConfig}
+          textColor={captionConfig.color?.trim() || faceTextFill}
+        />
+      ) : null}
     </div>
   );
 };
@@ -343,11 +436,13 @@ function PictureInterior({
   value,
   cardId,
   pipScale,
+  defaults,
 }: {
   suit: string;
   value: string;
   cardId: string;
   pipScale: number;
+  defaults?: CardArtGlobalDefaults;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId), [cardId]);
   const [attempt, setAttempt] = useState(0);
@@ -355,6 +450,8 @@ function PictureInterior({
   useEffect(() => {
     setAttempt(0);
   }, [cardId]);
+
+  const rankFill = resolveSuitFaceTextColor(suit, defaults?.suitFaceTextColor);
 
   if (attempt < candidates.length) {
     return (
@@ -379,8 +476,12 @@ function PictureInterior({
         <SuitGlyph suit={suit as any} className={`h-full w-full max-h-full max-w-full opacity-90 ${SUIT_COLORS[suit] ?? ''}`} />
       </div>
       <span
-        className="font-card-rank font-black text-zinc-800"
-        style={{ fontSize: Math.round(CARD_ART_WIDTH * 0.14 * pipScale) }}
+        className="font-card-rank font-black"
+        style={{
+          fontSize: Math.round(CARD_ART_WIDTH * 0.14 * pipScale),
+          color: rankFill,
+          ...contrastTextShadow(rankFill),
+        }}
       >
         {value}
       </span>

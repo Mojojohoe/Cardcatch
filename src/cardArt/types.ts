@@ -13,20 +13,27 @@ export type PipGridCell = PipSlot;
 /** Overlay lines on top of a background-only assembled face (corners/pips hidden). */
 export type BackgroundCaptionConfig = {
   text?: string;
+  /** CSS colour override for caption (rank/caption tint otherwise comes from suit defaults). */
+  color?: string;
   /** Multiplier on default caption size (1 ≈ 12px at 256px card width). */
   scale?: number;
   /** Anchor 0–100 from left edge (50 = horizontal centre). */
   anchorXPct?: number;
   anchorYPct?: number;
   maxWidthPct?: number;
+  /** Second copy through card centre, rotate 180deg (mirrors at 100-anchorX, 100-anchorY). */
+  mirrorDual?: boolean;
 };
 
 /** Corner index (rank + notifier suit) layout. */
 export type CornerTextConfig = {
   scale?: number;
-  /** Additional offset from the corner anchor toward the card interior. */
+  /** Rank numeral offsets from corner toward interior. */
   offsetLeftXPct?: number;
   offsetTopYPct?: number;
+  /** Notifier suit; omit an axis to follow rank horizontally and stack vertically under rank. */
+  notifierOffsetLeftXPct?: number;
+  notifierOffsetTopYPct?: number;
   /**
    * When true (default), top-left and bottom-right use the same offset sign so both move toward the card centre.
    * When false, uses legacy bottom-corner anchoring (subtract X/Y on the bottom-right).
@@ -59,6 +66,8 @@ export type CardArtGlobalDefaults = {
    * Standard suits + any extra (e.g. `Frogs`, `Coins`, `Moons`, `Joker` for a shared joker field).
    */
   suitBackgroundFile?: Partial<Record<string, string>>;
+  /** Corner rank, court rank fallback, and background-only caption text — CSS colours per suit name. */
+  suitFaceTextColor?: Partial<Record<string, string>>;
   /**
    * Centre / court pip symbol scale. Last matching range wins. Ranks: 2…A.
    * Does not affect corner “notifier” suit size.
