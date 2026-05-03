@@ -71,3 +71,26 @@ export function jointTableTrumpPair(
   if (targetSuit === 'Diamonds') return ['Diamonds', 'Coins'];
   return null;
 }
+
+/**
+ * Suit **name** under the table trump (e.g. “Clubs”) — light enough for dark green felt when using artwork theme.
+ * (Vector theme keeps {@link SUIT_COLORS} for HUD chips; this is for the central result line.)
+ */
+export function tableTrumpSuitNameClass(suit: string): string {
+  const felt: Record<string, string> = {
+    Hearts: 'text-rose-100',
+    Diamonds: 'text-red-100',
+    Clubs: 'text-emerald-50',
+    Spades: 'text-sky-100',
+    Stars: 'text-fuchsia-100',
+    Moons: 'text-slate-100',
+    Frogs: 'text-lime-100',
+    Coins: 'text-amber-100',
+    Crowns: 'text-orange-100',
+    Grovels: 'text-violet-100',
+    Swords: 'text-stone-200',
+    Bones: 'text-amber-50',
+    Joker: 'text-purple-100',
+  };
+  return felt[suit] ?? 'text-slate-100';
+}

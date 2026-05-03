@@ -1,7 +1,10 @@
 import React from 'react';
 import type { Suit } from '../types';
-import { SUIT_COLORS } from '../suitPresentation';
+import { SUIT_COLORS, tableTrumpSuitNameClass } from '../suitPresentation';
+import { useOptionalCardArt } from '../cardArt/cardArtContext';
+import { cardArtAssetUrl } from '../cardArt/paths';
 import { SuitGlyph } from './SuitGlyphs';
+import { SuitRasterOrGlyph } from './SuitRasterOrGlyph';
 
 /** Diagonal-split “OR” trump card — light top-left / dark bottom-right (TR–BL seam). */
 const CLIP_TRI_TOP_LEFT = 'polygon(0% 0%, 100% 0%, 0% 100%)';
@@ -26,17 +29,20 @@ export function DualTrumpTableLabel(props: {
   suits: readonly [Suit, Suit];
   className?: string;
   dividerClassName?: string;
+  /** Use with artwork / dark felt — avoids dark emerald/blue suit names on green. */
+  suitNamesOnGreenFelt?: boolean;
 }) {
-  const { suits, className = '', dividerClassName = 'text-slate-400' } = props;
+  const { suits, className = '', dividerClassName = 'text-slate-400', suitNamesOnGreenFelt } = props;
   const [a, b] = suits;
+  const nameCls = (s: Suit) => (suitNamesOnGreenFelt ? tableTrumpSuitNameClass(s) : SUIT_COLORS[s] ?? 'text-white');
   return (
     <span className={`inline-flex flex-wrap items-baseline justify-center gap-x-[0.35em] ${className}`}>
-      <span className={SUIT_COLORS[a] ?? 'text-white'}>{a}</span>
+      <span className={nameCls(a)}>{a}</span>
       <span className={dividerClassName} aria-hidden="true">
         {' '}
         /{' '}
       </span>
-      <span className={SUIT_COLORS[b] ?? 'text-white'}>{b}</span>
+      <span className={nameCls(b)}>{b}</span>
     </span>
   );
 }
@@ -48,45 +54,75 @@ export const DualTableTrumpCard: React.FC<{
   appearance?: 'standee' | 'hud';
   className?: string;
 }> = ({ suits, density = 'hero', appearance = 'standee', className = '' }) => {
+  const cardArt = useOptionalCardArt();
+  const artwork = cardArt?.mode === 'raster';
   const { box, glyph, aPos, bPos } = sizePresets[density];
   const [a, b] = suits;
   const frame =
     appearance === 'hud'
       ? 'rounded-xl border-2 border-slate-600/95 bg-yellow-400 shadow-md shadow-black/35'
       : 'rounded-2xl border-4 border-yellow-200 bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.28)]';
+  const artworkFrame =
+    appearance === 'hud'
+      ? 'rounded-xl border-2 border-amber-800/80 shadow-md shadow-black/40'
+      : 'rounded-2xl border-4 border-amber-700/85 shadow-[0_0_40px_rgba(251,191,36,0.22)]';
+
+  const glyphInner = `${glyph} max-h-[min(78%,7.5rem)] max-w-[min(78%,7.5rem)] sm:max-h-[min(78%,9rem)] sm:max-w-[min(78%,9rem)]`;
 
   return (
-    <div className={`relative isolate flex shrink-0 flex-col overflow-hidden ${frame} ${box} ${className}`.trim()}>
-      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-[0.10]" />
+    <div
+      className={`relative isolate flex shrink-0 flex-col overflow-hidden ${artwork ? artworkFrame : frame} ${box} ${className}`.trim()}
+    >
+      {artwork ? (
+        <>
+          <img
+            src={cardArtAssetUrl('GoldCard.png')}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
+          />
+          <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-[0.12]" />
+        </>
+      ) : (
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-[0.10]" />
 
-        {/* Top-left triangle — lighter gold */}
-        <div
-          className="absolute inset-0 rounded-[inherit] bg-gradient-to-br from-yellow-200/95 via-yellow-300/90 to-yellow-400/75"
-          style={{ clipPath: CLIP_TRI_TOP_LEFT }}
-          aria-hidden
-        />
-        {/* Bottom-right triangle — softened / darker (visual “OR”) */}
-        <div
-          className="absolute inset-0 rounded-[inherit] bg-gradient-to-tl from-amber-900/72 via-amber-800/38 to-transparent"
-          style={{ clipPath: CLIP_TRI_BOTTOM_RIGHT }}
-          aria-hidden
-        />
-      </div>
+          {/* Top-left triangle — lighter gold */}
+          <div
+            className="absolute inset-0 rounded-[inherit] bg-gradient-to-br from-yellow-200/95 via-yellow-300/90 to-yellow-400/75"
+            style={{ clipPath: CLIP_TRI_TOP_LEFT }}
+            aria-hidden
+          />
+          {/* Bottom-right triangle — softened / darker (visual “OR”) */}
+          <div
+            className="absolute inset-0 rounded-[inherit] bg-gradient-to-tl from-amber-900/72 via-amber-800/38 to-transparent"
+            style={{ clipPath: CLIP_TRI_BOTTOM_RIGHT }}
+            aria-hidden
+          />
+        </div>
+      )}
 
       {/* Centroids (~⅓ , ⅓) and (~⅔ , ⅔) for TR–BL split */}
       <div
         className={`pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 transform ${aPos}`}
       >
-        <div className={SUIT_COLORS[a] ?? 'text-red-500'}>
-          <SuitGlyph suit={a} className={`${glyph} drop-shadow-[0_4px_14px_rgba(0,0,0,0.35)]`} />
+        <div className={artwork ? 'drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]' : SUIT_COLORS[a] ?? 'text-red-500'}>
+          {artwork ? (
+            <SuitRasterOrGlyph suit={a} className={`${glyphInner} drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]`} />
+          ) : (
+            <SuitGlyph suit={a} className={`${glyph} drop-shadow-[0_4px_14px_rgba(0,0,0,0.35)]`} />
+          )}
         </div>
       </div>
       <div
         className={`pointer-events-none absolute z-10 translate-x-1/2 translate-y-1/2 transform ${bPos}`}
       >
-        <div className={SUIT_COLORS[b] ?? 'text-amber-400'}>
-          <SuitGlyph suit={b} className={`${glyph} drop-shadow-[0_4px_14px_rgba(0,0,0,0.4)]`} />
+        <div className={artwork ? 'drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]' : SUIT_COLORS[b] ?? 'text-amber-400'}>
+          {artwork ? (
+            <SuitRasterOrGlyph suit={b} className={`${glyphInner} drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]`} />
+          ) : (
+            <SuitGlyph suit={b} className={`${glyph} drop-shadow-[0_4px_14px_rgba(0,0,0,0.4)]`} />
+          )}
         </div>
       </div>
     </div>

@@ -269,7 +269,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               onClick={() => setMode('raster')}
               className={`rounded border px-2 py-1 ${displayMode === 'raster' ? 'border-amber-400 bg-amber-400/20 text-amber-200' : 'border-slate-700'}`}
             >
-              Assembled
+              Artwork
             </button>
           </div>
           <button
@@ -760,7 +760,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       />
                       {showCentrePictureField && (
                         <div className="mt-3 space-y-1 rounded border border-slate-800 bg-slate-950/50 p-3">
-                          <p className="text-[11px] font-bold text-slate-300">Centre court image (assembled mode)</p>
+                          <p className="text-[11px] font-bold text-slate-300">Centre court image (artwork mode)</p>
                           <p className="text-[10px] leading-snug text-slate-500">
                             Optional filename in <code className="text-slate-400">public/assets/images/</code> for the large
                             centre graphic (tried <em>before</em> <code className="text-slate-400">{selected}</code>
@@ -997,7 +997,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
                       <p className="mt-4 text-[11px] font-bold text-slate-300">Corner rank & caption text colour (per suit)</p>
                       <p className="mb-2 text-[10px] text-slate-500">
-                        CSS colours (#hex or name). Blank uses the built‑in preset for each suit on assembled faces (corners,
+                        CSS colours (#hex or name). Blank uses the built‑in preset for each suit on artwork faces (corners,
                         royalty rank fallback, background-only captions).
                       </p>
                       {(['Hearts', 'Diamonds', 'Clubs', 'Spades'] as const).map((suit) => (
@@ -1567,7 +1567,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <div>
                         <p className="mb-2 text-[11px] font-bold text-slate-300">Centre court image scale</p>
                         <p className="mb-2 text-[10px] text-slate-500">
-                          Uniform scale for Ace / God / royalty / Joker centre rasters (assembled mode). Per-card scale
+                          Uniform scale for Ace / God / royalty / Joker centre rasters (artwork mode). Per-card scale
                           overrides this. Blank = 1.
                         </p>
                         <label className="text-[11px] text-slate-400">

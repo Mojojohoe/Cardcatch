@@ -17,6 +17,8 @@ export function cardBackgroundUrlCandidates(): string[] {
  */
 export function suitRasterUrlCandidates(suit: string): string[] {
   const stems = [
+    /** Pack convention: `public/assets/images/suitHearts.png`, `suitDiamonds.png`, … */
+    `suit${suit}`,
     `Suit${suit}`,
     `${suit}`,
     `${suit.toLowerCase()}`,

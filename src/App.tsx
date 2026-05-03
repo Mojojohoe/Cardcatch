@@ -83,6 +83,7 @@ import { DesperationWheel, TargetSuitWheel } from './components/GameWheels';
 import { RoomChat } from './components/RoomChat';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { SuitGlyph } from './components/SuitGlyphs';
+import { SuitRasterOrGlyph } from './components/SuitRasterOrGlyph';
 import { DualTableTrumpCard, DualTrumpTableLabel } from './components/DualTableTrumpCard';
 import {
   CardVisual,
@@ -105,7 +106,7 @@ import { resolutionLogLineClass } from './utils/resolutionLogColors';
 import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
-import { jointTableTrumpPair } from './suitPresentation';
+import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
 import { useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
 import { CardCreator } from './cardCreator/CardCreator';
@@ -218,13 +219,30 @@ const CompactTableGlyphRow: React.FC<{
   suit: Suit | null | undefined;
   greedJointTrump: boolean;
 }> = ({ suit, greedJointTrump }) => {
+  const cardArt = useOptionalCardArt();
   if (!suit) return null;
   const joint = jointTableTrumpPair(suit, { greedActive: greedJointTrump });
+  const artwork = cardArt?.mode === 'raster';
   return (
     <div className="mb-2 flex flex-col items-center gap-1">
       <span className="text-[8px] font-black uppercase tracking-wider text-slate-500">Table suit</span>
       {joint ? (
         <DualTableTrumpCard suits={joint} density="compact" appearance="hud" />
+      ) : artwork ? (
+        <div className="relative flex h-12 min-w-[4.85rem] max-w-[5.85rem] items-center justify-center overflow-hidden rounded-xl border-2 border-amber-800/80 shadow-md shadow-black/35">
+          <img
+            src={cardArtAssetUrl('GoldCard.png')}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="relative z-10 flex h-full w-full items-center justify-center p-1.5">
+            <SuitRasterOrGlyph
+              suit={suit}
+              className="h-8 w-8 max-h-[88%] max-w-[88%] object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.42)] sm:h-9 sm:w-9"
+            />
+          </div>
+        </div>
       ) : (
         <div
           className={`flex items-center justify-center gap-1 rounded-full border-2 border-slate-600/90 bg-slate-950/90 px-2 py-1 shadow-md ${SUIT_COLORS[suit]}`}
@@ -3067,8 +3085,23 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         : 'Resolving power cards…'
       : null;
 
+  const artworkFelt = cardArtCtx?.mode === 'raster';
+
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 bg-emerald-950/40 p-4">
+    <div
+      className={`relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 p-4 ${
+        artworkFelt ? 'bg-emerald-950/25' : 'bg-emerald-950/40'
+      }`}
+      style={
+        artworkFelt
+          ? {
+              backgroundImage: `linear-gradient(to bottom, rgba(2, 44, 34, 0.5), rgba(2, 44, 34, 0.78)), url(${cardArtAssetUrl('Background.png')})`,
+              backgroundSize: 'cover, cover',
+              backgroundPosition: 'center, center',
+            }
+          : undefined
+      }
+    >
       {room.famineActive && famineBannerPhase === 'bone_deal' && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[241] bg-stone-900/95 border border-stone-500 px-5 py-2 rounded-full shadow-lg max-w-[min(94vw,32rem)]">
           <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-stone-100 text-center block">
@@ -3568,24 +3601,47 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            {joint ? (
                              <DualTableTrumpCard suits={joint} />
                            ) : ts ? (
-                             <div
-                               className={`
+                             cardArtCtx?.mode === 'raster' ? (
+                               <div
+                                 className={`
+                         relative flex h-[9.75rem] w-[6.75rem] flex-col items-center justify-center overflow-hidden rounded-2xl border-4 border-amber-700/85 shadow-[0_0_40px_rgba(251,191,36,0.22)]
+                         sm:h-[11.75rem] sm:w-[8.125rem]
+                       `}
+                               >
+                                 <img
+                                   src={cardArtAssetUrl('GoldCard.png')}
+                                   alt=""
+                                   draggable={false}
+                                   className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
+                                 />
+                                 <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-[0.12]" />
+                                 <div className="relative z-10 flex h-full w-full items-center justify-center p-[10%]">
+                                   <SuitRasterOrGlyph
+                                     suit={ts}
+                                     className="max-h-[min(78%,10.5rem)] max-w-[min(78%,7.5rem)] object-contain drop-shadow-[0_4px_18px_rgba(0,0,0,0.45)] sm:max-h-[min(78%,12.5rem)] sm:max-w-[min(78%,8.5rem)]"
+                                   />
+                                 </div>
+                               </div>
+                             ) : (
+                               <div
+                                 className={`
                          relative flex h-[9.75rem] w-[6.75rem] flex-col items-center justify-center rounded-2xl border-4 border-yellow-200 bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.28)]
                          sm:h-[11.75rem] sm:w-[8.125rem]
                        `}
-                             >
-                               <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-                                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-10" />
-                               </div>
-                               <div
-                                 className={`relative z-10 ${SUIT_COLORS[ts] ?? 'text-white'} drop-shadow-[0_6px_22px_rgba(0,0,0,0.35)]`}
                                >
-                                 <SuitGlyph
-                                   suit={ts}
-                                   className="h-[4.75rem] w-[4.75rem] sm:h-[7.25rem] sm:w-[7.25rem]"
-                                 />
+                                 <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+                                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#000_1px,transparent_1px)] bg-[size:10px_10px] opacity-10" />
+                                 </div>
+                                 <div
+                                   className={`relative z-10 ${SUIT_COLORS[ts] ?? 'text-white'} drop-shadow-[0_6px_22px_rgba(0,0,0,0.35)]`}
+                                 >
+                                   <SuitGlyph
+                                     suit={ts}
+                                     className="h-[4.75rem] w-[4.75rem] sm:h-[7.25rem] sm:w-[7.25rem]"
+                                   />
+                                 </div>
                                </div>
-                             </div>
+                             )
                            ) : (
                              <div
                                className={`
@@ -3601,10 +3657,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                <DualTrumpTableLabel
                                  suits={joint}
                                  className="uppercase tracking-[0.12em]"
-                                 dividerClassName="text-slate-400"
+                                 dividerClassName={cardArtCtx?.mode === 'raster' ? 'text-slate-300' : 'text-slate-400'}
+                                 suitNamesOnGreenFelt={cardArtCtx?.mode === 'raster'}
                                />
                              ) : ts ? (
-                               <span className={SUIT_COLORS[ts] ?? ''}>{ts}</span>
+                               <span
+                                 className={
+                                   cardArtCtx?.mode === 'raster' ? tableTrumpSuitNameClass(ts) : SUIT_COLORS[ts] ?? ''
+                                 }
+                               >
+                                 {ts}
+                               </span>
                              ) : null}
                            </span>
                          </>
@@ -4095,7 +4158,7 @@ function CardArtHud() {
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            Assembled
+            Artwork
           </button>
           <span className="mx-1 h-4 w-px bg-emerald-800" aria-hidden />
           <button
