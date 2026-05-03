@@ -4,7 +4,8 @@
 @font-face {
   font-family: 'Ye Olde Towne D';
   src: url('./fonts/ye-olde-towne-d.otf') format('opentype');
-  font-weight: normal;
+  /* Single display file: map all requested weights to it so Tailwind `font-black` does not fall back to serif. */
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }

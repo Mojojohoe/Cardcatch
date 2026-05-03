@@ -6,6 +6,16 @@ import type {
   PipOrient,
   PipSlot,
 } from './types';
+
+/** Effective opacity for assembled / vector face typography; card override wins. */
+export function resolvedFaceTextOpacity(
+  override?: CardArtOverride,
+  defaults?: CardArtGlobalDefaults,
+): number {
+  const r = override?.faceTextOpacity ?? defaults?.faceTextOpacity;
+  if (r == null || !Number.isFinite(r)) return 1;
+  return Math.min(1, Math.max(0, Number(r)));
+}
 import { cardArtAssetUrl, cardBackgroundUrlCandidates } from './paths';
 import { defaultPipCellsForRank } from './pipLayouts';
 

@@ -11,6 +11,7 @@ import type { BackgroundCaptionConfig, CardArtGlobalDefaults, CardArtOverride, P
 import { pipGridCellToFraction } from './pipLayouts';
 import {
   mergedBackgroundCaption,
+  resolvedFaceTextOpacity,
   resolveFaceBackgroundCandidates,
   resolveNotifierScale,
   resolvePipScale,
@@ -151,7 +152,15 @@ function contrastTextShadow(fill: string): React.CSSProperties {
 }
 
 /** One or two blocks (dual mirrors through card centre like corner indices). */
-function BackgroundCaptionLayers({ config, textColor }: { config: BackgroundCaptionConfig; textColor: string }) {
+function BackgroundCaptionLayers({
+  config,
+  textColor,
+  opacity,
+}: {
+  config: BackgroundCaptionConfig;
+  textColor: string;
+  opacity: number;
+}) {
   const t = config.text?.trim();
   if (!t) return null;
   const sx = config.scale ?? 1;
@@ -160,13 +169,21 @@ function BackgroundCaptionLayers({ config, textColor }: { config: BackgroundCapt
   const maxW = config.maxWidthPct ?? 88;
   const mirror = Boolean(config.mirrorDual);
   const shadow = contrastTextShadow(textColor);
-  const cls = 'pointer-events-none absolute z-[4] whitespace-pre-wrap px-1 text-center font-bold leading-tight tracking-tight';
+  const cls =
+    'font-card-rank pointer-events-none absolute z-[4] whitespace-pre-wrap px-1 text-center font-black leading-tight tracking-tight';
 
   return (
     <>
       <div
         className={cls}
-        style={{ left: `${ax}%`, top: `${ay}%`, color: textColor, ...captionTypographyStyle(sx, maxW, false), ...shadow }}
+        style={{
+          left: `${ax}%`,
+          top: `${ay}%`,
+          color: textColor,
+          opacity,
+          ...captionTypographyStyle(sx, maxW, false),
+          ...shadow,
+        }}
       >
         {t}
       </div>
@@ -177,6 +194,7 @@ function BackgroundCaptionLayers({ config, textColor }: { config: BackgroundCapt
             left: `${100 - ax}%`,
             top: `${100 - ay}%`,
             color: textColor,
+            opacity,
             ...captionTypographyStyle(sx, maxW, true),
             ...shadow,
           }}
@@ -191,17 +209,20 @@ function BackgroundCaptionLayers({ config, textColor }: { config: BackgroundCapt
 /** Try `{cardId}.png` etc.; then render fallback (pip court or glyph). */
 function RasterPictureOr({
   cardId,
+  pictureStem,
   fallback,
 }: {
   cardId: string;
+  /** Tried before `{cardId}` (see {@link CardArtOverride.centrePictureFile}). */
+  pictureStem?: string | null;
   fallback: React.ReactNode;
 }) {
-  const candidates = useMemo(() => pictureCardUrlCandidates(cardId), [cardId]);
+  const candidates = useMemo(() => pictureCardUrlCandidates(cardId, pictureStem), [cardId, pictureStem]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setAttempt(0);
-  }, [cardId]);
+  }, [cardId, pictureStem]);
 
   if (attempt >= candidates.length) {
     return <>{fallback}</>;
@@ -258,6 +279,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
     [defaults?.backgroundCaptionDefaults, override?.backgroundCaption],
   );
   const faceTextFill = resolveSuitFaceTextColor(bgSuitKey, defaults?.suitFaceTextColor);
+  const faceTextOpacity = resolvedFaceTextOpacity(override, defaults);
 
   if (customFullBleed && !customBroken) {
     return (
@@ -276,6 +298,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
           <BackgroundCaptionLayers
             config={captionConfig}
             textColor={captionConfig.color?.trim() || faceTextFill}
+            opacity={faceTextOpacity}
           />
         ) : null}
       </div>
@@ -335,6 +358,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               left: `calc(${CORNER_SIDE} + ${rLX}%)`,
               top: `calc(${CORNER_TOP} + ${rTY}%)`,
               color: faceTextFill,
+              opacity: faceTextOpacity,
               ...contrastTextShadow(faceTextFill),
             }}
           >
@@ -363,6 +387,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
                 ? `calc(${CORNER_TOP} + ${rTY}%)`
                 : `calc(${CORNER_TOP} - ${rTY}%)`,
               color: faceTextFill,
+              opacity: faceTextOpacity,
               ...contrastTextShadow(faceTextFill),
             }}
           >
@@ -398,6 +423,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
           {isJoker ? (
             <RasterPictureOr
               cardId={card}
+              pictureStem={override?.centrePictureFile}
               fallback={
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className={`opacity-90 ${SUIT_COLORS['Joker'] ?? 'text-purple-500'}`}>
@@ -407,7 +433,15 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               }
             />
           ) : royalPicture ? (
-            <PictureInterior suit={suit} value={value} cardId={card} pipScale={pipScale} defaults={defaults} />
+            <PictureInterior
+              suit={suit}
+              value={value}
+              cardId={card}
+              pipScale={pipScale}
+              defaults={defaults}
+              textOpacity={faceTextOpacity}
+              centrePictureStem={override?.centrePictureFile}
+            />
           ) : (
             <CenterFill
               card={card}
@@ -425,6 +459,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
         <BackgroundCaptionLayers
           config={captionConfig}
           textColor={captionConfig.color?.trim() || faceTextFill}
+          opacity={faceTextOpacity}
         />
       ) : null}
     </div>
@@ -437,19 +472,23 @@ function PictureInterior({
   cardId,
   pipScale,
   defaults,
+  textOpacity,
+  centrePictureStem,
 }: {
   suit: string;
   value: string;
   cardId: string;
   pipScale: number;
   defaults?: CardArtGlobalDefaults;
+  textOpacity: number;
+  centrePictureStem?: string | null;
 }) {
-  const candidates = useMemo(() => pictureCardUrlCandidates(cardId), [cardId]);
+  const candidates = useMemo(() => pictureCardUrlCandidates(cardId, centrePictureStem), [cardId, centrePictureStem]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setAttempt(0);
-  }, [cardId]);
+  }, [cardId, centrePictureStem]);
 
   const rankFill = resolveSuitFaceTextColor(suit, defaults?.suitFaceTextColor);
 
@@ -480,6 +519,7 @@ function PictureInterior({
         style={{
           fontSize: Math.round(CARD_ART_WIDTH * 0.14 * pipScale),
           color: rankFill,
+          opacity: textOpacity,
           ...contrastTextShadow(rankFill),
         }}
       >
@@ -515,10 +555,13 @@ function CenterFill({
     );
   }
 
+  const centreStem = override?.centrePictureFile;
+
   if (aceOrGod) {
     return (
       <RasterPictureOr
         cardId={card}
+        pictureStem={centreStem}
         fallback={
           <div className="pointer-events-none absolute inset-0 z-[2]">
             <PipInterior suit={suit} value={value} override={override} defaults={defaults} pipScale={pipScale} />
@@ -531,6 +574,7 @@ function CenterFill({
   return (
     <RasterPictureOr
       cardId={card}
+      pictureStem={centreStem}
       fallback={
         <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center opacity-[0.22]">
           <div className={`${SUIT_COLORS[suit] ?? 'text-red-500'}`}>

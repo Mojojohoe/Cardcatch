@@ -45,8 +45,15 @@ export type CornerTextConfig = {
 export type CardArtOverride = {
   customImageFile?: string;
   customDataUrl?: string;
+  /**
+   * Optional image stem in `public/assets/images/` (extensions auto-tried) for centre court art:
+   * Ace / God pip-as-picture fallback, royalty picture, joker centre, or bare slot fallback — tried before `{cardId}.png`.
+   */
+  centrePictureFile?: string;
   /** Pip centres + optional flip per pip */
   pipGrid?: PipSlot[];
+  /** Opacity 0–1 for face typography (corner rank, captions, royalty rank line). Default 1. */
+  faceTextOpacity?: number;
   /**
    * Only background + optional full-card upload: hide corner rank/suit and all centre pips/pictures.
    * Use when the face image (suit default or `customImageFile`) already contains the full design.
@@ -92,6 +99,8 @@ export type CardArtGlobalDefaults = {
   backgroundOnly?: boolean;
   /** Solid underlay behind transparent PNGs or minimal faces (default `#000000`). */
   faceUnderlayColor?: string;
+  /** Opacity 0–1 for face typography (corner rank, captions, royalty rank line). Default 1. */
+  faceTextOpacity?: number;
   /**
    * One pip layout for this rank applied to every suit (Hearts-2, Diamonds-2, …).
    * Each card still draws its own suit glyph at each slot.

@@ -135,6 +135,10 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [sharedRank, setSharedRank] = useState<string>('2');
 
   const playingParts = useMemo(() => trySplitPlaying(selected), [selected]);
+  const showCentrePictureField = Boolean(
+    selected.startsWith('Joker') ||
+      (playingParts && ['A', 'J', 'Q', 'K', 'G'].includes(playingParts.value)),
+  );
 
   useEffect(() => {
     const m = manifest[selected];
@@ -203,13 +207,14 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (draft?.backgroundOnly) clean.backgroundOnly = true;
     const capSaved = pruneBackgroundCaption(draft?.backgroundCaption);
     if (capSaved) clean.backgroundCaption = capSaved;
-    if (
-      !clean.customDataUrl &&
-      !clean.customImageFile &&
-      !clean.pipGrid?.length &&
-      !clean.backgroundOnly &&
-      !clean.backgroundCaption
-    ) {
+    const opDraft = draft?.faceTextOpacity;
+    if (typeof opDraft === 'number' && Number.isFinite(opDraft)) {
+      const c = Math.min(1, Math.max(0, opDraft));
+      if (c !== 1) clean.faceTextOpacity = c;
+    }
+    const centre = draft?.centrePictureFile?.trim();
+    if (centre) clean.centrePictureFile = centre;
+    if (Object.keys(clean).length === 0) {
       updateOverride(selected, null);
     } else {
       updateOverride(selected, clean);
@@ -541,6 +546,34 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           background image already includes the full design.
                         </span>
                       </label>
+                      <label className="block text-[11px] text-slate-400">
+                        Face text opacity for this card (0–1, blank = use defaults)
+                        <input
+                          type="number"
+                          step={0.05}
+                          min={0}
+                          max={1}
+                          value={
+                            draft?.faceTextOpacity !== undefined && draft?.faceTextOpacity !== null ? draft.faceTextOpacity : ''
+                          }
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            setDraft((prev) => {
+                              const base = { ...(prev ?? {}) };
+                              if (!raw.length) {
+                                delete base.faceTextOpacity;
+                              } else {
+                                const n = Number(raw);
+                                if (!Number.isFinite(n)) return prev;
+                                base.faceTextOpacity = Math.min(1, Math.max(0, n));
+                              }
+                              return Object.keys(base).length ? base : null;
+                            });
+                          }}
+                          placeholder="inherit"
+                          className="mt-1 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                        />
+                      </label>
                       <div className="rounded border border-slate-800 p-3 text-[11px] text-slate-400">
                         <p className="mb-2 font-bold text-slate-300">Overlay caption (shows when Background only is on)</p>
                         <p className="mb-2 text-[10px] text-slate-500">
@@ -721,6 +754,30 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         placeholder="Hearts-5-custom.png"
                         className="w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-2 text-sm"
                       />
+                      {showCentrePictureField && (
+                        <div className="mt-3 space-y-1 rounded border border-slate-800 bg-slate-950/50 p-3">
+                          <p className="text-[11px] font-bold text-slate-300">Centre court image (assembled mode)</p>
+                          <p className="text-[10px] leading-snug text-slate-500">
+                            Optional filename in <code className="text-slate-400">public/assets/images/</code> for the large
+                            centre graphic (tried <em>before</em> <code className="text-slate-400">{selected}</code>
+                            .png). Use for custom Ace / royalty / God / Joker art without replacing the whole card.
+                          </p>
+                          <input
+                            value={draft?.centrePictureFile ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value.trim();
+                              setDraft((prev) => {
+                                const base = { ...(prev ?? {}) };
+                                if (v) base.centrePictureFile = v;
+                                else delete base.centrePictureFile;
+                                return Object.keys(base).length ? base : null;
+                              });
+                            }}
+                            placeholder={`e.g. ${selected}-ace-art (no extension)`}
+                            className="w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                   {cardTab === 'pips' && pipRank !== null && (
@@ -1395,6 +1452,36 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             <strong className="text-slate-300">Symmetric offsets</strong> — bottom-right mirrors top-left toward
                             the card centre (same offset sign).
                           </span>
+                        </label>
+                        <label className="mt-2 block text-[11px] text-slate-400">
+                          Face text opacity (0–1, blank = 1)
+                          <input
+                            type="number"
+                            step={0.05}
+                            min={0}
+                            max={1}
+                            value={
+                              draftDefaults.faceTextOpacity !== undefined && draftDefaults.faceTextOpacity !== null
+                                ? draftDefaults.faceTextOpacity
+                                : ''
+                            }
+                            onChange={(e) => {
+                              const raw = e.target.value.trim();
+                              setDraftDefaults((prev) => {
+                                const next = { ...prev };
+                                if (!raw.length) {
+                                  delete next.faceTextOpacity;
+                                  return next;
+                                }
+                                const n = Number(raw);
+                                if (!Number.isFinite(n)) return prev;
+                                next.faceTextOpacity = Math.min(1, Math.max(0, n));
+                                return next;
+                              });
+                            }}
+                            placeholder="1"
+                            className="mt-1 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                          />
                         </label>
                       </div>
 

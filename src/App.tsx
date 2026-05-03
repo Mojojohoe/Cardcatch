@@ -106,7 +106,8 @@ import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair } from './suitPresentation';
-import { useCardArt } from './cardArt/cardArtContext';
+import { useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
+import { cardArtAssetUrl } from './cardArt/paths';
 import { CardCreator } from './cardCreator/CardCreator';
 import {
   CURSE_GLUTTONY,
@@ -240,11 +241,7 @@ const CurseZonePanel: React.FC<{
   activeCurses?: ActiveCurseState[];
   prideCeilingCard?: string | null;
   wrathMinionCard?: string | null;
-  wrathTargetUid?: string | null;
-  hostUid?: string;
-  players?: Record<string, PlayerData>;
-  envyCovet?: RoomData['envyCovet'];
-}> = ({ settings, activeCurses, prideCeilingCard, wrathMinionCard, players, envyCovet }) => {
+}> = ({ settings, activeCurses, prideCeilingCard, wrathMinionCard }) => {
   if (!settings.enableCurseCards) {
     return <div className="w-12 sm:w-[4.75rem] shrink-0" aria-hidden />;
   }
@@ -322,28 +319,17 @@ const CurseZonePanel: React.FC<{
         >
           <PowerCardVisual cardId={CURSE_ENVY} revealed matchHandCard curseRackPeek />
           <p className="text-center text-[7px] font-black uppercase tracking-wider text-emerald-400">Envy</p>
-          <p className="text-center font-mono text-[11px] font-black tabular-nums text-emerald-200">
-            {(typeof envy.envyMonsterHp === 'number' ? envy.envyMonsterHp : ENVY_MONSTER_START_HP).toString()}
-            <span className="text-[7px] font-bold text-emerald-500/90"> HP</span>
-          </p>
-          {envyCovet && players?.[envyCovet.uid] && (
-            <div className="mt-1 flex w-full flex-col items-center gap-1 border-t border-emerald-800/50 pt-2">
-              <p className="text-center text-[6px] font-black uppercase tracking-wide text-emerald-500/95">Covets</p>
-              <div className="relative origin-center scale-[0.48] drop-shadow-[0_8px_22px_rgba(16,185,129,0.35)]">
-                <CardVisual
-                  card={envyCovet.cardId}
-                  revealed
-                  small
-                  noAnimate
-                  presentation="none"
-                  detailTooltip={`Green-Eyed Monster hungers for this card from ${players[envyCovet.uid].name}'s hand.`}
-                />
-              </div>
-              <p className="px-1 text-center text-[7px] font-bold leading-tight text-emerald-200/90">
-                {players[envyCovet.uid].name}
-              </p>
-            </div>
-          )}
+          {/* Same stacking idea as Greed + Crown: curse card on top, Green-Eyed Monster token underneath with HP */}
+          <div className="mt-0.5 flex flex-col items-center gap-0.5">
+            <GreenEyedMonsterIcon className="mx-auto h-10 w-[4.95rem] drop-shadow-[0_0_16px_rgba(16,185,129,0.38)] sm:h-11 sm:w-[5.45rem]" />
+            <p className="text-center font-mono text-[10px] font-black tabular-nums text-emerald-200">
+              {(typeof envy.envyMonsterHp === 'number' ? envy.envyMonsterHp : ENVY_MONSTER_START_HP).toString()}
+              <span className="text-[7px] font-bold text-emerald-500/90"> HP</span>
+            </p>
+            <p className="px-0.5 text-center text-[6px] font-bold uppercase tracking-wide text-emerald-500/90">
+              Monster
+            </p>
+          </div>
         </motion.div>
       )}
       {wrath && (
@@ -3067,6 +3053,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const curseSelectionLocked =
     room.settings.enableCurseCards !== false && curseEffectActive(room.activeCurses);
 
+  const cardArtCtx = useOptionalCardArt();
+  const deckBackRasterUrl = useMemo(() => {
+    const m = cardArtCtx?.manifest?.['back-deck'];
+    if (cardArtCtx?.mode !== 'raster' || !m) return null;
+    return m.customDataUrl ?? (m.customImageFile?.trim() ? cardArtAssetUrl(m.customImageFile.trim()) : null);
+  }, [cardArtCtx?.mode, cardArtCtx?.manifest, cardArtCtx?.manifestVersion]);
+
   const hudPhaseLine =
     room.status === 'powering'
       ? powerShowdown
@@ -3259,7 +3252,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="flex h-28 items-center justify-center -space-x-8 overflow-x-auto px-2 opacity-80 flex-nowrap sm:-space-x-12 sm:scale-100 scale-90">
+              <div className="flex h-44 items-end justify-center -space-x-8 overflow-x-auto px-2 opacity-80 flex-nowrap sm:-space-x-12 sm:scale-100 scale-90">
                 {Array.from({ length: opponent.hand.length }).map((_, i) => (
                   <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
                 ))}
@@ -3308,7 +3301,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               <div className="hidden min-h-[0.125rem] sm:col-start-1 sm:row-start-1 sm:block" aria-hidden />
               <div
                 className={`relative col-span-full min-h-0 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1 ${
-                  opponentWheelDecisionSpinning ? 'min-h-[10rem] sm:min-h-[12rem]' : 'min-h-[5.75rem] sm:min-h-[6.5rem]'
+                  opponentWheelDecisionSpinning ? 'min-h-[10rem] sm:min-h-[12rem]' : 'min-h-[11rem] sm:min-h-[12rem]'
                 }`}
               >
                 <div className="mb-1 text-center">
@@ -3316,10 +3309,30 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     Cards: {opponent.hand.length}
                   </span>
                 </div>
-                <div className="flex h-24 flex-nowrap items-center justify-center -space-x-7 px-3 opacity-[0.82] sm:h-28 sm:-space-x-10 sm:px-4 sm:opacity-95">
-                  {Array.from({ length: opponent.hand.length }).map((_, i) => (
-                    <CardVisual key={`og-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
-                  ))}
+                <div className="flex h-44 w-full min-w-0 items-end justify-center gap-1.5 px-2 opacity-[0.82] sm:gap-2 sm:px-4 sm:opacity-95">
+                  {room.status === 'playing' &&
+                    room.settings.enableCurseCards &&
+                    envyCurseActive(room.activeCurses ?? []) &&
+                    room.envyCovet &&
+                    room.envyCovet.uid === opponent.uid && (
+                      <motion.div
+                        className="pointer-events-none flex shrink-0 flex-col items-center justify-center opacity-[0.44]"
+                        initial={{ opacity: 0.44 }}
+                        animate={{ y: [0, -4, 0] }}
+                        transition={{ duration: 1.14, repeat: Infinity, ease: 'easeInOut' }}
+                        title={`Green-Eyed Monster covets ${describeCardPlain(room.envyCovet.cardId)} in ${opponent.name}'s hand`}
+                      >
+                        <GreenEyedMonsterIcon className="h-[2.85rem] w-[4rem] sm:h-12 sm:w-[4.7rem]" />
+                        <span className="mt-0.5 max-w-[4.25rem] text-center text-[5.5px] font-black uppercase leading-tight tracking-wide text-emerald-400/95">
+                          Covets their hand
+                        </span>
+                      </motion.div>
+                    )}
+                  <div className="flex min-w-0 flex-nowrap items-center justify-center -space-x-7 sm:-space-x-10">
+                    {Array.from({ length: opponent.hand.length }).map((_, i) => (
+                      <CardVisual key={`og-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
+                    ))}
+                  </div>
                 </div>
                 <OpposingHandOverlayStack
                   opponent={opponent}
@@ -3346,10 +3359,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     activeCurses={room.activeCurses}
                     prideCeilingCard={room.prideCeilingCard}
                     wrathMinionCard={room.wrathMinionCard}
-                    wrathTargetUid={room.wrathTargetUid}
-                    hostUid={room.hostUid}
-                    players={room.players}
-                    envyCovet={room.envyCovet}
                   />
                 </div>
               </aside>
@@ -3612,22 +3621,37 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
               <aside className="relative z-0 hidden min-h-0 w-full min-w-0 flex-col items-center justify-between gap-2 pt-1 sm:col-span-1 sm:col-start-3 sm:row-start-2 sm:flex sm:max-w-[min(7.5rem,calc((100vw-2rem)*0.2))] sm:pt-2">
                 <div className="relative group shrink-0">
-                  <div className="relative h-28 w-20">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="absolute inset-0 rounded-lg border-2 border-purple-600/50 bg-purple-950 shadow-2xl"
-                        style={{ transform: `translate(${-i * 2}px, ${-i * 2}px)` }}
-                      >
-                        <div className="flex h-full w-full flex-col items-center justify-center p-3 opacity-20">
-                          <div className="flex h-full w-full flex-col items-center justify-center gap-1">
-                            <WolfIcon />
-                            <Rabbit className="h-8 w-8 text-purple-400" />
+                  <div className="relative h-28 w-[4.9rem] sm:h-32 sm:w-[6.1rem]">
+                    {deckBackRasterUrl
+                      ? Array.from({ length: 4 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="absolute inset-0 overflow-hidden rounded-lg shadow-2xl ring-1 ring-black/25"
+                            style={{ transform: `translate(${-i * 2}px, ${-i * 2}px)` }}
+                          >
+                            <img
+                              src={deckBackRasterUrl}
+                              alt=""
+                              draggable={false}
+                              className="h-full w-full object-cover"
+                            />
                           </div>
-                        </div>
-                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,#ffffff_1px,transparent_1px)] bg-[length:10px_10px] opacity-10" />
-                      </div>
-                    ))}
+                        ))
+                      : Array.from({ length: 4 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="absolute inset-0 rounded-lg border-2 border-purple-600/50 bg-purple-950 shadow-2xl"
+                            style={{ transform: `translate(${-i * 2}px, ${-i * 2}px)` }}
+                          >
+                            <div className="flex h-full w-full flex-col items-center justify-center p-3 opacity-20">
+                              <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+                                <WolfIcon />
+                                <Rabbit className="h-8 w-8 text-purple-400" />
+                              </div>
+                            </div>
+                            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,#ffffff_1px,transparent_1px)] bg-[length:10px_10px] opacity-10" />
+                          </div>
+                        ))}
                   </div>
                   <div className="mt-4 flex flex-col items-center">
                     <div className="font-mono text-[10px] font-black uppercase tracking-[0.3em] text-emerald-500">
@@ -3900,12 +3924,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     className="relative"
                   >
                     {envyCovetedHere && (
-                      <div
+                      <motion.div
                         className="pointer-events-none absolute -top-[3.35rem] left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-0.5"
                         title={ENVY_COVET_CARD_TOOLTIP}
+                        initial={{ y: 0 }}
+                        animate={{ y: [0, -5, 0] }}
+                        transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
                       >
                         <GreenEyedMonsterIcon className="h-10 w-[5.75rem] drop-shadow-[0_0_14px_rgba(16,185,129,0.5)] sm:h-11 sm:w-[6.25rem]" />
-                      </div>
+                      </motion.div>
                     )}
                     {selected && !me.confirmed && (
                       <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.65)]">

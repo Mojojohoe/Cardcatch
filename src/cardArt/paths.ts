@@ -39,7 +39,22 @@ export function suitRasterUrlCandidates(suit: string): string[] {
   return out;
 }
 
-/** Full-bleed picture card: `Hearts-K.png` etc. */
-export function pictureCardUrlCandidates(cardId: string): string[] {
-  return RASTER_EXTS.map((ext) => cardArtAssetUrl(`${cardId}${ext}`));
+/** Full-bleed picture card: `Hearts-K.png` etc.; optional alternate stem tries first (from Card Creator). */
+export function pictureCardUrlCandidates(cardId: string, preferredStem?: string | null): string[] {
+  const stems: string[] = [];
+  const t = preferredStem?.trim();
+  if (t) stems.push(t);
+  if (!stems.includes(cardId)) stems.push(cardId);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const stem of stems) {
+    for (const ext of RASTER_EXTS) {
+      const url = cardArtAssetUrl(`${stem}${ext}`);
+      if (!seen.has(url)) {
+        seen.add(url);
+        out.push(url);
+      }
+    }
+  }
+  return out;
 }

@@ -36,6 +36,7 @@ import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide
 import { useOptionalCardArt } from '../cardArt/cardArtContext';
 import { isAssembledRasterCardId } from '../cardArt/assembledRaster';
 import { cardArtAssetUrl } from '../cardArt/paths';
+import { resolvedFaceTextOpacity } from '../cardArt/resolveCardArt';
 import { ScaledAssembledCardFace } from '../cardArt/ScaledAssembledCardFace';
 import {
   CURSES,
@@ -391,6 +392,10 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       !resolutionMorph &&
       (hasCustomRasterFace || isAssembledRasterCardId(card)),
   );
+  const faceTextOpacity = useMemo(
+    () => resolvedFaceTextOpacity(cardArtOverride, cardArt?.defaults),
+    [cardArtOverride, cardArt?.defaults],
+  );
 
   useEffect(() => {
     return () => {
@@ -410,10 +415,11 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     delay,
   });
 
+  /** Assembled faces use full-bleed art — outer border/white frame clips edges; selection uses ring only. */
   const faceWrap = useAssembledFace
     ? small
-      ? 'w-10 sm:w-14 border-2 rounded-lg p-0'
-      : 'w-12 sm:w-24 border-2 rounded-lg p-0 sm:p-0'
+      ? 'w-10 sm:w-14 border-0 rounded-lg p-0 shadow-lg'
+      : 'w-12 sm:w-24 border-0 rounded-lg p-0 shadow-lg'
     : small
       ? 'w-10 h-[5.5rem] sm:w-14 sm:h-[8.25rem] border-2 rounded-lg p-1.5'
       : 'w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg p-2';
@@ -440,7 +446,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     let backClasses = 'bg-blue-950 border-blue-800/80 text-blue-500 bg-[radial-gradient(circle_at_center,#172554_1px,transparent_1px)] bg-[size:8px_8px]';
     if (isPredator) backClasses = 'bg-red-950 border-red-800/80 text-red-500 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:8px_8px]';
     else if (isPreydator) backClasses = 'bg-purple-950 border-purple-800/80 text-purple-500 bg-[radial-gradient(circle_at_center,#3b0764_1px,transparent_1px)] bg-[size:8px_8px]';
-    const backSizing = small ? 'w-9 h-[4.75rem] sm:w-12 sm:h-[7.25rem]' : 'w-10 h-14 sm:w-16 sm:h-24';
+    const backSizing = small ? 'w-9 h-[4.75rem] sm:w-12 sm:h-[7.25rem]' : 'w-12 aspect-[24/37] shrink-0 sm:w-24';
     if (backRasterUrl) {
       return (
         <motion.div
@@ -448,7 +454,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           {...entrance}
           transition={{ type: 'spring', stiffness: 720, damping: 38 }}
           whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
-          className={`${backSizing} relative overflow-hidden rounded-lg shadow-xl flex items-center justify-center border-2 transition-colors border-gray-700`}
+          className={`${backSizing} relative overflow-hidden rounded-lg shadow-xl flex items-center justify-center border-0 transition-colors`}
         >
           <img src={backRasterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
         </motion.div>
@@ -544,11 +550,11 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         whileTap={!disabled && !muted ? { scale: 0.95 } : {}}
         onClick={muted ? undefined : onClick}
         className={`
-          ${faceWrap} shadow-xl flex flex-col justify-between overflow-hidden rounded-lg
+          ${faceWrap} ${useAssembledFace ? '' : 'shadow-xl'} flex flex-col justify-between overflow-hidden rounded-lg
           transition-[box-shadow] outline-none will-change-transform
           ${presentation === 'deckPull' || resolutionMorph === 'transform' || resolutionMorph === 'upgrade' || resolutionMorph === 'lustUpgrade' ? 'perspective-[900px] origin-bottom' : ''}
-          ${isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
-          ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
+          ${useAssembledFace ? 'bg-transparent' : isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
+          ${useAssembledFace ? (selected ? 'ring-4 ring-yellow-400/90 ring-offset-0 shadow-lg' : '') : selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
           ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
           ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
           ${resolutionMorph === 'lustUpgrade' ? 'ring-2 ring-rose-400/90 shadow-[0_0_46px_rgba(251,113,133,0.58)]' : ''}
@@ -611,10 +617,13 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           </div>
         ) : (
         <>
-        <div className={`relative z-[2] flex flex-col items-start leading-[0.9] ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
+        <div
+          className={`relative z-[2] flex flex-col items-start leading-[0.9] ${SUIT_COLORS[suit] ?? 'text-red-400'}`}
+          style={{ opacity: faceTextOpacity }}
+        >
           {isGrovelsSuit ? (
             <span
-              className={`${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}
+              className={`font-card-rank ${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}
             >
               Grovel
             </span>
@@ -644,10 +653,13 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           </div>
         </div>
 
-        <div className={`relative z-[2] flex flex-col items-start leading-[0.9] self-end rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
+        <div
+          className={`relative z-[2] flex flex-col items-start leading-[0.9] self-end rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-400'}`}
+          style={{ opacity: faceTextOpacity }}
+        >
           {isGrovelsSuit ? (
             <span
-              className={`${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}
+              className={`font-card-rank ${small ? 'text-[10px] sm:text-xs' : 'text-sm sm:text-xl'} font-black uppercase tracking-tighter text-violet-200 leading-none`}
             >
               Grovel
             </span>
@@ -851,15 +863,26 @@ export const PowerCardVisual: React.FC<{
     );
   }
 
-  const faceBorder = matchHandCard ? 'border-2' : 'border-4';
-  const faceShell = curseChrome
-    ? `bg-zinc-950 ${faceBorder} ${curseChrome.shell} ${matchHandCard ? 'shadow-lg' : ''}`
-    : `bg-slate-50 ${faceBorder} border-slate-800 text-slate-800`;
+  const rasterFullBleed = Boolean(cardArtPower?.mode === 'raster' && customPowerFaceUrl);
+  const faceBorder = rasterFullBleed ? 'border-0' : matchHandCard ? 'border-2' : 'border-4';
+  const faceShell = rasterFullBleed
+    ? 'bg-transparent overflow-hidden shadow-xl'
+    : curseChrome
+      ? `bg-zinc-950 ${faceBorder} ${curseChrome.shell} ${matchHandCard ? 'shadow-lg' : ''}`
+      : `bg-slate-50 ${faceBorder} border-slate-800 text-slate-800`;
   const gloss = curseChrome ? curseChrome.gloss : 'from-white/20 to-slate-900/5';
 
   const canLiftOnHover = !curseRackPeek && !disabled;
 
-  const powerShellClass = `${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between ${matchHandCard ? 'overflow-hidden' : 'overflow-visible'} ${faceShell} ${selected ? `${matchHandCard ? 'ring-2 ring-yellow-400' : 'ring-4 ring-yellow-400'} border-yellow-500` : ''} ${curseRackPeek ? 'cursor-help' : disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`;
+  const powerShellClass = `${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between ${matchHandCard ? 'overflow-hidden' : 'overflow-visible'} ${faceShell} ${
+    selected
+      ? rasterFullBleed
+        ? matchHandCard
+          ? 'ring-2 ring-yellow-400'
+          : 'ring-4 ring-yellow-400/90 ring-offset-0'
+        : `${matchHandCard ? 'ring-2 ring-yellow-400' : 'ring-4 ring-yellow-400'} border-yellow-500`
+      : ''
+  } ${curseRackPeek ? 'cursor-help' : disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`;
 
   if (cardArtPower?.mode === 'raster' && customPowerFaceUrl) {
     return (
