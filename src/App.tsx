@@ -2706,6 +2706,13 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     }
   }, [room?.status, room?.players[myUid]?.secretIntel, room?.currentTurn, lastResolvedTurn]);
 
+  const cardArtCtx = useOptionalCardArt();
+  const deckBackRasterUrl = useMemo(() => {
+    const m = cardArtCtx?.manifest?.['back-deck'];
+    if (cardArtCtx?.mode !== 'raster' || !m) return null;
+    return m.customDataUrl ?? (m.customImageFile?.trim() ? cardArtAssetUrl(m.customImageFile.trim()) : null);
+  }, [cardArtCtx?.mode, cardArtCtx?.manifest, cardArtCtx?.manifestVersion]);
+
   const handleCreateRoom = async () => {
     if (!playerName) { setError('Please enter your name'); return; }
     setLoading(true);
@@ -3052,13 +3059,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     room.targetSuit === 'Diamonds';
   const curseSelectionLocked =
     room.settings.enableCurseCards !== false && curseEffectActive(room.activeCurses);
-
-  const cardArtCtx = useOptionalCardArt();
-  const deckBackRasterUrl = useMemo(() => {
-    const m = cardArtCtx?.manifest?.['back-deck'];
-    if (cardArtCtx?.mode !== 'raster' || !m) return null;
-    return m.customDataUrl ?? (m.customImageFile?.trim() ? cardArtAssetUrl(m.customImageFile.trim()) : null);
-  }, [cardArtCtx?.mode, cardArtCtx?.manifest, cardArtCtx?.manifestVersion]);
 
   const hudPhaseLine =
     room.status === 'powering'
