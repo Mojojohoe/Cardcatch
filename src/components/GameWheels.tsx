@@ -238,6 +238,8 @@ export interface TargetSuitWheelProps {
   greedHalveBasicSuits?: boolean;
   /** Greed joint trump visual on the Diamonds wedge (Diamonds + Coins). */
   greedJointDiamondCoinGlyphs?: boolean;
+  /** Raster / artwork table: suit art + felt-coloured slices on the dial. */
+  artworkTable?: boolean;
 }
 
 export const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
@@ -248,6 +250,7 @@ export const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
   lustTripleHearts = false,
   greedHalveBasicSuits = false,
   greedJointDiamondCoinGlyphs = false,
+  artworkTable = false,
 }) => {
   const wheelDef = useMemo(
     () =>
@@ -255,8 +258,9 @@ export const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
         lustTripleHearts,
         greedHalveBasicSuits,
         greedJointDiamondCoinGlyphs,
+        artworkTable,
       }),
-    [availableSuits, lustTripleHearts, greedHalveBasicSuits, greedJointDiamondCoinGlyphs],
+    [availableSuits, lustTripleHearts, greedHalveBasicSuits, greedJointDiamondCoinGlyphs, artworkTable],
   );
   const segments = useMemo(() => resolveWheelSegments(wheelDef), [wheelDef]);
 
@@ -273,7 +277,7 @@ export const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
 
   return (
     <div className="relative flex flex-col items-center pt-5">
-      <div className="relative z-10 aspect-square w-[min(12rem,88vw)] shrink-0 sm:w-48">
+      <div className="relative z-10 aspect-square w-[min(14.4rem,92vw)] shrink-0 sm:w-[14.4rem]">
         <div className="pointer-events-none absolute inset-0 z-[5] rounded-full bg-linear-to-tr from-white/10 to-transparent" />
         <ConfigurableWheel
           definition={wheelDef}

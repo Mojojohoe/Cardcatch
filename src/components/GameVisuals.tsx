@@ -57,6 +57,21 @@ import {
   tooltipPrintedStrengthLabel,
 } from '../services/gameService';
 import { MAJOR_ARCANA, PlayerRole } from '../types';
+import {
+  PC_ASM_MD,
+  PC_ASM_SM,
+  PC_BACK_MD,
+  PC_BACK_SM,
+  PC_FACE_MINH,
+  PC_HAND,
+  PC_HAND_VEC_SM,
+  PC_PWR_FALLBACK_LG,
+  PC_PWR_FALLBACK_SM,
+  PC_PWR_LG,
+  PC_PWR_PANEL,
+  PC_PWR_PANEL_BACK,
+  PC_PWR_SM,
+} from '../cardUiDimensions';
 import { SUIT_COLORS } from '../suitPresentation';
 import { SuitGlyph } from './SuitGlyphs';
 
@@ -442,14 +457,14 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   /** Assembled faces use full-bleed art — outer border/white frame clips edges; selection uses ring only. */
   const faceWrap = useAssembledFace
     ? small
-      ? 'w-10 sm:w-14 border-0 rounded-lg p-0 shadow-lg'
-      : 'w-12 sm:w-24 border-0 rounded-lg p-0 shadow-lg'
+      ? `${PC_ASM_SM} border-0 rounded-lg p-0 shadow-lg`
+      : `${PC_ASM_MD} border-0 rounded-lg p-0 shadow-lg`
     : small
-      ? 'w-10 h-[5.5rem] sm:w-14 sm:h-[8.25rem] border-2 rounded-lg p-1.5'
-      : 'w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg p-2';
+      ? `${PC_HAND_VEC_SM} border-2 rounded-lg p-1.5`
+      : `${PC_HAND} border-2 rounded-lg p-2`;
   const cornerText = small ? 'text-xs sm:text-base' : 'text-sm sm:text-xl';
-  const cornerGlyph = small ? 'w-4 h-4 sm:w-6 sm:h-6' : 'w-5 h-5 sm:w-8 sm:h-8';
-  const centerGlyph = small ? 'w-12 h-12 sm:w-16 sm:h-16' : 'w-16 h-16 sm:w-24 sm:h-24';
+  const cornerGlyph = small ? 'w-5 h-5 sm:w-7 sm:h-7' : 'w-6 h-6 sm:w-9 sm:h-9';
+  const centerGlyph = small ? 'w-14 h-14 sm:w-[4.25rem] sm:h-[4.25rem]' : 'w-[4.25rem] h-[4.25rem] sm:w-[7.25rem] sm:h-[7.25rem]';
 
   if (!revealed) {
     const isPredator = role === 'Predator';
@@ -470,7 +485,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     let backClasses = 'bg-blue-950 border-blue-800/80 text-blue-500 bg-[radial-gradient(circle_at_center,#172554_1px,transparent_1px)] bg-[size:8px_8px]';
     if (isPredator) backClasses = 'bg-red-950 border-red-800/80 text-red-500 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:8px_8px]';
     else if (isPreydator) backClasses = 'bg-purple-950 border-purple-800/80 text-purple-500 bg-[radial-gradient(circle_at_center,#3b0764_1px,transparent_1px)] bg-[size:8px_8px]';
-    const backSizing = small ? 'w-9 h-[4.75rem] sm:w-12 sm:h-[7.25rem]' : 'w-12 aspect-[24/37] shrink-0 sm:w-24';
+    const backSizing = small ? PC_BACK_SM : PC_BACK_MD;
     if (backRasterUrl) {
       return (
         <motion.div
@@ -595,7 +610,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       )}
       <motion.div
         key={`${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}-${resolutionWiggleTick}`}
-        className={`relative z-[1] flex flex-1 flex-col justify-between overflow-hidden rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : 'min-h-[5.5rem] sm:min-h-[8.25rem]'}`}
+        className={`relative z-[1] flex flex-1 flex-col justify-between overflow-hidden rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : PC_FACE_MINH}`}
         style={{ transformStyle: 'preserve-3d' }}
         animate={
           resolutionMorph === 'transform'
@@ -755,12 +770,12 @@ export const PowerCardVisual: React.FC<{
   const tooltipStyle = usePowerTooltipPosition(tooltipHudOpen, rootRef, popRef);
 
   const dimClass = panel
-    ? 'w-[6.875rem] sm:w-[7.5rem] min-h-[10rem] max-w-[8rem] text-[10px] p-2.5 pt-3 justify-start gap-2'
+    ? `${PC_PWR_PANEL} text-[10px] p-2.5 pt-3 justify-start gap-2`
     : matchHandCard
-      ? 'w-12 h-18 sm:w-24 sm:h-36 text-[6px] sm:text-[7px] p-1 sm:p-1.5 justify-between gap-0 min-h-0'
+      ? `${PC_HAND} text-[6px] sm:text-[7px] p-1 sm:p-1.5 justify-between gap-0 min-h-0`
       : small
-        ? 'w-18 h-28 text-[9px] p-3'
-        : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px] p-3';
+        ? `${PC_PWR_SM} text-[9px] p-3`
+        : `${PC_PWR_LG} text-[12px] p-3`;
   const curseChrome = curseDef ? curseFaceChrome(cardId) : null;
   const titleClassPanel =
     'text-[7px] sm:text-[8px] leading-tight line-clamp-3 break-words hyphens-auto text-center normal-case px-0.5 w-full min-h-[2.75rem] flex items-center justify-center border-b pb-1.5 font-bold tracking-tight';
@@ -775,7 +790,7 @@ export const PowerCardVisual: React.FC<{
   if (!curseDef && !card) {
     return (
       <div
-        className={`${matchHandCard ? 'w-12 h-18 sm:w-24 sm:h-36' : small ? 'w-14 h-22' : 'w-32 h-52'} rounded-lg border border-slate-700 bg-slate-900 text-[10px] text-slate-500 flex items-center justify-center`}
+        className={`${matchHandCard ? PC_HAND : small ? PC_PWR_FALLBACK_SM : PC_PWR_FALLBACK_LG} rounded-lg border border-slate-700 bg-slate-900 text-[10px] text-slate-500 flex items-center justify-center`}
       >
         ?
       </div>
@@ -817,12 +832,12 @@ export const PowerCardVisual: React.FC<{
 
   if (!revealed) {
     const backW = matchHandCard
-      ? 'w-12 h-18 sm:w-24 sm:h-36'
+      ? PC_HAND
       : panel
-        ? 'w-[7rem] sm:w-[7.75rem] h-36'
+        ? PC_PWR_PANEL_BACK
         : small
-          ? 'w-14 h-22'
-          : 'w-32 h-52 sm:w-40 sm:h-64';
+          ? PC_PWR_FALLBACK_SM
+          : PC_PWR_FALLBACK_LG;
     const backCurse = curseDef
       ? 'bg-zinc-950 border-2 border-red-900/70 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:9px_9px]'
       : 'bg-slate-300 border-2 border-slate-400 bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px]';
@@ -859,11 +874,11 @@ export const PowerCardVisual: React.FC<{
           {curseDef ? (
             <CursePowerIcon
               curseId={cardId}
-              className={`${matchHandCard ? 'h-5 w-5 sm:h-7 sm:w-7' : small ? 'h-7 w-7' : 'h-11 w-11 sm:h-12 sm:w-12'} ${cursePowerIconClass(cardId)}`}
+              className={`${matchHandCard ? 'h-6 w-6 sm:h-8 sm:w-8' : small ? 'h-7 w-7' : 'h-11 w-11 sm:h-12 sm:w-12'} ${cursePowerIconClass(cardId)}`}
             />
           ) : (
             <span
-              className={`font-black tabular-nums text-slate-500 ${matchHandCard ? 'text-sm sm:text-xl leading-none' : small ? 'text-lg leading-none' : 'text-3xl sm:text-[2.65rem]'}`}
+              className={`font-black tabular-nums text-slate-500 ${matchHandCard ? 'text-base sm:text-2xl leading-none' : small ? 'text-lg leading-none' : 'text-3xl sm:text-[2.65rem]'}`}
             >
               ?
             </span>
@@ -1053,13 +1068,13 @@ export const PowerCardVisual: React.FC<{
         {curseDef ? (
           <CursePowerIcon
             curseId={cardId}
-            className={`${matchHandCard ? 'h-4 w-4 sm:h-5 sm:w-5' : small ? 'h-4 w-4' : panel ? 'h-[22px] w-[22px]' : 'h-10 w-10'} ${cursePowerIconClass(cardId)}`}
+            className={`${matchHandCard ? 'h-5 w-5 sm:h-6 sm:w-6' : small ? 'h-4 w-4' : panel ? 'h-[22px] w-[22px]' : 'h-10 w-10'} ${cursePowerIconClass(cardId)}`}
           />
         ) : (
           <MajorArcanaIconGlyph
             iconName={card!.icon}
             className="text-yellow-400"
-            size={panel ? 22 : matchHandCard ? 14 : small ? 16 : 40}
+            size={panel ? 22 : matchHandCard ? 17 : small ? 16 : 40}
           />
         )}
       </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Cloud, Moon, Skull, Sun } from 'lucide-react';
 import type { Suit } from '../types';
 import { SuitGlyph } from '../components/SuitGlyphs';
+import { SuitRasterOrGlyph } from '../components/SuitRasterOrGlyph';
 import { SUITS } from '../types';
 import { SUIT_COLORS } from '../suitPresentation';
 import type { WheelDefinition, WheelOutcomeInput } from './types';
@@ -179,6 +180,38 @@ export const fortuneWheelDefinition: WheelDefinition = {
 
 const defaultSuits = SUITS;
 
+/** Felt-mode slice fills (suit “text” colours — tuned for wheel contrast). */
+export function targetSuitSliceArtworkBg(suit: Suit): string {
+  switch (suit) {
+    case 'Bones':
+      return '#e3d2b3';
+    case 'Diamonds':
+      return '#f8fafc';
+    case 'Clubs':
+      return '#166534';
+    case 'Spades':
+      return '#1e3a8a';
+    case 'Coins':
+      return '#eab308';
+    case 'Frogs':
+      return '#65a30d';
+    case 'Hearts':
+      return '#b91c1c';
+    case 'Moons':
+      return '#cbd5e1';
+    case 'Stars':
+      return '#c026d3';
+    case 'Swords':
+      return '#52525b';
+    case 'Crowns':
+      return '#a16207';
+    case 'Grovels':
+      return '#6d28d9';
+    default:
+      return '#0f172a';
+  }
+}
+
 function suitSlicePalette(suit: Suit): { fill: string; markFill: string } {
   const fill =
     suit === 'Moons'
@@ -200,6 +233,11 @@ function suitSlicePalette(suit: Suit): { fill: string; markFill: string } {
 }
 
 /** Trump dial: equal slices by default; Lust triples Hearts’ weight on the wheel. */
+const WHEEL_SUIT_ART_CLASS =
+  'mx-auto h-[2.15rem] w-[2.15rem] shrink-0 sm:h-10 sm:w-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]';
+const WHEEL_SUIT_ART_JOINT_CLASS =
+  'h-[1.9rem] w-[1.9rem] shrink-0 sm:h-9 sm:w-9 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]';
+
 export function buildTargetSuitWheelDefinition(
   availableSuits: readonly Suit[] = defaultSuits,
   opts?: {
@@ -207,40 +245,56 @@ export function buildTargetSuitWheelDefinition(
     greedHalveBasicSuits?: boolean;
     /** Greed joint trump: Diamonds slice shows Diamonds + Coins (same wedge). */
     greedJointDiamondCoinGlyphs?: boolean;
+    /** Raster table / “artwork” mode: coloured slices + {@link SuitRasterOrGlyph} in the dial. */
+    artworkTable?: boolean;
   },
 ): WheelDefinition {
   const suits = availableSuits.length > 0 ? availableSuits : defaultSuits;
   const lustTriple = Boolean(opts?.lustTripleHearts);
   const greedHalve = Boolean(opts?.greedHalveBasicSuits);
   const greedJointGlyphs = Boolean(opts?.greedJointDiamondCoinGlyphs);
+  const artworkTable = Boolean(opts?.artworkTable);
   const outcomes: WheelOutcomeInput[] = suits.map((suit) => {
     const { fill, markFill } = suitSlicePalette(suit);
+    const sliceFill = artworkTable ? targetSuitSliceArtworkBg(suit) : fill;
     let probability = suit === 'Hearts' && lustTriple ? 3 : 1;
     if (greedHalve && (suit === 'Hearts' || suit === 'Clubs' || suit === 'Spades')) {
       probability *= 0.5;
     }
     const jointDiamondCoin =
       greedJointGlyphs && suit === 'Diamonds' ? (
-        <span className="flex items-center justify-center gap-px sm:gap-0.5">
-          <span className={`shrink-0 ${SUIT_COLORS.Diamonds}`}>
-            <SuitGlyph suit="Diamonds" className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
+        artworkTable ? (
+          <span className="flex items-center justify-center gap-px sm:gap-0.5">
+            <SuitRasterOrGlyph suit="Diamonds" className={WHEEL_SUIT_ART_JOINT_CLASS} />
+            <SuitRasterOrGlyph suit="Coins" className={WHEEL_SUIT_ART_JOINT_CLASS} />
           </span>
-          <span className={`shrink-0 ${SUIT_COLORS.Coins}`}>
-            <SuitGlyph suit="Coins" className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
+        ) : (
+          <span className="flex items-center justify-center gap-px sm:gap-0.5">
+            <span className={`shrink-0 ${SUIT_COLORS.Diamonds}`}>
+              <SuitGlyph suit="Diamonds" className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
+            </span>
+            <span className={`shrink-0 ${SUIT_COLORS.Coins}`}>
+              <SuitGlyph suit="Coins" className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
+            </span>
           </span>
-        </span>
+        )
       ) : null;
+    const sliceContent =
+      jointDiamondCoin ??
+      (artworkTable ? (
+        <SuitRasterOrGlyph suit={suit} className={WHEEL_SUIT_ART_CLASS} />
+      ) : (
+        <span style={{ color: markFill }}>
+          <SuitGlyph suit={suit} className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" />
+        </span>
+      ));
     return {
       id: `suit_${suit}`,
       label: suit,
       display: suit,
-      color: fill,
+      color: sliceFill,
       probability,
-      content: jointDiamondCoin ?? (
-        <span style={{ color: markFill }}>
-          <SuitGlyph suit={suit} className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" />
-        </span>
-      ),
+      content: sliceContent,
       textTone: 'default',
     };
   });
@@ -261,8 +315,8 @@ export function buildTargetSuitWheelDefinition(
     hub: {
       mode: 'node',
       node: (
-        <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-emerald-800 bg-emerald-900 shadow-inner">
-          <Skull className="h-5 w-5 text-emerald-400" />
+        <div className="flex h-[3.6rem] w-[3.6rem] items-center justify-center rounded-full border-4 border-emerald-800 bg-emerald-900 shadow-inner">
+          <Skull className="h-6 w-6 text-emerald-400" />
         </div>
       ),
     },

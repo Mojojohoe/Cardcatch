@@ -107,6 +107,7 @@ import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
+import { playerHandFanMotion } from './playerHandFan';
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
 import { mergeCardArtWithRoom, useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
@@ -3301,7 +3302,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="mx-auto flex h-44 w-max max-w-full items-end justify-center -space-x-8 overflow-x-auto px-2 opacity-80 flex-nowrap sm:-space-x-12 sm:scale-100 scale-90">
+              <div className="mx-auto flex h-[13rem] w-max max-w-full items-end justify-center -space-x-9 overflow-x-auto px-2 opacity-80 flex-nowrap sm:h-[13.5rem] sm:-space-x-14 sm:scale-100 scale-90">
                 {Array.from({ length: opponent.hand.length }).map((_, i) => (
                   <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
                 ))}
@@ -3345,7 +3346,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           )}
 
             {(room.status === 'playing' || room.status === 'powering') && opponent ? (
-            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(0,13rem)_minmax(0,1fr)_minmax(6.5rem,9.5rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)_minmax(7rem,10rem)] sm:gap-x-3 md:gap-y-1.5">
+            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(0,15.6rem)_minmax(0,1fr)_minmax(7.8rem,11.4rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:grid-cols-[minmax(0,18rem)_minmax(0,1fr)_minmax(8.4rem,12rem)] sm:gap-x-3 md:gap-y-1.5">
               {/* Row 1 napkin sketch: spacer | opp hand | opp powers — deck stacks row2 col3 */}
               <div className="hidden min-h-[0.125rem] sm:col-start-1 sm:row-start-1 sm:block" aria-hidden />
               <div
@@ -3358,7 +3359,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     Cards: {opponent.hand.length}
                   </span>
                 </div>
-                <div className="flex h-44 w-full min-w-0 items-end justify-center gap-1.5 px-2 opacity-[0.82] sm:gap-2 sm:px-4 sm:opacity-95">
+                <div className="flex h-[13rem] w-full min-w-0 items-end justify-center gap-1.5 px-2 opacity-[0.82] sm:h-[13.5rem] sm:gap-2 sm:px-4 sm:opacity-95">
                   {room.status === 'playing' &&
                     room.settings.enableCurseCards &&
                     envyCurseActive(room.activeCurses ?? []) &&
@@ -3377,7 +3378,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         </span>
                       </motion.div>
                     )}
-                  <div className="mx-auto flex w-max max-w-full min-w-0 flex-nowrap items-center justify-center -space-x-7 sm:-space-x-10">
+                  <div className="mx-auto flex w-max max-w-full min-w-0 flex-nowrap items-center justify-center -space-x-8 sm:-space-x-12">
                     {Array.from({ length: opponent.hand.length }).map((_, i) => (
                       <CardVisual key={`og-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
                     ))}
@@ -3573,6 +3574,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                        lustTripleHearts={lustTripleWheel}
                        greedHalveBasicSuits={greedHalveWheel}
                        greedJointDiamondCoinGlyphs={greedHalveWheel}
+                       artworkTable={artworkFelt}
                      />
                    </motion.div>
                  ) : (
@@ -3698,9 +3700,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 </div>
               </div>
 
-              <aside className="relative z-0 hidden min-h-0 w-full min-w-0 flex-col items-center justify-between gap-2 pt-1 sm:col-span-1 sm:col-start-3 sm:row-start-2 sm:flex sm:max-w-[min(7.5rem,calc((100vw-2rem)*0.2))] sm:pt-2">
+              <aside className="relative z-0 hidden min-h-0 w-full min-w-0 flex-col items-center justify-between gap-2 pt-1 sm:col-span-1 sm:col-start-3 sm:row-start-2 sm:flex sm:max-w-[min(9rem,calc((100vw-2rem)*0.22))] sm:pt-2">
                 <div className="relative group shrink-0">
-                  <div className="relative h-28 w-[4.9rem] sm:h-32 sm:w-[6.1rem]">
+                  <div className="relative h-[8.4rem] w-[5.88rem] sm:h-[9.6rem] sm:w-[7.32rem]">
                     {deckBackRasterUrl
                       ? Array.from({ length: 4 }).map((_, i) => (
                           <div
@@ -3938,16 +3940,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
            </div>
         </div>
         <div
-          className={`flex w-full flex-col items-stretch gap-3 sm:flex-row sm:flex-nowrap sm:items-end sm:justify-center sm:gap-x-3 xl:gap-4 ${
+          className={`flex w-full flex-col items-stretch gap-4 px-1 sm:items-end sm:justify-center ${
             (room.status === 'playing' || room.status === 'powering') && me.powerCards.length ? '' : ''
           }`}
         >
+          <div className="mx-auto flex w-full max-w-[min(100%,56rem)] flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-center sm:gap-10 lg:gap-14 xl:gap-16">
           {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
-            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-7 pb-3 sm:w-[min(46vw,22rem)] sm:max-w-[22rem] sm:shrink-0 sm:items-start">
-              <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
+            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-7 pb-3 sm:w-auto sm:max-w-none sm:shrink-0 sm:items-end sm:pb-1 sm:pt-5">
+              <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
                 Your powers
               </span>
-              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-x-auto overflow-y-visible pb-2 pt-1 -space-x-4 pl-1 [scrollbar-width:thin] sm:justify-start sm:-space-x-6 sm:pl-2">
+              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-x-auto overflow-y-visible pb-2 pt-1 -space-x-4 pl-1 [scrollbar-width:thin] sm:w-max sm:justify-end sm:-space-x-6 sm:pl-0">
                 {me.powerCards.map((pId, i) => (
                   <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
                     <PowerCardVisual
@@ -3963,19 +3966,20 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           )}
           <div
-            className={`relative z-[12] flex min-h-[11rem] min-w-0 flex-1 flex-col justify-end sm:min-h-0 ${
+            className={`relative z-[12] flex min-h-[13rem] min-w-0 flex-1 flex-col justify-end sm:min-h-[12rem] ${
               (room.status === 'playing' || room.status === 'powering') && me.powerCards.length
-                ? 'sm:min-w-0 sm:flex-1'
+                ? 'sm:min-w-0 sm:flex-1 sm:max-w-none'
                 : 'w-full'
             }`}
           >
             <div
-              className={`flex h-44 w-full items-end justify-center -space-x-8 flex-nowrap transition-[filter,opacity] duration-300 sm:-space-x-12 ${
+              className={`flex min-h-[12rem] w-full items-end justify-center -space-x-6 flex-nowrap px-1 transition-[filter,opacity] duration-300 sm:min-h-[11.5rem] sm:-space-x-9 ${
                 me.confirmed ? 'saturate-[0.68] brightness-95 opacity-[0.92]' : ''
               }`}
             >
               {me.hand.map((card, i) => {
                 const selected = selectedCardIndex === i;
+                const fan = playerHandFanMotion(i, me.hand.length);
                 const prideMuted = prideBlocksCard(room, myUid, card);
                 const envyMuted = envySealBlocksHandIndex(room, myUid, me.hand, i);
                 const envyCovetedHere = Boolean(
@@ -3998,7 +4002,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 return (
                   <motion.div
                     key={`${card}-${i}`}
-                    animate={selected ? { y: -26, scale: 1.04 } : { y: 0, scale: 1 }}
+                    style={{ transformOrigin: 'bottom center' }}
+                    animate={
+                      selected
+                        ? { y: -26, scale: 1.04, rotate: fan.rotate, x: fan.x, zIndex: 55 }
+                        : { y: 0, scale: 1, rotate: fan.rotate, x: fan.x, zIndex: fan.baseZ }
+                    }
                     transition={{ type: 'spring', stiffness: 310, damping: 24 }}
                     className="relative"
                   >
@@ -4039,6 +4048,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 );
               })}
             </div>
+          </div>
           </div>
         </div>
 
