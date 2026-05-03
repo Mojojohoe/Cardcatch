@@ -229,7 +229,7 @@ export interface ChatMessageEntry {
 /** Active curse on the table (curse zone). */
 export interface ActiveCurseState {
   id: number;
-  /** Lust: progress toward 150. */
+  /** Lust: progress toward 100. */
   lustAccumulated?: number;
   /** Gluttony: 0 hungry → 1 starving → 2 wasting away; paired with streak toward next tier. */
   gluttonyPhase?: number;
@@ -348,7 +348,7 @@ export interface RoomData {
       previousMeter: number;
       /** After applying contributions; 0 if the curse clears this round. */
       nextMeter: number;
-      /** Meter reached ≥150 while a heart fed. */
+      /** Meter reached threshold while a heart fed. */
       sated: boolean;
       /** Cleared because no Hearts remain in deck or hands (+ committed trick). */
       heartsExhausted?: boolean;

@@ -28,6 +28,7 @@ import {
   curseEffectActive,
   gluttonyCurseActive,
   greedCurseActive,
+  LUST_METER_MAX,
   greedTaxAmount,
   isCurseCardId,
   isMajorArcanaId,
@@ -2732,7 +2733,7 @@ export class GameService {
           }
 
           const nextRaw = prevLust + hungerAdd;
-          const meterFull = nextRaw >= 150;
+          const meterFull = nextRaw >= LUST_METER_MAX;
           const curseClears = heartsExhaustedGlobally || (contributions.length > 0 && meterFull);
 
           if (contributions.length > 0 || curseClears) {
@@ -3073,7 +3074,7 @@ export class GameService {
                 powerCardId: CURSE_LUST,
                 lustFeedPts: c.lustPointsAdded,
                 lustSurgeHeart: true,
-                message: '',
+                message: `${players[c.uid].name}'s heart feeds Lust (+${c.lustPointsAdded} thirst).`,
               });
             }
           }
@@ -3081,7 +3082,7 @@ export class GameService {
             events.push({
               type: 'POWER_TRIGGER',
               powerCardId: CURSE_LUST,
-              message: `Gluttony's Lust reached 150 hunger — thirst cleared.`,
+              message: `Lust reached ${LUST_METER_MAX} hunger — thirst cleared.`,
             });
           }
           if (fx.heartsExhausted) {

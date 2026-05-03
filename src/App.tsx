@@ -37,7 +37,6 @@ import {
   Scale,
   Anchor,
   Waves,
-  Cloud,
   Flame,
   ZapOff,
   Star,
@@ -62,6 +61,7 @@ import {
   ENVY_MONSTER_START_HP,
   playingCardUpgradeSteps,
   lustHeartUpgradeSteps,
+  describeCardPlain,
 } from './services/gameService';
 import {
   RoomData,
@@ -101,10 +101,13 @@ import {
   slothDreamWheelDefinition,
 } from './wheels';
 import { desperationLadderLabel } from './utils/desperationUi';
+import { resolutionLogLineClass } from './utils/resolutionLogColors';
 import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair } from './suitPresentation';
+import { useCardArt } from './cardArt/cardArtContext';
+import { CardCreator } from './cardCreator/CardCreator';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -123,7 +126,7 @@ import {
   prideCurseActive,
   envyCurseActive,
   wrathCurseActive,
-  slothCurseActive,
+  LUST_METER_MAX,
 } from './curses';
 
 const SLOTH_DREAM_WHEEL_SEGMENTS = resolveWheelSegments(slothDreamWheelDefinition);
@@ -133,6 +136,10 @@ const GROVEL_FEED_TOOLTIP = "Sometimes the only way to play the game is to feed 
 const ENVY_COVET_CARD_TOOLTIP = 'The Green-Eyed Monster is envious of this card.';
 const ENVY_SEALED_TOOLTIP = 'Envy has sealed this card — it cannot be played until the Green-Eyed Monster is defeated.';
 const ENVY_RESOLUTION_MONSTER_TOOLTIP = 'The Green-Eyed Monster must be stopped!';
+
+/** Round resolution: rank/suit ladder pacing (Lust heart path uses red-pink glow in `CardVisual`). */
+const RESOLUTION_UPGRADE_STEP_MS = 500;
+const RESOLUTION_UPGRADE_PROMPT_MS = 450;
 
 /** Pride barrier blocks plays of the barrier suit at or above its clash rank (Grovel exempt). */
 function envySealBlocksHandIndex(
@@ -236,7 +243,8 @@ const CurseZonePanel: React.FC<{
   wrathTargetUid?: string | null;
   hostUid?: string;
   players?: Record<string, PlayerData>;
-}> = ({ settings, activeCurses, prideCeilingCard, wrathMinionCard, wrathTargetUid, hostUid, players }) => {
+  envyCovet?: RoomData['envyCovet'];
+}> = ({ settings, activeCurses, prideCeilingCard, wrathMinionCard, players, envyCovet }) => {
   if (!settings.enableCurseCards) {
     return <div className="w-12 sm:w-[4.75rem] shrink-0" aria-hidden />;
   }
@@ -249,58 +257,49 @@ const CurseZonePanel: React.FC<{
   const sloth = activeCurses?.find((c) => c.id === CURSE_SLOTH);
   if (!lust && !gluttony && !greed && !pride && !envy && !wrath && !sloth)
     return <div className="w-12 sm:w-[4.75rem] shrink-0" aria-hidden />;
+  const curseCol = 'relative flex w-[7.5rem] shrink-0 flex-col items-center gap-1.5 overflow-visible sm:w-[8rem]';
   return (
-    <div className="relative flex w-full max-w-[14rem] shrink-0 flex-col items-stretch gap-3 pt-1 sm:max-w-none">
+    <div className="relative flex w-full max-w-none shrink-0 flex-row flex-wrap items-start justify-center gap-x-5 gap-y-6 overflow-visible px-0.5 pt-1 pb-2">
       {lust && (
-        <motion.div layout className="relative flex w-full flex-col items-center gap-1.5">
+        <motion.div layout className={curseCol}>
           <PowerCardVisual cardId={CURSE_LUST} revealed matchHandCard curseRackPeek />
-          <p className="text-center text-[7px] font-black uppercase tracking-wider text-red-400">Lust</p>
-          <p className="text-center font-mono text-[10px] font-bold tabular-nums leading-tight text-red-200">
+          <p className="text-center text-[7px] font-black uppercase tracking-wider text-pink-400">Lust</p>
+          <p className="text-center font-mono text-[10px] font-bold tabular-nums leading-tight text-pink-200">
             {lust.lustAccumulated ?? 0}
-            <span className="text-red-500/80">/150</span>{' '}
-            <span className="block text-[6px] font-bold uppercase tracking-wide text-red-400/90">Hunger</span>
+            <span className="text-pink-500/80">/{LUST_METER_MAX}</span>{' '}
+            <span className="block text-[6px] font-bold uppercase tracking-wide text-pink-400/90">Hunger</span>
           </p>
         </motion.div>
       )}
       {gluttony && (
-        <motion.div layout className="relative flex w-full flex-col items-center gap-1.5">
+        <motion.div layout className={curseCol}>
           <PowerCardVisual cardId={CURSE_GLUTTONY} revealed matchHandCard curseRackPeek />
-          <p className="text-center text-[7px] font-black uppercase tracking-wider text-red-400">Gluttony</p>
-          <p className="max-w-[12rem] px-0.5 text-center text-[7px] font-bold leading-snug normal-case text-red-200/95">
+          <p className="text-center text-[7px] font-black uppercase tracking-wider text-orange-400">Gluttony</p>
+          <p className="max-w-[12rem] px-0.5 text-center text-[7px] font-bold leading-snug normal-case text-orange-200/95">
             {gluttonyMoodCopy(gluttony.gluttonyPhase ?? 0)}
           </p>
         </motion.div>
       )}
       {greed && (
-        <motion.div
-          layout
-          className="relative flex w-full flex-col items-center rounded-xl border-2 border-red-900/75 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]"
-        >
-          <div className="flex items-center gap-1">
-            <div className={SUIT_COLORS.Diamonds ?? 'text-red-500'}>
-              <SuitGlyph suit="Diamonds" className="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-            <div className={SUIT_COLORS.Coins ?? 'text-amber-400'}>
-              <SuitGlyph suit="Coins" className="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-          </div>
-          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-red-400">Greed</p>
-          <div className="mt-1 flex flex-col items-center gap-0.5">
-            <SuitGlyph suit="Crowns" className="h-8 w-8 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.35)] sm:h-9 sm:w-9" />
-            <p className="text-center font-mono text-[9px] font-bold tabular-nums text-amber-200">
+        <motion.div layout className={curseCol}>
+          <PowerCardVisual cardId={CURSE_GREED} revealed matchHandCard curseRackPeek />
+          <p className="text-center text-[7px] font-black uppercase tracking-wider text-yellow-400">Greed</p>
+          <div className="mt-0.5 flex flex-col items-center gap-0.5">
+            <SuitGlyph suit="Crowns" className="h-7 w-7 text-yellow-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.35)] sm:h-8 sm:w-8" />
+            <p className="text-center font-mono text-[9px] font-bold tabular-nums text-yellow-200">
               {(greed.greedCrown ?? 0).toString()}/17
             </p>
-            <p className="px-0.5 text-center text-[6px] font-bold uppercase tracking-wide text-amber-500/90">Tax</p>
+            <p className="px-0.5 text-center text-[6px] font-bold uppercase tracking-wide text-yellow-500/90">Tax</p>
           </div>
         </motion.div>
       )}
       {pride && (
         <motion.div
           layout
-          className="relative flex w-full flex-col items-center rounded-xl border-2 border-red-900/75 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]"
+          className={`${curseCol} rounded-xl border-2 border-white/25 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]`}
         >
-          <Sparkles className="mx-auto h-5 w-5 text-violet-400 sm:h-6 sm:w-6" />
-          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-red-400">Pride</p>
+          <Sparkles className="mx-auto h-5 w-5 text-white sm:h-6 sm:w-6" />
+          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-slate-100">Pride</p>
           {prideCeilingCard ? (
             <div className="mt-1 flex flex-col items-center gap-0.5">
               <p className="text-center text-[6px] font-bold uppercase tracking-wide text-violet-300/90">Barrier</p>
@@ -319,32 +318,37 @@ const CurseZonePanel: React.FC<{
       {envy && (
         <motion.div
           layout
-          className="relative flex w-full flex-col items-center rounded-xl border-2 border-emerald-900/80 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]"
+          className={`${curseCol} gap-1 rounded-xl border-2 border-emerald-700/70 bg-zinc-950 px-1 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]`}
         >
-          <GreenEyedMonsterIcon className="mx-auto h-6 w-14 text-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.45)] sm:h-7 sm:w-16" />
-          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-emerald-400">Envy</p>
+          <PowerCardVisual cardId={CURSE_ENVY} revealed matchHandCard curseRackPeek />
+          <p className="text-center text-[7px] font-black uppercase tracking-wider text-emerald-400">Envy</p>
           <p className="text-center font-mono text-[11px] font-black tabular-nums text-emerald-200">
             {(typeof envy.envyMonsterHp === 'number' ? envy.envyMonsterHp : ENVY_MONSTER_START_HP).toString()}
             <span className="text-[7px] font-bold text-emerald-500/90"> HP</span>
           </p>
+          {envyCovet && players?.[envyCovet.uid] && (
+            <div className="mt-1 flex w-full flex-col items-center gap-1 border-t border-emerald-800/50 pt-2">
+              <p className="text-center text-[6px] font-black uppercase tracking-wide text-emerald-500/95">Covets</p>
+              <div className="relative origin-center scale-[0.48] drop-shadow-[0_8px_22px_rgba(16,185,129,0.35)]">
+                <CardVisual
+                  card={envyCovet.cardId}
+                  revealed
+                  small
+                  noAnimate
+                  presentation="none"
+                  detailTooltip={`Green-Eyed Monster hungers for this card from ${players[envyCovet.uid].name}'s hand.`}
+                />
+              </div>
+              <p className="px-1 text-center text-[7px] font-bold leading-tight text-emerald-200/90">
+                {players[envyCovet.uid].name}
+              </p>
+            </div>
+          )}
         </motion.div>
       )}
       {wrath && (
-        <motion.div
-          layout
-          className="relative flex w-full flex-col items-center rounded-xl border-2 border-red-900/75 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]"
-        >
-          <div className="flex gap-0.5">
-            <div
-              className={`h-5 w-5 rounded-full border-2 border-zinc-600 sm:h-6 sm:w-6 ${wrathTargetUid && hostUid && wrathTargetUid === hostUid ? 'bg-zinc-100 ring-2 ring-amber-400' : 'bg-black'}`}
-              title="Host seat"
-            />
-            <div
-              className={`h-5 w-5 rounded-full border-2 border-zinc-600 sm:h-6 sm:w-6 ${wrathTargetUid && hostUid && wrathTargetUid !== hostUid ? 'bg-zinc-100 ring-2 ring-amber-400' : 'bg-black'}`}
-              title="Guest seat"
-            />
-          </div>
-          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-red-400">Wrath</p>
+        <motion.div layout className={curseCol}>
+          <p className="text-center text-[7px] font-black uppercase tracking-wider text-red-500">Wrath</p>
           <p className="text-center font-mono text-[8px] font-bold tabular-nums text-red-200/95">
             {(wrath.wrathRound ?? 1)}/5
           </p>
@@ -357,28 +361,20 @@ const CurseZonePanel: React.FC<{
                   revealed
                   noAnimate
                   small
-                  detailTooltip={`${describeWrathMinionTitle(wrathMinionCard)} threatens the marked player's clash rank this round.`}
+                  detailTooltip={`${describeWrathMinionTitle(wrathMinionCard)} — mark is chosen when the round resolves.`}
                 />
               </div>
             </div>
           ) : (
             <p className="mt-1 px-0.5 text-center text-[6px] font-bold text-red-300/80">Next round…</p>
           )}
-          {wrathTargetUid && players?.[wrathTargetUid] && (
-            <p className="mt-1 px-0.5 text-center text-[6px] font-bold leading-tight text-amber-200/95">
-              Mark: {players[wrathTargetUid].name}
-            </p>
-          )}
         </motion.div>
       )}
       {sloth && (
-        <motion.div
-          layout
-          className="relative flex w-full flex-col items-center rounded-xl border-2 border-indigo-900/80 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]"
-        >
-          <Cloud className="mx-auto h-5 w-5 text-indigo-300/90 sm:h-6 sm:w-6" strokeWidth={1.65} />
-          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-indigo-300">Sloth</p>
-          <p className="mt-1 px-0.5 text-center text-[6px] font-bold leading-snug normal-case text-indigo-100/95">
+        <motion.div layout className={curseCol}>
+          <PowerCardVisual cardId={CURSE_SLOTH} revealed matchHandCard curseRackPeek />
+          <p className="text-center text-[7px] font-black uppercase tracking-wider text-indigo-300">Sloth</p>
+          <p className="mt-0.5 px-0.5 text-center text-[6px] font-bold leading-snug normal-case text-indigo-100/95">
             The sloth is dreaming
           </p>
           <div className="mt-1 flex items-center justify-center gap-1.5 text-amber-200">
@@ -997,6 +993,7 @@ const DevPowerMenu: React.FC<{
 type ResolutionFx =
   | null
   | { kind: 'death_slash'; victimUid: string }
+  | { kind: 'wrath_cut'; victimUid: string }
   | { kind: 'clash_shatter'; uid: string; cardId: string }
   | { kind: 'tower_shield'; towerUid: string }
   | { kind: 'fool_swap' }
@@ -1074,7 +1071,8 @@ function deriveResolutionFx(event: ResolutionEvent, hostUid: string, guestUid: s
 function resolutionColumnMotion(fx: ResolutionFx, uid: string) {
   if (!fx) return {};
   if (fx.kind === 'fool_swap') return { x: [0, -7, 7, -5, 5, 0], y: [0, 4, -4, 0], rotate: [0, -5, 5, 0] };
-  if (fx.kind === 'death_slash' && fx.victimUid === uid) return { x: [0, -9, 9, -5, 5, 0], scale: [1, 0.94, 1] };
+  if ((fx.kind === 'death_slash' || fx.kind === 'wrath_cut') && fx.victimUid === uid)
+    return { x: [0, -9, 9, -5, 5, 0], scale: [1, 0.94, 1] };
   if (fx.kind === 'strength_pulse' && fx.uid === uid) return { scale: [1, 1.09, 1] };
   if (fx.kind === 'emperor_glow' && fx.uid === uid)
     return { scale: [1, 1.05, 1], filter: ['brightness(1)', 'brightness(1.28)', 'brightness(1)'] };
@@ -1244,14 +1242,23 @@ const ResolutionSequence: React.FC<{
   const [summoned, setSummoned] = useState<Record<string, string>>({});
   const [devilStolen, setDevilStolen] = useState<Record<string, number>>({});
   const [visibleEvents, setVisibleEvents] = useState<
-    { id: number; message: string; eventType?: ResolutionEventType; coinWinnerUid?: string | null }
+    {
+      id: number;
+      message: string;
+      eventType?: ResolutionEventType;
+      coinWinnerUid?: string | null;
+      logClass?: string;
+    }
   >([]);
   const [isDone, setIsDone] = useState(false);
   const [towerScorch, setTowerScorch] = useState<Record<string, boolean>>({});
   const [resolutionFx, setResolutionFx] = useState<ResolutionFx>(null);
   const [lustHeartBurst, setLustHeartBurst] = useState(false);
   /** Per-seat resolution morph overlay on the played card (`transform` = identity swap flip, `upgrade` = rank/suit flicker ladder). */
-  const [resolutionCardMorph, setResolutionCardMorph] = useState<Record<string, 'transform' | 'upgrade'>>({});
+  const [resolutionCardMorph, setResolutionCardMorph] = useState<
+    Record<string, 'transform' | 'upgrade' | 'lustUpgrade'>
+  >({});
+  const [resolutionEmpowerCaption, setResolutionEmpowerCaption] = useState<{ uid: string; text: string } | null>(null);
 
   const lustHeartParticles = useMemo(() => {
     if (!outcome.lustRoundFx?.contributions.length) return [] as { uid: string; k: string }[];
@@ -1270,6 +1277,10 @@ const ResolutionSequence: React.FC<{
     outcome.envyRoundFx ? outcome.envyRoundFx.monsterHpStart : null,
   );
   const [slothDreamWheel, setSlothDreamWheel] = useState<{ offset: number; spinning: boolean } | null>(null);
+  const [wrathAnim, setWrathAnim] = useState<
+    null | { stage: 'center' | 'coin' | 'fly' | 'cutting'; cutIndex: number }
+  >(null);
+  const [wrathRevealDone, setWrathRevealDone] = useState(false);
 
   useEffect(() => {
     if (!isDone) return;
@@ -1290,6 +1301,32 @@ const ResolutionSequence: React.FC<{
 
       const hostUid = room.hostUid;
       const guestUid = Object.keys(room.players).find(id => id !== hostUid)!;
+
+      const wf = outcome.wrathFx;
+      if (wf && !wf.sparedJoker && wf.magnitude > 0 && wf.minionCard && wf.targetUid) {
+        setWrathRevealDone(false);
+        setWrathAnim({ stage: 'center', cutIndex: 0 });
+        await new Promise((r) => setTimeout(r, 700));
+        if (!active) return;
+        setWrathAnim({ stage: 'coin', cutIndex: 0 });
+        await new Promise((r) => setTimeout(r, 3200));
+        if (!active) return;
+        setWrathAnim({ stage: 'fly', cutIndex: 0 });
+        await new Promise((r) => setTimeout(r, 650));
+        if (!active) return;
+        setWrathAnim({ stage: 'cutting', cutIndex: 0 });
+        for (let i = 1; i <= wf.magnitude; i++) {
+          setWrathAnim({ stage: 'cutting', cutIndex: i });
+          setResolutionFx({ kind: 'wrath_cut', victimUid: wf.targetUid });
+          await new Promise((r) => setTimeout(r, 500));
+          if (!active) return;
+          setResolutionFx(null);
+        }
+        setWrathAnim(null);
+        setWrathRevealDone(true);
+      } else if (wf?.targetUid) {
+        setWrathRevealDone(true);
+      }
       
       const events = outcome.events || [];
       for (let i = 0; i < events.length; i++) {
@@ -1297,12 +1334,13 @@ const ResolutionSequence: React.FC<{
         const fx = deriveResolutionFx(event, hostUid, guestUid);
         setResolutionFx(fx);
         setEventIndex(i);
-        setVisibleEvents(prev => [
+        setVisibleEvents((prev) => [
           ...prev,
           {
             id: Date.now() + i,
             message: event.message ?? '',
             eventType: event.type,
+            logClass: resolutionLogLineClass(event),
             coinWinnerUid:
               event.type === 'COIN_FLIP' ? inferCoinFlipWinnerUid(event.message ?? '', room) : undefined,
           },
@@ -1327,24 +1365,38 @@ const ResolutionSequence: React.FC<{
             if (event.uid && event.cardId && event.fromCardId) {
               const f = parseCard(event.fromCardId);
               const t = parseCard(event.cardId);
+              const heartsLustLadder = f.suit === 'Hearts' && t.suit === 'Hearts';
               const steps = (
-                f.suit === 'Hearts' && t.suit === 'Hearts'
+                heartsLustLadder
                   ? lustHeartUpgradeSteps(event.fromCardId, event.cardId)
                   : playingCardUpgradeSteps(event.fromCardId, event.cardId)
               ).filter(Boolean);
+              const morphMode = heartsLustLadder ? ('lustUpgrade' as const) : ('upgrade' as const);
               if (steps.length > 1) {
-                setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'upgrade' }));
-                for (let s = 0; s < steps.length; s++) {
-                  const stepCard = steps[s];
-                  setCurrentCards((prev) => ({ ...prev, [event.uid!]: stepCard }));
-                  await new Promise((r) => setTimeout(r, s === 0 ? 120 : 280));
-                  if (!active) return;
-                }
-                setResolutionCardMorph((m) => {
-                  const next = { ...m };
-                  delete next[event.uid!];
-                  return next;
+                setResolutionEmpowerCaption({
+                  uid: event.uid!,
+                  text:
+                    event.message?.trim() ||
+                    (heartsLustLadder ? 'Lust empowers this heart.' : 'Empowering.'),
                 });
+                setResolutionCardMorph((m) => ({ ...m, [event.uid!]: morphMode }));
+                await new Promise((r) => setTimeout(r, RESOLUTION_UPGRADE_PROMPT_MS));
+                if (!active) return;
+                try {
+                  for (let s = 0; s < steps.length; s++) {
+                    const stepCard = steps[s];
+                    setCurrentCards((prev) => ({ ...prev, [event.uid!]: stepCard }));
+                    await new Promise((r) => setTimeout(r, RESOLUTION_UPGRADE_STEP_MS));
+                    if (!active) return;
+                  }
+                } finally {
+                  setResolutionEmpowerCaption(null);
+                  setResolutionCardMorph((m) => {
+                    const next = { ...m };
+                    delete next[event.uid!];
+                    return next;
+                  });
+                }
               } else {
                 setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.cardId! }));
               }
@@ -1365,8 +1417,8 @@ const ResolutionSequence: React.FC<{
             }
             if (event.powerCardId === CURSE_LUST && (event.lustFeedPts ?? 0) > 0 && event.uid) {
               if (event.lustSurgeHeart) {
-                setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'upgrade' }));
-                await new Promise((r) => setTimeout(r, 460));
+                setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'lustUpgrade' }));
+                await new Promise((r) => setTimeout(r, 720));
                 if (!active) return;
                 setResolutionCardMorph((m) => {
                   const next = { ...m };
@@ -1455,7 +1507,7 @@ const ResolutionSequence: React.FC<{
             : event.type === 'POWER_DESTROYED'
               ? 1500
               : event.type === 'CARD_EMPOWER' || event.type === 'TARGET_CHANGE'
-                ? 980
+                ? 1180
                 : event.type === 'GLUTTONY_DIGEST'
                   ? 3200
                   : event.type === 'POWER_TRIGGER'
@@ -1473,7 +1525,8 @@ const ResolutionSequence: React.FC<{
                       ? Math.round(slothDreamWheelDefinition.spinDurationSeconds * 1000 + 750)
                       : 1200
                     : 1150;
-        if (fx?.kind === 'death_slash' || fx?.kind === 'tower_shield') pauseMs = Math.max(pauseMs, 1380);
+        if (fx?.kind === 'death_slash' || fx?.kind === 'wrath_cut' || fx?.kind === 'tower_shield')
+          pauseMs = Math.max(pauseMs, 1380);
         if (fx?.kind === 'envy_lunge') pauseMs = Math.max(pauseMs, 1380);
         if (fx?.kind === 'clash_shatter') pauseMs = Math.max(pauseMs, 1640);
         if (fx?.kind === 'gluttony_bite') pauseMs = Math.max(pauseMs, 3400);
@@ -1520,8 +1573,11 @@ const ResolutionSequence: React.FC<{
       active = false;
       setResolutionFx(null);
       setSlothDreamWheel(null);
+      setResolutionEmpowerCaption(null);
+      setWrathAnim(null);
+      setWrathRevealDone(false);
     };
-  }, [outcome.events, outcome.cardsPlayed, outcome.slothDreamFx, room.hostUid, room.players]);
+  }, [outcome.events, outcome.cardsPlayed, outcome.slothDreamFx, outcome.wrathFx, room.hostUid, room.players]);
 
   const hostUid = room.hostUid;
   const guestUid = Object.keys(room.players).find(id => id !== hostUid)!;
@@ -1550,6 +1606,18 @@ const ResolutionSequence: React.FC<{
       : [];
 
   const lustHeartFlyCentered = activeCursesSorted.length > 1 && lustHeartResolution;
+
+  const wfRes = outcome.wrathFx;
+  const wrathTripleColumn = Boolean(wfRes && !wfRes.sparedJoker && wfRes.magnitude > 0);
+  const wrathNeedsIntro = wrathTripleColumn;
+
+  const showWrathAgentAbovePlayer = (uid: string) => {
+    if (!wfRes || wfRes.targetUid !== uid || !wfRes.minionCard) return false;
+    if (!wrathNeedsIntro) return true;
+    if (wrathRevealDone) return true;
+    if (wrathAnim && (wrathAnim.stage === 'fly' || wrathAnim.stage === 'cutting')) return true;
+    return false;
+  };
 
   return (
     <div className="relative overflow-hidden flex flex-col items-center w-full h-full max-h-screen p-4 sm:p-6 justify-center rounded-2xl border border-slate-800/50 bg-[radial-gradient(ellipse_80%_55%_at_50%_0%,rgba(251,191,36,0.14),transparent_58%),linear-gradient(180deg,#020617_0%,#0f172a_50%,#020617_100%)] shadow-[inset_0_0_100px_rgba(15,23,42,0.55)]">
@@ -1752,7 +1820,9 @@ const ResolutionSequence: React.FC<{
             <div className="flex max-w-[52rem] flex-wrap justify-center gap-x-4 gap-y-4 px-1 sm:gap-x-5">
               {activeCursesSorted.map((entry) => (
                 <div key={entry.id} className="flex max-w-[6.75rem] flex-col items-center gap-1">
-                  <span className="text-[9px] font-black uppercase tracking-wider text-red-400/95">
+                  <span
+                    className={`text-[9px] font-black uppercase tracking-wider ${cursePowerIconClass(entry.id)}`}
+                  >
                     {CURSES[entry.id]?.sin ?? 'Curse'}
                   </span>
                   <PowerCardVisual cardId={entry.id} small revealed curseRackPeek />
@@ -1810,7 +1880,9 @@ const ResolutionSequence: React.FC<{
           title={ENVY_RESOLUTION_MONSTER_TOOLTIP}
           className="mb-4 flex flex-col items-center gap-2"
         >
-          <GreenEyedMonsterIcon className="h-12 w-28 text-emerald-400 drop-shadow-[0_0_26px_rgba(16,185,129,0.45)] sm:h-14 sm:w-32" />
+          <div className="origin-center scale-[0.92] drop-shadow-[0_12px_36px_rgba(16,185,129,0.4)] sm:scale-100">
+            <PowerCardVisual cardId={CURSE_ENVY} small revealed curseRackPeek />
+          </div>
           <span className="font-mono text-lg font-black tabular-nums text-emerald-200 sm:text-2xl">
             {envyShownHp}{' '}
             <span className="text-xs font-black uppercase tracking-wider text-emerald-500">HP</span>
@@ -1818,9 +1890,14 @@ const ResolutionSequence: React.FC<{
         </motion.div>
       )}
 
-      <div className="flex-none w-full max-w-4xl flex items-center justify-center gap-4 sm:gap-12">
+      <div
+        className={`flex-none flex w-full max-w-5xl items-center justify-center ${
+          wrathTripleColumn ? 'items-end gap-1 sm:gap-4' : 'gap-4 sm:gap-12'
+        }`}
+      >
         {[hostUid, guestUid].map((uid, idx) => (
-          <div key={uid} className="flex flex-col items-center gap-3 relative scale-90 sm:scale-100">
+          <React.Fragment key={uid}>
+          <div className="flex flex-col items-center gap-3 relative scale-90 sm:scale-100">
             <motion.div 
               initial={{ x: idx === 0 ? -20 : 20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -1829,20 +1906,47 @@ const ResolutionSequence: React.FC<{
                <span className="text-[8px] font-black uppercase tracking-widest leading-none block">{room.players[uid].name}</span>
             </motion.div>
 
-            {outcome.wrathFx && outcome.wrathFx.targetUid === uid && (
+            {showWrathAgentAbovePlayer(uid) && wfRes?.minionCard && (
               <motion.div
                 className="pointer-events-none absolute -top-6 left-1/2 z-40 flex w-[10rem] -translate-x-1/2 justify-center sm:w-[11rem]"
-                initial={{ y: -10, opacity: 1 }}
-                animate={{ y: [0, -12, 0], opacity: 1 }}
-                transition={{
-                  y: { repeat: Infinity, duration: 1.2, ease: 'easeInOut' },
-                }}
+                initial={
+                  wrathAnim?.stage === 'fly'
+                    ? { y: 26, opacity: 0.75 }
+                    : { y: -10, opacity: 1 }
+                }
+                animate={
+                  wrathAnim?.stage === 'fly'
+                    ? { y: 0, opacity: 1 }
+                    : { y: [0, -12, 0], opacity: 1 }
+                }
+                transition={
+                  wrathAnim?.stage === 'fly'
+                    ? { duration: 0.55, ease: [0.22, 1, 0.36, 1] }
+                    : {
+                        y: { repeat: Infinity, duration: 1.2, ease: 'easeInOut' },
+                      }
+                }
               >
                 <div className="origin-top scale-[0.62] drop-shadow-[0_0_28px_rgba(220,38,38,0.5)] sm:scale-[0.68]">
-                  <CardVisual card={outcome.wrathFx.minionCard} revealed noAnimate presentation="none" small />
+                  <CardVisual card={wfRes.minionCard} revealed noAnimate presentation="none" small />
                 </div>
               </motion.div>
             )}
+
+            <AnimatePresence>
+              {resolutionEmpowerCaption?.uid === uid && (
+                <motion.div
+                  key={`empower-${resolutionEmpowerCaption.text}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                  className="pointer-events-none z-[25] mb-1.5 max-w-[min(17rem,92vw)] px-2 text-center text-[10px] font-black uppercase italic leading-snug tracking-wide text-rose-200/95 drop-shadow-[0_0_12px_rgba(251,113,133,0.35)] sm:text-[11px]"
+                >
+                  {resolutionEmpowerCaption.text}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="relative">
               <div className="flex items-end gap-2">
@@ -1924,9 +2028,10 @@ const ResolutionSequence: React.FC<{
                         </div>
                       </motion.div>
                     )}
-                    {resolutionFx?.kind === 'death_slash' && resolutionFx.victimUid === uid && (
+                    {(resolutionFx?.kind === 'death_slash' || resolutionFx?.kind === 'wrath_cut') &&
+                      resolutionFx.victimUid === uid && (
                       <motion.div
-                        key="death-slash"
+                        key={resolutionFx?.kind === 'wrath_cut' ? 'wrath-cut' : 'death-slash'}
                         className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-xl"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -2099,6 +2204,35 @@ const ResolutionSequence: React.FC<{
               </div>
             </div>
           </div>
+            {idx === 0 && wrathTripleColumn && (
+              <div
+                className="flex w-[5.5rem] shrink-0 flex-col items-center justify-end self-end pb-4 min-h-[9.5rem] sm:min-h-[10.5rem] sm:w-[6.5rem] sm:pb-6"
+                aria-hidden={!wrathAnim}
+              >
+                {wrathAnim?.stage === 'center' && wfRes?.minionCard && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="origin-top scale-[0.62] drop-shadow-[0_0_24px_rgba(220,38,38,0.45)] sm:scale-[0.68]"
+                  >
+                    <CardVisual card={wfRes.minionCard} revealed noAnimate presentation="none" small />
+                  </motion.div>
+                )}
+                {wrathAnim?.stage === 'coin' && wfRes?.targetUid && (
+                  <div className="flex w-full flex-col items-center [perspective:1200px]">
+                    <CssCoinEmbed
+                      flipDegrees={priorityFlipLandingDegrees(wfRes.targetUid, room)}
+                      autoPlay
+                      className="w-full max-w-[9.5rem] rounded-xl"
+                    />
+                    <span className="mt-1.5 text-center text-[7px] font-black uppercase tracking-[0.2em] text-red-400/90">
+                      Wrath
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </React.Fragment>
         ))}
       </div>
 
@@ -2123,7 +2257,10 @@ const ResolutionSequence: React.FC<{
             })()}
           </AnimatePresence>
           <AnimatePresence mode="popLayout">
-            {visibleEvents.slice(-2).map((evt, i) => (
+            {visibleEvents
+              .slice(-2)
+              .filter((e) => e.message.trim().length > 0)
+              .map((evt, i) => (
               <motion.div 
                 key={evt.id} 
                 initial={{ opacity: 0, y: 26, scale: 0.9, filter: 'blur(8px)' }}
@@ -2135,7 +2272,7 @@ const ResolutionSequence: React.FC<{
                 }}
                 transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                 exit={{ opacity: 0, y: -30 }}
-                className={`text-center font-black uppercase tracking-widest italic text-[10px] sm:text-sm ${i === 1 ? 'text-yellow-300 drop-shadow-[0_0_12px_rgba(253,224,71,0.35)]' : 'text-slate-500'}`}
+                className={`text-center font-black uppercase tracking-widest italic text-[10px] sm:text-sm ${evt.logClass ?? 'text-slate-400'} ${i === 1 ? 'opacity-100' : 'opacity-[0.42]'}`}
               >
                 {evt.message}
               </motion.div>
@@ -2927,8 +3064,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     room.settings.enableCurseCards &&
     greedCurseActive(room.activeCurses ?? []) &&
     room.targetSuit === 'Diamonds';
-  const slothDreamTableOverlay =
-    room.settings.enableCurseCards && slothCurseActive(room.activeCurses ?? []);
   const curseSelectionLocked =
     room.settings.enableCurseCards !== false && curseEffectActive(room.activeCurses);
 
@@ -3139,9 +3274,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
               />
             </div>
-            <div className="flex max-w-full shrink-0 flex-row flex-wrap items-end justify-end gap-x-4 gap-y-2 overflow-visible py-1 pr-1 opacity-80 sm:flex-nowrap sm:gap-x-5">
+            <div className="flex max-w-full shrink-0 flex-row flex-wrap items-end justify-end gap-x-4 gap-y-2 overflow-visible py-1 pr-1 opacity-80 sm:flex-nowrap sm:gap-x-6">
               {opponent.powerCards.map((pid, i) => (
-                <PowerCardVisual key={`opp-p-${pid}-${i}`} cardId={pid} revealed={false} small staticBackdrop />
+                <div key={`opp-p-${pid}-${i}`} className="flex shrink-0 flex-none justify-center">
+                  <PowerCardVisual cardId={pid} revealed={false} small staticBackdrop />
+                </div>
               ))}
             </div>
           </div>
@@ -3165,8 +3302,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           )}
 
-          {(room.status === 'playing' || room.status === 'powering') && opponent ? (
-            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(5rem,7rem)_minmax(0,1fr)_minmax(5rem,7rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:gap-x-3 md:gap-y-1.5">
+            {(room.status === 'playing' || room.status === 'powering') && opponent ? (
+            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(10rem,36%)_minmax(0,1fr)_minmax(8.5rem,11rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:gap-x-3 md:gap-y-1.5">
               {/* Row 1 napkin sketch: spacer | opp hand | opp powers — deck stacks row2 col3 */}
               <div className="hidden min-h-[0.125rem] sm:col-start-1 sm:row-start-1 sm:block" aria-hidden />
               <div
@@ -3194,14 +3331,16 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
                 />
               </div>
-              <div className="col-span-full flex min-h-[3.5rem] flex-row flex-wrap justify-center gap-x-4 gap-y-2 self-start overflow-visible py-2 pt-3 opacity-95 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-full sm:max-w-none sm:flex-nowrap sm:justify-end sm:gap-x-5 sm:self-stretch sm:px-1 sm:pb-1 sm:pt-3">
+              <div className="col-span-full flex min-h-[3.5rem] flex-row flex-wrap justify-center gap-x-4 gap-y-2 self-start overflow-visible py-2 pt-3 opacity-95 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-full sm:max-w-none sm:flex-nowrap sm:justify-end sm:gap-x-6 sm:self-stretch sm:px-1 sm:pb-1 sm:pt-3">
                 {opponent.powerCards.map((pid, i) => (
-                  <PowerCardVisual key={`ogr-${pid}-${i}`} cardId={pid} revealed={false} small staticBackdrop />
+                  <div key={`ogr-${pid}-${i}`} className="flex shrink-0 flex-none justify-center">
+                    <PowerCardVisual cardId={pid} revealed={false} small staticBackdrop />
+                  </div>
                 ))}
               </div>
 
-              <aside className="relative z-[6] col-span-full flex min-h-0 w-full min-w-0 flex-col items-center gap-2 overflow-hidden pb-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-auto sm:max-w-[min(11rem,calc((100vw-2rem)*0.28))] sm:self-stretch sm:pb-2">
-                <div className="flex max-h-[min(32vh,12.75rem)] w-full shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden pb-1 [-ms-overflow-style:auto] [scrollbar-gutter:stable]">
+              <aside className="relative z-[6] col-span-full flex min-h-min w-full min-w-0 flex-col items-center gap-2 overflow-visible pb-2 pt-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-auto sm:max-w-[min(30rem,calc((100vw-2rem)*0.42))] sm:self-stretch sm:pb-3">
+                <div className="flex w-full shrink-0 flex-col items-stretch overflow-visible px-0.5 py-2">
                   <CurseZonePanel
                     settings={room.settings}
                     activeCurses={room.activeCurses}
@@ -3210,27 +3349,23 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     wrathTargetUid={room.wrathTargetUid}
                     hostUid={room.hostUid}
                     players={room.players}
+                    envyCovet={room.envyCovet}
                   />
                 </div>
               </aside>
 
-              <div
-                className={`relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:px-3 ${
-                  slothDreamTableOverlay
-                    ? 'ring-2 ring-indigo-300/30 shadow-[0_0_48px_rgba(99,102,241,0.14)]'
-                    : ''
-                }`}
-              >
-                {slothDreamTableOverlay && (
-                  <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[inherit]">
-                    <div className="absolute inset-0 bg-slate-950/20" />
-                    <div className="absolute -left-[12%] top-[8%] h-[52%] w-[64%] rounded-full bg-slate-200/25 blur-3xl" />
-                    <div className="absolute -right-[8%] top-[18%] h-[48%] w-[58%] rounded-full bg-indigo-200/20 blur-3xl" />
-                    <div className="absolute left-[12%] -bottom-[6%] h-[55%] w-[78%] rounded-full bg-slate-300/18 blur-[2.5rem]" />
-                    <div className="absolute inset-0 opacity-[0.14] bg-[radial-gradient(circle_at_center,#fff_1px,transparent_1.5px)] bg-[size:14px_14px]" />
-                  </div>
-                )}
+              <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:px-3">
                 <div className="relative z-10 flex w-full min-w-0 flex-col items-center">
+               {room.status === 'playing' &&
+                 room.settings.enableCurseCards &&
+                 envyCurseActive(room.activeCurses ?? []) &&
+                 room.envyCovet &&
+                 room.players[room.envyCovet.uid] && (
+                   <p className="mb-2 max-w-[min(100%,26rem)] px-3 text-center text-[10px] font-black uppercase leading-snug tracking-wide text-emerald-300/95 drop-shadow-[0_0_14px_rgba(16,185,129,0.22)]">
+                     Green-Eyed Monster covets {describeCardPlain(room.envyCovet.cardId)} from{' '}
+                     {room.players[room.envyCovet.uid].name}.
+                   </p>
+                 )}
                {!(
                  room.status === 'powering' &&
                  me.currentMove &&
@@ -3276,6 +3411,23 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                </div>
                              </motion.div>
                            )}
+                         {room.settings.enableCurseCards &&
+                           envyCurseActive(room.activeCurses ?? []) &&
+                           room.envyCovet &&
+                           room.envyCovet.uid === myUid &&
+                           room.envyCovet.cardId === me.currentMove && (
+                             <motion.div
+                               className="pointer-events-none absolute top-0 left-1/2 z-[41] flex -translate-x-1/2 flex-col items-center gap-0.5"
+                               initial={{ y: -2, opacity: 1 }}
+                               animate={{ y: [0, -7, 0] }}
+                               transition={{ y: { repeat: Infinity, duration: 1.12, ease: 'easeInOut' } }}
+                             >
+                               <GreenEyedMonsterIcon className="h-11 w-[5.35rem] opacity-95 drop-shadow-[0_0_20px_rgba(16,185,129,0.48)] sm:h-12 sm:w-[5.85rem]" />
+                               <span className="text-[7px] font-black uppercase tracking-wider text-emerald-400/95">
+                                 Coveted
+                               </span>
+                             </motion.div>
+                           )}
                          <CardVisual
                            card={me.currentMove}
                            revealed
@@ -3309,6 +3461,23 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                <div className="origin-top scale-[0.52] opacity-95 drop-shadow-[0_0_20px_rgba(220,38,38,0.45)]">
                                  <CardVisual card={room.wrathMinionCard} revealed noAnimate presentation="none" small />
                                </div>
+                             </motion.div>
+                           )}
+                         {room.settings.enableCurseCards &&
+                           envyCurseActive(room.activeCurses ?? []) &&
+                           room.envyCovet &&
+                           room.envyCovet.uid === opponent.uid &&
+                           room.envyCovet.cardId === opponent.currentMove && (
+                             <motion.div
+                               className="pointer-events-none absolute top-0 left-1/2 z-[41] flex -translate-x-1/2 flex-col items-center gap-0.5"
+                               initial={{ y: -2, opacity: 1 }}
+                               animate={{ y: [0, -7, 0] }}
+                               transition={{ y: { repeat: Infinity, duration: 1.12, ease: 'easeInOut' } }}
+                             >
+                               <GreenEyedMonsterIcon className="h-11 w-[5.35rem] opacity-95 drop-shadow-[0_0_20px_rgba(16,185,129,0.48)] sm:h-12 sm:w-[5.85rem]" />
+                               <span className="text-[7px] font-black uppercase tracking-wider text-emerald-400/95">
+                                 Coveted
+                               </span>
                              </motion.div>
                            )}
                          <CardVisual
@@ -3362,8 +3531,31 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                        const greedActive =
                          room.settings.enableCurseCards && greedCurseActive(room.activeCurses ?? []);
                        const joint = jointTableTrumpPair(ts, { greedActive });
+                       const envyCovetPlaying =
+                         room.status === 'playing' &&
+                         room.settings.enableCurseCards &&
+                         envyCurseActive(room.activeCurses ?? []) &&
+                         room.envyCovet;
                        return (
                          <>
+                           {envyCovetPlaying && room.envyCovet && room.players[room.envyCovet.uid] && (
+                             <div className="mb-2 flex flex-col items-center gap-2">
+                               <GreenEyedMonsterIcon className="h-14 w-[6.25rem] shadow-[0_12px_36px_rgba(16,185,129,0.35)] sm:h-16 sm:w-[7rem]" />
+                               <div className="pointer-events-auto origin-center scale-[0.42] drop-shadow-[0_10px_28px_rgba(16,185,129,0.35)]">
+                                 <CardVisual
+                                   card={room.envyCovet.cardId}
+                                   revealed
+                                   small
+                                   noAnimate
+                                   presentation="none"
+                                   detailTooltip={`Coveted from ${room.players[room.envyCovet.uid].name}'s hand — play this suit card to feed the monster.`}
+                                 />
+                               </div>
+                               <span className="max-w-[18rem] px-2 text-center text-[9px] font-bold uppercase tracking-wide text-emerald-400/95">
+                                 Prey · {room.players[room.envyCovet.uid].name}
+                               </span>
+                             </div>
+                           )}
                            {joint ? (
                              <DualTableTrumpCard suits={joint} />
                            ) : ts ? (
@@ -3567,27 +3759,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
                    {/* Event Log Display */}
                    <div className="w-full flex flex-col gap-1.5 p-4 rounded-2xl bg-black/40 border border-white/5 max-h-[150px] overflow-y-auto custom-scrollbar">
-                     {room.lastOutcome.events.map((evt: any, i: number) => (
+                     {room.lastOutcome.events.map((evt: ResolutionEvent, i: number) => (
                        <div key={i} className="flex gap-2 text-[9px] uppercase tracking-wider font-bold">
                          <span className="text-slate-600 font-mono">{(i+1).toString().padStart(2, '0')}</span>
-                         <span
-                           className={
-                             evt.type === 'POWER_TRIGGER'
-                               ? 'text-yellow-400'
-                               : evt.type === 'POWER_DESTROYED'
-                                 ? 'text-orange-400'
-                                 : evt.type === 'COIN_FLIP'
-                                   ? 'text-amber-300'
-                                   : evt.type === 'CLASH_DESTROYED'
-                                     ? 'text-rose-400'
-                                     : evt.type === 'ENVY_COVET' ||
-                                         evt.type === 'ENVY_STRIKE' ||
-                                         evt.type === 'ENVY_DEFEATED' ||
-                                         evt.type === 'ENVY_DEPARTS'
-                                       ? 'text-emerald-400'
-                                       : 'text-slate-400'
-                           }
-                         >
+                         <span className={resolutionLogLineClass(evt)}>
                            {evt.message}
                          </span>
                        </div>
@@ -3667,11 +3842,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           }`}
         >
           {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
-            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center sm:max-w-[min(46vw,22rem)] sm:items-start md:-mr-3 xl:mr-0">
+            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-7 pb-3 sm:max-w-[min(46vw,22rem)] sm:items-start md:-mr-3 xl:mr-0">
               <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
                 Your powers
               </span>
-              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-x-auto overflow-y-visible pb-1 -space-x-4 pl-1 [scrollbar-width:thin] sm:justify-start sm:-space-x-6 sm:pl-2">
+              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-x-auto overflow-y-visible pb-2 pt-1 -space-x-4 pl-1 [scrollbar-width:thin] sm:justify-start sm:-space-x-6 sm:pl-2">
                 {me.powerCards.map((pId, i) => (
                   <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
                     <PowerCardVisual
@@ -3726,10 +3901,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   >
                     {envyCovetedHere && (
                       <div
-                        className="pointer-events-none absolute -top-11 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center"
+                        className="pointer-events-none absolute -top-[3.35rem] left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-0.5"
                         title={ENVY_COVET_CARD_TOOLTIP}
                       >
-                        <GreenEyedMonsterIcon className="h-9 w-[4.25rem] text-emerald-400 drop-shadow-[0_0_14px_rgba(16,185,129,0.5)]" />
+                        <GreenEyedMonsterIcon className="h-10 w-[5.75rem] drop-shadow-[0_0_14px_rgba(16,185,129,0.5)] sm:h-11 sm:w-[6.25rem]" />
                       </div>
                     )}
                     {selected && !me.confirmed && (
@@ -3849,11 +4024,75 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   );
 };
 
+function CardArtHud() {
+  const { mode, setMode } = useCardArt();
+  const [creatorOpen, setCreatorOpen] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setCreatorOpen(window.location.hash === '#card-creator');
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  return (
+    <>
+      {creatorOpen && (
+        <CardCreator
+          onClose={() => {
+            window.location.hash = '';
+            setCreatorOpen(false);
+          }}
+        />
+      )}
+      <div className="fixed top-4 right-4 z-[221] flex flex-col items-end gap-2">
+        <div className="flex items-center gap-1 rounded-lg border border-emerald-800 bg-emerald-950/95 px-2 py-1.5 text-[9px] font-black uppercase shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+          <span className="text-slate-500">Art</span>
+          <button
+            type="button"
+            onClick={() => setMode('vector')}
+            className={`rounded border px-2 py-0.5 transition-colors ${
+              mode === 'vector'
+                ? 'border-amber-400 bg-amber-400/25 text-amber-100'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Vector
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('raster')}
+            className={`rounded border px-2 py-0.5 transition-colors ${
+              mode === 'raster'
+                ? 'border-amber-400 bg-amber-400/25 text-amber-100'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Assembled
+          </button>
+          <span className="mx-1 h-4 w-px bg-emerald-800" aria-hidden />
+          <button
+            type="button"
+            onClick={() => {
+              window.location.hash = '#card-creator';
+              setCreatorOpen(true);
+            }}
+            className="rounded border border-emerald-700 px-2 py-0.5 text-emerald-300 hover:bg-emerald-900/80"
+          >
+            Card Creator
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function App() {
   const [isDual, setIsDual] = useState(false);
 
   return (
     <div className="min-h-screen bg-emerald-950 text-white selection:bg-yellow-400 selection:text-black font-sans overflow-hidden">
+      <CardArtHud />
       {/* Dev Toggle */}
       <div className="fixed top-4 left-4 z-[220] flex gap-2">
         <button 

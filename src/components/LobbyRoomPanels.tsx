@@ -16,8 +16,12 @@ import {
 } from 'lucide-react';
 import type { GameSettings, RoomData } from '../types';
 import { desperationTierRowsForDisplay } from '../types';
-import { CUSTOM_LOBBY_PRESET_ID, BUILTIN_CARDCATCH_PRESET_ID } from '../settings/gameSettingsConstants';
-import { listStaticBuiltinPresets, loadCustomPresets, saveCustomPresetList, type SavedLobbyPreset } from '../settings/lobbyPresetIO';
+import {
+  CUSTOM_LOBBY_PRESET_ID,
+  BUILTIN_CARDCATCH_PRESET_ID,
+  type SavedLobbyPreset,
+} from '../settings/gameSettingsConstants';
+import { listStaticBuiltinPresets, loadCustomPresets, saveCustomPresetList } from '../settings/lobbyPresetIO';
 import { normalizeGameSettings } from '../settings/normalizeGameSettings';
 import { standardDeckComposition, deckBlurb } from '../settings/deckMath';
 

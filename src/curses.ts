@@ -19,6 +19,9 @@ export const CURSE_IDS = [
 
 export type CurseCardId = (typeof CURSE_IDS)[number];
 
+/** Hunger meter threshold — when reached while hearts feed, Lust clears (unless hearts exhausted first). */
+export const LUST_METER_MAX = 100;
+
 export interface CurseDefinition {
   id: number;
   sin: string;
@@ -32,7 +35,7 @@ export const CURSES: Record<number, CurseDefinition> = {
     sin: 'Lust',
     name: 'Lust',
     description:
-      'Hearts dominate the target wheel. Hearts played bump +3 ranks (past Ace becomes God at 19). Lust meter feeds until 150 or no hearts remain in deck or hands.',
+      'Hearts dominate the target wheel. Hearts played bump +3 ranks (past Ace becomes God at 19). Lust meter feeds until 100 or no hearts remain in deck or hands.',
   },
   [CURSE_GLUTTONY]: {
     id: CURSE_GLUTTONY,

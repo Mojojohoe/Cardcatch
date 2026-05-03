@@ -33,6 +33,9 @@ import {
   ZapOff,
 } from 'lucide-react';
 import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide, type PresentationPace } from '../animations/cardMotion';
+import { useOptionalCardArt } from '../cardArt/cardArtContext';
+import { isStandardSuitRasterCard } from '../cardArt/standardSuit';
+import { ScaledAssembledCardFace } from '../cardArt/ScaledAssembledCardFace';
 import {
   CURSES,
   CURSE_ENVY,
@@ -119,18 +122,18 @@ export function MajorArcanaIconGlyph({
   return <Comp className={className} size={size} />;
 }
 
+/** Compact playing-card tile with central eye — Green-Eyed Monster representation. */
 export const GreenEyedMonsterIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="-0.5 8 39 26"
-    className={className}
-    aria-hidden
+  <div
+    role="img"
+    aria-label="Green-Eyed Monster"
+    className={`relative flex aspect-[5/7] flex-col items-center justify-center rounded-lg border-2 border-emerald-500/90 bg-gradient-to-b from-emerald-950 via-zinc-950 to-black shadow-[0_10px_28px_rgba(16,185,129,0.42)] ${className ?? ''}`}
   >
-    <path
-      fill="currentColor"
-      d="M0 16q0.064 0.128 0.16 0.352t0.48 0.928 0.832 1.344 1.248 1.536 1.664 1.696 2.144 1.568 2.624 1.344 3.136 0.896 3.712 0.352 3.712-0.352 3.168-0.928 2.592-1.312 2.144-1.6 1.664-1.632 1.248-1.6 0.832-1.312 0.48-0.928l0.16-0.352q-0.032-0.128-0.16-0.352t-0.48-0.896-0.832-1.344-1.248-1.568-1.664-1.664-2.144-1.568-2.624-1.344-3.136-0.896-3.712-0.352-3.712 0.352-3.168 0.896-2.592 1.344-2.144 1.568-1.664 1.664-1.248 1.568-0.832 1.344-0.48 0.928zM10.016 16q0-2.464 1.728-4.224t4.256-1.76 4.256 1.76 1.76 4.224-1.76 4.256-4.256 1.76-4.256-1.76-1.728-4.256zM12 16q0 1.664 1.184 2.848t2.816 1.152 2.816-1.152 1.184-2.848-1.184-2.816-2.816-1.184-2.816 1.184l2.816 2.816h-4z"
-    />
-  </svg>
+    <Eye className="h-[46%] w-[46%] text-emerald-300 drop-shadow-[0_0_14px_rgba(52,211,153,0.55)]" strokeWidth={2.25} aria-hidden />
+    <span className="pointer-events-none absolute bottom-1 left-0 right-0 text-center text-[6px] font-black uppercase tracking-[0.14em] text-emerald-400/95">
+      Envy
+    </span>
+  </div>
 );
 
 /** Distinct placeholder per curse card (SVG / Lucide). */
@@ -138,21 +141,124 @@ export const GreenEyedMonsterIcon: React.FC<{ className?: string }> = ({ classNa
 export function cursePowerIconClass(curseId: number): string {
   switch (curseId) {
     case CURSE_LUST:
-      return 'text-rose-500';
+      return 'text-pink-400';
     case CURSE_GLUTTONY:
-      return 'text-orange-500';
+      return 'text-orange-400';
     case CURSE_GREED:
-      return 'text-amber-400';
+      return 'text-yellow-400';
     case CURSE_PRIDE:
-      return 'text-violet-400';
+      return 'text-white';
     case CURSE_WRATH:
       return 'text-red-500';
     case CURSE_ENVY:
       return 'text-emerald-400';
     case CURSE_SLOTH:
-      return 'text-sky-300';
+      return 'text-sky-400';
     default:
-      return 'text-red-400';
+      return 'text-slate-400';
+  }
+}
+
+/** Border / text chrome for curse faces in {@link PowerCardVisual}. */
+export function curseFaceChrome(curseId: number): {
+  shell: string;
+  gloss: string;
+  title: string;
+  sin: string;
+  body: string;
+  footer: string;
+  iconRing: string;
+  tooltipBorder: string;
+} {
+  switch (curseId) {
+    case CURSE_LUST:
+      return {
+        shell: 'border-pink-600 text-pink-300 shadow-[0_0_40px_rgba(219,39,119,0.38)]',
+        gloss: 'from-pink-950/35 to-transparent',
+        title: 'border-pink-700 text-pink-200',
+        sin: 'text-pink-400',
+        body: 'text-pink-200/95',
+        footer: 'text-pink-400',
+        iconRing: 'border-pink-700 bg-black',
+        tooltipBorder: 'border-pink-600/55',
+      };
+    case CURSE_GLUTTONY:
+      return {
+        shell: 'border-orange-600 text-orange-300 shadow-[0_0_40px_rgba(234,88,12,0.35)]',
+        gloss: 'from-orange-950/35 to-transparent',
+        title: 'border-orange-700 text-orange-200',
+        sin: 'text-orange-400',
+        body: 'text-orange-200/95',
+        footer: 'text-orange-400',
+        iconRing: 'border-orange-700 bg-black',
+        tooltipBorder: 'border-orange-600/55',
+      };
+    case CURSE_GREED:
+      return {
+        shell: 'border-yellow-500 text-yellow-200 shadow-[0_0_40px_rgba(234,179,8,0.35)]',
+        gloss: 'from-yellow-950/35 to-transparent',
+        title: 'border-yellow-600 text-yellow-100',
+        sin: 'text-yellow-400',
+        body: 'text-yellow-100/95',
+        footer: 'text-yellow-400',
+        iconRing: 'border-yellow-600 bg-black',
+        tooltipBorder: 'border-yellow-500/55',
+      };
+    case CURSE_PRIDE:
+      return {
+        shell: 'border-white/80 text-slate-100 shadow-[0_0_36px_rgba(248,250,252,0.22)]',
+        gloss: 'from-slate-800/40 to-transparent',
+        title: 'border-white/50 text-white',
+        sin: 'text-slate-200',
+        body: 'text-slate-100/95',
+        footer: 'text-white',
+        iconRing: 'border-white/60 bg-black',
+        tooltipBorder: 'border-white/45',
+      };
+    case CURSE_WRATH:
+      return {
+        shell: 'border-red-600 text-red-300 shadow-[0_0_40px_rgba(220,38,38,0.4)]',
+        gloss: 'from-red-950/40 to-transparent',
+        title: 'border-red-800 text-red-200',
+        sin: 'text-red-400',
+        body: 'text-red-200/95',
+        footer: 'text-red-500',
+        iconRing: 'border-red-800 bg-black',
+        tooltipBorder: 'border-red-600/55',
+      };
+    case CURSE_ENVY:
+      return {
+        shell: 'border-emerald-500 text-emerald-200 shadow-[0_0_40px_rgba(16,185,129,0.38)]',
+        gloss: 'from-emerald-950/40 to-transparent',
+        title: 'border-emerald-700 text-emerald-100',
+        sin: 'text-emerald-400',
+        body: 'text-emerald-100/95',
+        footer: 'text-emerald-400',
+        iconRing: 'border-emerald-700 bg-black',
+        tooltipBorder: 'border-emerald-600/55',
+      };
+    case CURSE_SLOTH:
+      return {
+        shell: 'border-sky-500 text-sky-200 shadow-[0_0_40px_rgba(14,165,233,0.35)]',
+        gloss: 'from-sky-950/35 to-transparent',
+        title: 'border-sky-700 text-sky-100',
+        sin: 'text-sky-400',
+        body: 'text-sky-100/95',
+        footer: 'text-sky-400',
+        iconRing: 'border-sky-700 bg-black',
+        tooltipBorder: 'border-sky-600/55',
+      };
+    default:
+      return {
+        shell: 'border-red-900 text-red-400 shadow-[0_0_40px_rgba(127,29,29,0.35)]',
+        gloss: 'from-red-950/30 to-transparent',
+        title: 'border-red-800 text-red-300',
+        sin: 'text-red-500',
+        body: 'text-red-300/95',
+        footer: 'text-red-500',
+        iconRing: 'border-red-800 bg-black',
+        tooltipBorder: 'border-red-600/50',
+      };
   }
 }
 
@@ -170,7 +276,7 @@ export function CursePowerIcon({ curseId, className }: { curseId: number; classN
     case CURSE_WRATH:
       return <Swords className={cn} strokeWidth={2.2} aria-hidden />;
     case CURSE_ENVY:
-      return <GreenEyedMonsterIcon className={cn} aria-hidden />;
+      return <Eye className={cn} strokeWidth={2.35} aria-hidden />;
     case CURSE_SLOTH:
       return <Cloud className={cn} strokeWidth={1.85} aria-hidden />;
     default:
@@ -224,7 +330,7 @@ export interface CardVisualProps {
   /** Envy: playable coveted card glows green. */
   envyCovetedGlow?: boolean;
   /** Round-resolution visual: distinguish identity flip vs rank/suit reinforcement. */
-  resolutionMorph?: 'transform' | 'upgrade' | null;
+  resolutionMorph?: 'transform' | 'upgrade' | 'lustUpgrade' | null;
 }
 
 export const CardVisual: React.FC<CardVisualProps> = (props) => {
@@ -263,6 +369,16 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     popRef,
   );
   const { suit, value, isJoker } = useMemo(() => (revealed ? parseCard(card) : { suit: '', value: '', isJoker: false }), [card, revealed]);
+  const cardArt = useOptionalCardArt();
+  const useAssembledFace =
+    Boolean(
+      cardArt &&
+        cardArt.mode === 'raster' &&
+        revealed &&
+        isStandardSuitRasterCard(card) &&
+        !resolutionMorph,
+    );
+  const cardArtOverride = cardArt?.manifest[card];
 
   useEffect(() => {
     return () => {
@@ -282,9 +398,13 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     delay,
   });
 
-  const faceWrap = small
-    ? 'w-10 h-[5.5rem] sm:w-14 sm:h-[8.25rem] border-2 rounded-lg p-1.5'
-    : 'w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg p-2';
+  const faceWrap = useAssembledFace
+    ? small
+      ? 'w-10 sm:w-14 border-2 rounded-lg p-0'
+      : 'w-12 sm:w-24 border-2 rounded-lg p-0 sm:p-0'
+    : small
+      ? 'w-10 h-[5.5rem] sm:w-14 sm:h-[8.25rem] border-2 rounded-lg p-1.5'
+      : 'w-12 h-18 sm:w-24 sm:h-36 border-2 rounded-lg p-2';
   const cornerText = small ? 'text-xs sm:text-base' : 'text-sm sm:text-xl';
   const cornerGlyph = small ? 'w-4 h-4 sm:w-6 sm:h-6' : 'w-5 h-5 sm:w-8 sm:h-8';
   const centerGlyph = small ? 'w-12 h-12 sm:w-16 sm:h-16' : 'w-16 h-16 sm:w-24 sm:h-24';
@@ -388,11 +508,12 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         className={`
           ${faceWrap} shadow-xl flex flex-col justify-between overflow-hidden rounded-lg
           transition-[box-shadow] outline-none will-change-transform
-          ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
+          ${presentation === 'deckPull' || resolutionMorph === 'transform' || resolutionMorph === 'upgrade' || resolutionMorph === 'lustUpgrade' ? 'perspective-[900px] origin-bottom' : ''}
           ${isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
           ${selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
           ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
           ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
+          ${resolutionMorph === 'lustUpgrade' ? 'ring-2 ring-rose-400/90 shadow-[0_0_46px_rgba(251,113,133,0.58)]' : ''}
           ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}
           ${muted ? 'opacity-[0.42] saturate-[0.48] brightness-[0.88]' : ''}
           ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
@@ -407,7 +528,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       )}
       <motion.div
         key={`${resolutionMorph ?? 'idle'}-${card}`}
-        className={`relative z-[1] flex flex-1 flex-col justify-between overflow-hidden rounded-[inherit] ${small ? '' : 'min-h-[5.5rem] sm:min-h-[8.25rem]'}`}
+        className={`relative z-[1] flex flex-1 flex-col justify-between overflow-hidden rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : 'min-h-[5.5rem] sm:min-h-[8.25rem]'}`}
         style={{ transformStyle: 'preserve-3d' }}
         animate={
           resolutionMorph === 'transform'
@@ -421,18 +542,37 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
                   'brightness(1)',
                 ],
               }
-            : resolutionMorph === 'upgrade'
-              ? { rotate: [0, -14, 10, -7, 0], x: [0, -10, 8, -4, 0], scale: [1, 1.04, 0.94, 1.06, 1] }
-              : {}
+            : resolutionMorph === 'lustUpgrade'
+              ? {
+                  rotate: [0, -12, 11, -8, 0],
+                  x: [0, -11, 9, -5, 0],
+                  scale: [1, 1.045, 0.93, 1.065, 1],
+                  filter: [
+                    'brightness(1)',
+                    'brightness(1.06)',
+                    'brightness(1.14)',
+                    'brightness(1.08)',
+                    'brightness(1)',
+                  ],
+                }
+              : resolutionMorph === 'upgrade'
+                ? { rotate: [0, -14, 10, -7, 0], x: [0, -10, 8, -4, 0], scale: [1, 1.04, 0.94, 1.06, 1] }
+                : {}
         }
         transition={
           resolutionMorph === 'transform'
             ? { duration: 0.92, times: [0, 0.48, 0.52, 1], ease: [0.22, 1, 0.36, 1] }
-            : resolutionMorph === 'upgrade'
-              ? { duration: 0.36, ease: [0.22, 1, 0.36, 1] }
+            : resolutionMorph === 'lustUpgrade' || resolutionMorph === 'upgrade'
+              ? { duration: 0.48, ease: [0.22, 1, 0.36, 1] }
               : { duration: 0 }
         }
       >
+        {useAssembledFace ? (
+          <div className="relative z-[1] h-full w-full min-h-0 overflow-hidden rounded-[inherit]">
+            <ScaledAssembledCardFace card={card} override={cardArtOverride} />
+          </div>
+        ) : (
+        <>
         <div className={`relative z-[2] flex flex-col items-start leading-[0.9] ${SUIT_COLORS[suit] ?? 'text-red-400'}`}>
           {isGrovelsSuit ? (
             <span
@@ -484,6 +624,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
             </>
           )}
         </div>
+        </>
+        )}
       </motion.div>
       </motion.div>
 
@@ -558,13 +700,16 @@ export const PowerCardVisual: React.FC<{
       : small
         ? 'w-18 h-28 text-[9px] p-3'
         : 'w-52 h-80 sm:w-64 sm:h-96 text-[12px] p-3';
+  const curseChrome = curseDef ? curseFaceChrome(cardId) : null;
   const titleClassPanel =
     'text-[7px] sm:text-[8px] leading-tight line-clamp-3 break-words hyphens-auto text-center normal-case px-0.5 w-full min-h-[2.75rem] flex items-center justify-center border-b pb-1.5 font-bold tracking-tight';
   const titleClassPanelStd = `${titleClassPanel} border-slate-800/70 text-slate-800`;
   const titleClassPanelCurse = `${titleClassPanel} border-red-800/70 text-red-200`;
   const titleClassDefault = `font-black border-b-2 w-full pb-1 px-1 uppercase tracking-tighter leading-[0.9] ${matchHandCard ? 'text-[6px] sm:text-[7px] border-b border-slate-700/60 pb-0.5' : small ? 'text-[8px]' : 'text-[18px] sm:text-[32px]'}`;
   const titleClassDefaultStd = `${titleClassDefault} border-slate-800 text-slate-800`;
-  const titleClassDefaultCurse = `${titleClassDefault} border-red-800 text-red-300`;
+  const titleClassDefaultCurse = curseChrome
+    ? `${titleClassDefault} ${curseChrome.title}`
+    : `${titleClassDefault} border-red-800 text-red-300`;
 
   if (!curseDef && !card) {
     return (
@@ -626,12 +771,10 @@ export const PowerCardVisual: React.FC<{
   }
 
   const faceBorder = matchHandCard ? 'border-2' : 'border-4';
-  const faceShell = curseDef
-    ? `bg-zinc-950 ${faceBorder} border-red-900 text-red-400 ${matchHandCard ? 'shadow-lg' : 'shadow-[0_0_40px_rgba(127,29,29,0.35)]'}`
+  const faceShell = curseChrome
+    ? `bg-zinc-950 ${faceBorder} ${curseChrome.shell} ${matchHandCard ? 'shadow-lg' : ''}`
     : `bg-slate-50 ${faceBorder} border-slate-800 text-slate-800`;
-  const gloss = curseDef
-    ? 'from-red-950/30 to-transparent'
-    : 'from-white/20 to-slate-900/5';
+  const gloss = curseChrome ? curseChrome.gloss : 'from-white/20 to-slate-900/5';
 
   const canLiftOnHover = !curseRackPeek && !disabled;
 
@@ -667,13 +810,23 @@ export const PowerCardVisual: React.FC<{
 
       <div className={`flex flex-col items-center gap-0.5 z-10 w-full min-w-0 ${panel ? 'mb-0' : matchHandCard ? 'mb-0' : 'mb-1'}`}>
         <span
-          className={`line-clamp-2 ${curseDef ? (panel ? titleClassPanelCurse : titleClassDefaultCurse) : panel ? titleClassPanelStd : titleClassDefaultStd}`}
+          className={`line-clamp-2 ${
+            curseDef
+              ? panel
+                ? curseChrome
+                  ? `${titleClassPanel} ${curseChrome.title}`
+                  : titleClassPanelCurse
+                : titleClassDefaultCurse
+              : panel
+                ? titleClassPanelStd
+                : titleClassDefaultStd
+          }`}
         >
           {curseDef ? curseDef.name : card!.name}
         </span>
         {!small && !panel && !matchHandCard && (
           <span
-            className={`font-mono font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70 mt-1 ${curseDef ? 'text-red-500' : 'text-slate-400'}`}
+            className={`font-mono font-bold italic text-[6px] sm:text-[9px] tracking-[0.2em] uppercase opacity-70 mt-1 ${curseChrome ? curseChrome.sin : 'text-slate-400'}`}
           >
             {curseDef ? curseDef.sin : 'Power card'}
           </span>
@@ -681,7 +834,7 @@ export const PowerCardVisual: React.FC<{
       </div>
 
       <div
-        className={`z-10 shrink-0 rounded-full border-2 shadow-xl ${curseRackPeek || matchHandCard ? '' : 'group-hover:scale-105'} transition-transform ${panel ? 'p-2 my-1' : matchHandCard ? 'p-0.5 my-0.5' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : matchHandCard ? '' : 'my-2'} ${curseDef ? 'bg-black border-red-800' : 'bg-slate-900 border-slate-800'}`}
+        className={`z-10 shrink-0 rounded-full border-2 shadow-xl ${curseRackPeek || matchHandCard ? '' : 'group-hover:scale-105'} transition-transform ${panel ? 'p-2 my-1' : matchHandCard ? 'p-0.5 my-0.5' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : matchHandCard ? '' : 'my-2'} ${curseChrome ? `${curseChrome.iconRing}` : 'bg-slate-900 border-slate-800'}`}
       >
         {curseDef ? (
           <CursePowerIcon
@@ -698,15 +851,15 @@ export const PowerCardVisual: React.FC<{
       </div>
 
       <div
-        className={`font-bold leading-snug z-10 w-full px-2 mt-auto ${curseDef ? 'text-red-200' : 'text-slate-700'} ${panel || small || matchHandCard ? 'hidden' : 'block'}`}
+        className={`font-bold leading-snug z-10 w-full px-2 mt-auto ${curseChrome ? curseChrome.body : 'text-slate-700'} ${panel || small || matchHandCard ? 'hidden' : 'block'}`}
       >
-        <p className={`font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em] ${curseDef ? 'text-red-300/95' : 'text-slate-500'}`}>
+        <p className={`font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em] ${curseChrome ? curseChrome.body : 'text-slate-500'}`}>
           {curseDef ? curseDef.description : card!.description}
         </p>
       </div>
 
       <div
-        className={`mt-auto font-black uppercase tracking-[0.3em] ${curseDef ? 'text-red-500' : 'text-slate-400'} ${panel || small || matchHandCard ? 'hidden' : 'block pt-3 text-[8px] sm:text-[10px]'}`}
+        className={`mt-auto font-black uppercase tracking-[0.3em] ${curseChrome ? curseChrome.footer : 'text-slate-400'} ${panel || small || matchHandCard ? 'hidden' : 'block pt-3 text-[8px] sm:text-[10px]'}`}
       >
         {curseDef ? 'Curse' : `${cardId} / 21`}
       </div>
@@ -718,7 +871,7 @@ export const PowerCardVisual: React.FC<{
             ref={popRef}
             style={tooltipStyle}
             className={`rounded-xl px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${
-              curseDef ? 'border border-red-600/50 bg-zinc-950/98' : 'border border-yellow-500/40 bg-slate-950/98'
+              curseChrome ? `border bg-zinc-950/98 ${curseChrome.tooltipBorder}` : 'border border-yellow-500/40 bg-slate-950/98'
             } ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
             aria-hidden={!tipOpen}
           >
