@@ -57,6 +57,10 @@ export const DEFAULT_PIP_GRIDS: Record<string, PipGridCell[]> = {
     N(0.56, 0.62),
     N(0.42, 0.84),
   ],
+  /** Single centre pip — large suit glyph; picture file overrides via asset name if present. */
+  A: [N(0.5, 0.5)],
+  /** Lust God of Hearts — same layout as Ace. */
+  G: [N(0.5, 0.5)],
 };
 
 export function defaultPipCellsForRank(rank: string): PipGridCell[] | null {

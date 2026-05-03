@@ -34,7 +34,8 @@ import {
 } from 'lucide-react';
 import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide, type PresentationPace } from '../animations/cardMotion';
 import { useOptionalCardArt } from '../cardArt/cardArtContext';
-import { isStandardSuitRasterCard } from '../cardArt/standardSuit';
+import { isAssembledRasterCardId } from '../cardArt/assembledRaster';
+import { cardArtAssetUrl } from '../cardArt/paths';
 import { ScaledAssembledCardFace } from '../cardArt/ScaledAssembledCardFace';
 import {
   CURSES,
@@ -370,15 +371,17 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   );
   const { suit, value, isJoker } = useMemo(() => (revealed ? parseCard(card) : { suit: '', value: '', isJoker: false }), [card, revealed]);
   const cardArt = useOptionalCardArt();
-  const useAssembledFace =
-    Boolean(
-      cardArt &&
-        cardArt.mode === 'raster' &&
-        revealed &&
-        isStandardSuitRasterCard(card) &&
-        !resolutionMorph,
-    );
   const cardArtOverride = cardArt?.manifest[card];
+  const hasCustomRasterFace = Boolean(
+    cardArtOverride?.customDataUrl || (cardArtOverride?.customImageFile && cardArtOverride.customImageFile.trim()),
+  );
+  const useAssembledFace = Boolean(
+    cardArt &&
+      cardArt.mode === 'raster' &&
+      revealed &&
+      !resolutionMorph &&
+      (hasCustomRasterFace || isAssembledRasterCardId(card)),
+  );
 
   useEffect(() => {
     return () => {
@@ -412,10 +415,36 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   if (!revealed) {
     const isPredator = role === 'Predator';
     const isPreydator = role === 'Preydator';
+    const backKey = isPredator
+      ? 'back-predator'
+      : isPreydator
+        ? 'back-preydator'
+        : role === 'Prey'
+          ? 'back-prey'
+          : 'back-deck';
+    const backOv = cardArt?.manifest[backKey];
+    const backRasterUrl =
+      cardArt?.mode === 'raster' && backOv
+        ? backOv.customDataUrl ??
+          (backOv.customImageFile?.trim() ? cardArtAssetUrl(backOv.customImageFile.trim()) : null)
+        : null;
     let backClasses = 'bg-blue-950 border-blue-800/80 text-blue-500 bg-[radial-gradient(circle_at_center,#172554_1px,transparent_1px)] bg-[size:8px_8px]';
     if (isPredator) backClasses = 'bg-red-950 border-red-800/80 text-red-500 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:8px_8px]';
     else if (isPreydator) backClasses = 'bg-purple-950 border-purple-800/80 text-purple-500 bg-[radial-gradient(circle_at_center,#3b0764_1px,transparent_1px)] bg-[size:8px_8px]';
     const backSizing = small ? 'w-9 h-[4.75rem] sm:w-12 sm:h-[7.25rem]' : 'w-10 h-14 sm:w-16 sm:h-24';
+    if (backRasterUrl) {
+      return (
+        <motion.div
+          layout
+          {...entrance}
+          transition={{ type: 'spring', stiffness: 720, damping: 38 }}
+          whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
+          className={`${backSizing} relative overflow-hidden rounded-lg shadow-xl flex items-center justify-center border-2 transition-colors border-gray-700`}
+        >
+          <img src={backRasterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+        </motion.div>
+      );
+    }
     return (
       <motion.div
         layout
@@ -680,6 +709,7 @@ export const PowerCardVisual: React.FC<{
   staticBackdrop = false,
   curseRackPeek = false,
 }) => {
+  const cardArtPower = useOptionalCardArt();
   const curseDef = isCurseCardId(cardId) ? CURSES[cardId] : undefined;
   const card = curseDef ? null : MAJOR_ARCANA[cardId];
   const tip = curseDef
@@ -720,6 +750,14 @@ export const PowerCardVisual: React.FC<{
       </div>
     );
   }
+
+  const powerManifestKey = curseDef ? `curse-${cardId}` : `power-${cardId}`;
+  const powerManifestOv = cardArtPower?.manifest[powerManifestKey];
+  const customPowerFaceUrl =
+    powerManifestOv?.customDataUrl ??
+    (powerManifestOv?.customImageFile?.trim()
+      ? cardArtAssetUrl(powerManifestOv.customImageFile.trim())
+      : null);
 
   if (!revealed) {
     const backW = matchHandCard
@@ -778,6 +816,90 @@ export const PowerCardVisual: React.FC<{
 
   const canLiftOnHover = !curseRackPeek && !disabled;
 
+  const powerShellClass = `${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between ${matchHandCard ? 'overflow-hidden' : 'overflow-visible'} ${faceShell} ${selected ? `${matchHandCard ? 'ring-2 ring-yellow-400' : 'ring-4 ring-yellow-400'} border-yellow-500` : ''} ${curseRackPeek ? 'cursor-help' : disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`;
+
+  if (cardArtPower?.mode === 'raster' && customPowerFaceUrl) {
+    return (
+      <motion.div
+        ref={rootRef}
+        layout
+        title={tip}
+        tabIndex={curseRackPeek ? 0 : undefined}
+        whileHover={
+          canLiftOnHover
+            ? matchHandCard
+              ? { y: -6, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
+              : { scale: panel ? 1.05 : small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } }
+            : {}
+        }
+        onMouseEnter={() => {
+          if (!(curseRackPeek || !disabled || destroyed) || !tip) return;
+          setTipOpen(true);
+        }}
+        onMouseLeave={() => setTipOpen(false)}
+        onFocus={() => {
+          if (!(curseRackPeek || !disabled || destroyed) || !tip) return;
+          setTipOpen(true);
+        }}
+        onBlur={() => setTipOpen(false)}
+        onClick={curseRackPeek ? undefined : onClick}
+        className={powerShellClass}
+      >
+        <img
+          src={customPowerFaceUrl}
+          alt=""
+          draggable={false}
+          className={`absolute inset-0 z-[25] h-full w-full object-cover ${matchHandCard ? 'rounded-md' : 'rounded-2xl'}`}
+        />
+        {(curseRackPeek || !disabled || destroyed) &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              ref={popRef}
+              style={tooltipStyle}
+              className={`rounded-xl px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${
+                curseChrome ? `border bg-zinc-950/98 ${curseChrome.tooltipBorder}` : 'border border-yellow-500/40 bg-slate-950/98'
+              } ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+              aria-hidden={!tipOpen}
+            >
+              <div className="flex gap-3 items-start text-left">
+                <div className={`shrink-0 rounded-lg p-2 border ${curseDef ? 'bg-black border-red-900' : 'bg-slate-900 border-slate-700'}`}>
+                  {curseDef ? (
+                    <CursePowerIcon
+                      curseId={cardId}
+                      className={`h-[26px] w-[26px] ${cursePowerIconClass(cardId)}`}
+                    />
+                  ) : (
+                    <MajorArcanaIconGlyph
+                      iconName={card!.icon}
+                      className="text-yellow-400"
+                      size={panel ? 24 : small ? 20 : 26}
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p
+                    className={`font-black text-[11px] uppercase tracking-wide border-b pb-1 mb-1.5 ${
+                      curseDef ? 'text-red-400 border-red-600/30' : 'text-yellow-400/95 border-yellow-500/25'
+                    }`}
+                  >
+                    {curseDef ? curseDef.name : card!.name}
+                  </p>
+                  <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{curseDef ? curseDef.description : card!.description}</p>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
+        {destroyed && small && (
+          <span className="absolute bottom-0 left-0 right-0 text-[5px] font-black uppercase tracking-tighter text-center text-orange-100 bg-black/60 py-0.5 pointer-events-none z-[60]">
+            Blocked
+          </span>
+        )}
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       ref={rootRef}
@@ -802,7 +924,7 @@ export const PowerCardVisual: React.FC<{
       }}
       onBlur={() => setTipOpen(false)}
       onClick={curseRackPeek ? undefined : onClick}
-      className={`${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between ${matchHandCard ? 'overflow-hidden' : 'overflow-visible'} ${faceShell} ${selected ? `${matchHandCard ? 'ring-2 ring-yellow-400' : 'ring-4 ring-yellow-400'} border-yellow-500` : ''} ${curseRackPeek ? 'cursor-help' : disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`}
+      className={powerShellClass}
     >
       <div
         className={`absolute top-0 left-0 w-full h-full bg-linear-to-b ${gloss} pointer-events-none ${matchHandCard ? 'rounded-md' : 'rounded-[13px]'} overflow-hidden`}

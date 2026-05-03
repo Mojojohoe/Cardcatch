@@ -8,6 +8,10 @@ import { defaultPipCellsForRank } from '../cardArt/pipLayouts';
 import { cyclePipAtCell } from '../cardArt/resolveCardArt';
 import { ScaledAssembledCardFace } from '../cardArt/ScaledAssembledCardFace';
 import { cardArtAssetUrl } from '../cardArt/paths';
+import { isAssembledRasterCardId } from '../cardArt/assembledRaster';
+import { PowerCardVisual } from '../components/GameVisuals';
+import { WRATH_MINION_BY_ROUND } from '../services/gameService';
+import { CURSE_IDS } from '../curses';
 
 const ALL_SUIT_CARDS: string[] = [];
 for (const s of SUITS) {
@@ -16,10 +20,30 @@ for (const s of SUITS) {
   }
 }
 
-const SHARED_RANK_OPTIONS = VALUES.filter((v) => !['J', 'Q', 'K'].includes(v));
+const EXTENDED_SUIT_CARDS: string[] = [];
+for (const s of ['Stars', 'Moons', 'Frogs', 'Coins', 'Bones'] as const) {
+  for (const v of VALUES) {
+    EXTENDED_SUIT_CARDS.push(`${s}-${v}`);
+  }
+}
 
-function splitCardId(id: string): { suit: string; value: string } {
+const SPECIAL_PLAYING = ['Hearts-G', 'Crowns-E', 'Grovels-1', ...WRATH_MINION_BY_ROUND.map((r) => r.id)];
+
+const JOKER_CARDS = ['Joker-1', 'Joker-2'] as const;
+
+const POWER_MANIFEST_KEYS = Array.from({ length: 22 }, (_, i) => `power-${i}` as const);
+const CURSE_MANIFEST_KEYS = CURSE_IDS.map((id) => `curse-${id}` as const);
+const BACK_MANIFEST_KEYS = ['back-prey', 'back-predator', 'back-preydator', 'back-deck'] as const;
+
+/** Ranks 2…A and God of Hearts (G) for shared layouts + scale ranges. */
+const SHARED_RANK_OPTIONS = [...VALUES, 'G'].filter((v) => !['J', 'Q', 'K'].includes(v));
+
+const RANK_RANGE_OPTIONS = [...VALUES, 'G'];
+
+function trySplitPlaying(id: string): { suit: string; value: string } | null {
+  if (id.startsWith('power-') || id.startsWith('curse-') || id.startsWith('back-')) return null;
   const i = id.indexOf('-');
+  if (i <= 0) return null;
   return { suit: id.slice(0, i), value: id.slice(i + 1) };
 }
 
@@ -108,7 +132,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const [sharedRank, setSharedRank] = useState<string>('2');
 
-  const p = useMemo(() => splitCardId(selected), [selected]);
+  const playingParts = useMemo(() => trySplitPlaying(selected), [selected]);
 
   useEffect(() => {
     const m = manifest[selected];
@@ -136,7 +160,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 
   const pipRank =
-    p.value === 'A' || p.value === 'J' || p.value === 'Q' || p.value === 'K' ? null : p.value;
+    playingParts && !['J', 'Q', 'K'].includes(playingParts.value) ? playingParts.value : null;
 
   const cardGridSlots: PipSlot[] = useMemo(() => {
     if (pipRank === null) return [];
@@ -150,12 +174,24 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     return (defaultPipCellsForRank(sharedRank) ?? []).map((s) => ({ ...s, o: s.o ?? 0 }));
   }, [draftDefaults.sharedPipLayoutByRank, sharedRank]);
 
+  const showPipGridTab = isAssembledRasterCardId(selected) && pipRank !== null;
+
+  const previewPowerId = selected.startsWith('power-') ? Number(selected.slice(6)) : NaN;
+  const previewCurseId = selected.startsWith('curse-') ? Number(selected.slice(6)) : NaN;
+  const previewIsBack = selected.startsWith('back-');
+
   const handleSaveCard = () => {
     const clean: CardArtOverride = {};
     if (draft?.customDataUrl) clean.customDataUrl = draft.customDataUrl;
     if (draft?.customImageFile?.trim()) clean.customImageFile = draft.customImageFile.trim();
     if (draft?.pipGrid?.length) clean.pipGrid = draft.pipGrid;
-    if (!clean.customDataUrl && !clean.customImageFile && !clean.pipGrid?.length) {
+    if (draft?.backgroundOnly) clean.backgroundOnly = true;
+    if (
+      !clean.customDataUrl &&
+      !clean.customImageFile &&
+      !clean.pipGrid?.length &&
+      !clean.backgroundOnly
+    ) {
       updateOverride(selected, null);
     } else {
       updateOverride(selected, clean);
@@ -237,19 +273,83 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               Defaults
             </button>
           </div>
-          <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Suit cards</p>
-          <div className="flex flex-col gap-0.5">
-            {ALL_SUIT_CARDS.map((id) => (
+          <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Standard suits</p>
+          <div className="mb-3 flex flex-col gap-0.5">
+            {ALL_SUIT_CARDS.map((rowId) => (
               <button
-                key={id}
+                key={rowId}
                 type="button"
-                onClick={() => setSelected(id)}
+                onClick={() => setSelected(rowId)}
                 className={`rounded px-2 py-1.5 text-left text-[10px] font-mono ${
-                  selected === id ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+                  selected === rowId ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
                 }`}
               >
-                {id}
-                {manifest[id] ? ' *' : ''}
+                {rowId}
+                {manifest[rowId] ? ' *' : ''}
+              </button>
+            ))}
+          </div>
+          <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Special & extended</p>
+          <div className="mb-3 flex max-h-36 flex-col gap-0.5 overflow-y-auto">
+            {SPECIAL_PLAYING.map((rowId) => (
+              <button
+                key={rowId}
+                type="button"
+                onClick={() => setSelected(rowId)}
+                className={`rounded px-2 py-1.5 text-left text-[10px] font-mono ${
+                  selected === rowId ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                {rowId}
+                {manifest[rowId] ? ' *' : ''}
+              </button>
+            ))}
+          </div>
+          <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Stars · Moons · Frogs · Coins · Bones</p>
+          <div className="mb-3 flex max-h-36 flex-col gap-0.5 overflow-y-auto">
+            {EXTENDED_SUIT_CARDS.map((rowId) => (
+              <button
+                key={rowId}
+                type="button"
+                onClick={() => setSelected(rowId)}
+                className={`rounded px-2 py-1.5 text-left text-[10px] font-mono ${
+                  selected === rowId ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                {rowId}
+                {manifest[rowId] ? ' *' : ''}
+              </button>
+            ))}
+          </div>
+          <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Jokers</p>
+          <div className="mb-3 flex flex-col gap-0.5">
+            {JOKER_CARDS.map((rowId) => (
+              <button
+                key={rowId}
+                type="button"
+                onClick={() => setSelected(rowId)}
+                className={`rounded px-2 py-1.5 text-left text-[10px] font-mono ${
+                  selected === rowId ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                {rowId}
+                {manifest[rowId] ? ' *' : ''}
+              </button>
+            ))}
+          </div>
+          <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Power · curse · backs</p>
+          <div className="flex max-h-44 flex-col gap-0.5 overflow-y-auto">
+            {[...POWER_MANIFEST_KEYS, ...CURSE_MANIFEST_KEYS, ...BACK_MANIFEST_KEYS].map((rowId) => (
+              <button
+                key={rowId}
+                type="button"
+                onClick={() => setSelected(rowId)}
+                className={`rounded px-2 py-1.5 text-left text-[10px] font-mono ${
+                  selected === rowId ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                {rowId}
+                {manifest[rowId] ? ' *' : ''}
               </button>
             ))}
           </div>
@@ -288,7 +388,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </button>
                 <button
                   type="button"
-                  disabled={pipRank === null}
+                  disabled={!showPipGridTab}
                   onClick={() => setCardTab('pips')}
                   className={`flex items-center gap-1 rounded border px-3 py-2 text-[11px] font-bold uppercase disabled:opacity-40 ${
                     cardTab === 'pips' ? 'border-emerald-600 bg-emerald-950/60 text-emerald-200' : 'border-slate-700'
@@ -302,15 +402,61 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div className="w-[200px] shrink-0">
                   <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Preview</p>
                   <div className="overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
-                    <ScaledAssembledCardFace card={selected} override={draft ?? undefined} />
+                    {Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
+                      <PowerCardVisual cardId={previewPowerId} small matchHandCard revealed curseRackPeek />
+                    ) : Number.isFinite(previewCurseId) && selected.startsWith('curse-') ? (
+                      <PowerCardVisual cardId={previewCurseId} small matchHandCard revealed curseRackPeek />
+                    ) : previewIsBack ? (
+                      <div
+                        className="flex w-full items-center justify-center bg-zinc-900 text-[10px] text-slate-500"
+                        style={{ aspectRatio: '24 / 37' }}
+                      >
+                        {draft?.customDataUrl ? (
+                          <img src={draft.customDataUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+                        ) : draft?.customImageFile?.trim() ? (
+                          <img
+                            src={cardArtAssetUrl(draft.customImageFile.trim())}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            draggable={false}
+                          />
+                        ) : (
+                          <span className="p-4 text-center">Upload or file path — keys like back-prey</span>
+                        )}
+                      </div>
+                    ) : (
+                      <ScaledAssembledCardFace card={selected} override={draft ?? undefined} />
+                    )}
                   </div>
                 </div>
 
                 <div className="min-w-0 flex-1 space-y-4">
                   {cardTab === 'info' && (
-                    <div className="text-sm text-slate-400">
-                      Global defaults apply unless this card has overrides. Uses{' '}
-                      <code className="text-slate-300">CardBasicLight</code> / suit backgrounds / shared layouts from Defaults.
+                    <div className="space-y-4 text-sm text-slate-400">
+                      <p>
+                        Global defaults apply unless this card has overrides. Uses{' '}
+                        <code className="text-slate-300">CardBasicLight</code> / suit backgrounds / shared layouts from Defaults.
+                      </p>
+                      <label className="flex cursor-pointer items-start gap-2 text-[12px]">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(draft?.backgroundOnly)}
+                          onChange={(e) =>
+                            setDraft((prev) => {
+                              const base = { ...(prev ?? {}) };
+                              if (e.target.checked) base.backgroundOnly = true;
+                              else delete base.backgroundOnly;
+                              return Object.keys(base).length ? base : null;
+                            })
+                          }
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="font-bold text-slate-300">Background only</span> — hide corner index and centre pips
+                          / art; show only the face background (and optional solid underlay from Defaults). Use when your
+                          background image already includes the full design.
+                        </span>
+                      </label>
                     </div>
                   )}
                   {cardTab === 'upload' && (
@@ -414,7 +560,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       : 'border-slate-700'
                   }`}
                 >
-                  <SlidersHorizontal className="h-3.5 w-3.5" /> Pip size ranges
+                  <SlidersHorizontal className="h-3.5 w-3.5" /> Scales & corners
                 </button>
                 <button
                   type="button"
@@ -433,11 +579,28 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div className="w-[200px] shrink-0">
                   <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Preview ({selected})</p>
                   <div className="overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
-                    <ScaledAssembledCardFace
-                      card={selected}
-                      override={manifest[selected]}
-                      previewDefaults={draftDefaults}
-                    />
+                    {isAssembledRasterCardId(selected) ? (
+                      <ScaledAssembledCardFace
+                        card={selected}
+                        override={manifest[selected]}
+                        previewDefaults={draftDefaults}
+                      />
+                    ) : Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
+                      <PowerCardVisual cardId={previewPowerId} small matchHandCard revealed curseRackPeek />
+                    ) : Number.isFinite(previewCurseId) && selected.startsWith('curse-') ? (
+                      <PowerCardVisual cardId={previewCurseId} small matchHandCard revealed curseRackPeek />
+                    ) : previewIsBack ? (
+                      <div
+                        className="flex w-full items-center justify-center bg-zinc-900 text-[9px] text-slate-500"
+                        style={{ aspectRatio: '24 / 37' }}
+                      >
+                        Deck / role back art
+                      </div>
+                    ) : (
+                      <div className="flex aspect-[24/37] items-center justify-center p-2 text-center text-[10px] text-slate-500">
+                        Select a playing card, joker, or power id for preview.
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -467,14 +630,68 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           />
                         </label>
                       ))}
+                      <p className="pt-2 text-[10px] font-black uppercase text-slate-500">Extra suits &amp; joker</p>
+                      {(['Stars', 'Moons', 'Frogs', 'Coins', 'Bones', 'Crowns', 'Grovels', 'Swords', 'Joker'] as const).map(
+                        (suit) => (
+                          <label key={suit} className="flex flex-col gap-1 text-[11px]">
+                            <span className="font-bold text-slate-300">{suit}</span>
+                            <input
+                              value={draftDefaults.suitBackgroundFile?.[suit] ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  suitBackgroundFile: {
+                                    ...prev.suitBackgroundFile,
+                                    [suit]: v.trim() || undefined,
+                                  },
+                                }));
+                              }}
+                              placeholder={`${suit} face stem`}
+                              className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs"
+                            />
+                          </label>
+                        ),
+                      )}
+                      <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(draftDefaults.backgroundOnly)}
+                          onChange={(e) =>
+                            setDraftDefaults((prev) => {
+                              const next = { ...prev };
+                              if (e.target.checked) next.backgroundOnly = true;
+                              else delete next.backgroundOnly;
+                              return next;
+                            })
+                          }
+                          className="mt-0.5"
+                        />
+                        <span>
+                          Default to <strong className="text-slate-300">background-only</strong> faces (no corners / centre
+                          art).
+                        </span>
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px]">
+                        <span className="font-bold text-slate-300">Solid underlay (behind transparent PNG)</span>
+                        <input
+                          value={draftDefaults.faceUnderlayColor ?? '#000000'}
+                          onChange={(e) =>
+                            setDraftDefaults((prev) => ({ ...prev, faceUnderlayColor: e.target.value || '#000000' }))
+                          }
+                          className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs"
+                        />
+                      </label>
                     </div>
                   )}
 
                   {defaultsTab === 'pipScale' && (
-                    <div className="space-y-3">
-                      <p className="text-xs text-slate-400">
-                        Ranks use deck order (2…A). Later rows override earlier if ranges overlap.
-                      </p>
+                    <div className="space-y-6">
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Centre pip scale</p>
+                        <p className="mb-2 text-xs text-slate-400">
+                          Large suit symbols in the court. Ranks 2…A and G. Later rows win on overlap.
+                        </p>
                       {(draftDefaults.pipScaleRanges ?? []).map((row, idx) => (
                         <div key={idx} className="flex flex-wrap items-end gap-2">
                           <label className="text-[10px] uppercase text-slate-500">
@@ -488,7 +705,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                               }}
                               className="ml-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
                             >
-                              {VALUES.map((v) => (
+                              {RANK_RANGE_OPTIONS.map((v) => (
                                 <option key={v} value={v}>
                                   {v}
                                 </option>
@@ -506,7 +723,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                               }}
                               className="ml-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
                             >
-                              {VALUES.map((v) => (
+                              {RANK_RANGE_OPTIONS.map((v) => (
                                 <option key={v} value={v}>
                                   {v}
                                 </option>
@@ -552,8 +769,160 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           }))
                         }
                       >
-                        Add range
+                        Add pip range
                       </button>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Corner notifier scale</p>
+                        <p className="mb-2 text-xs text-slate-400">
+                          Rank numeral + small suit next to it — independent from centre pips.
+                        </p>
+                        {(draftDefaults.notifierScaleRanges ?? []).map((row, idx) => (
+                          <div key={idx} className="mb-2 flex flex-wrap items-end gap-2">
+                            <label className="text-[10px] uppercase text-slate-500">
+                              From
+                              <select
+                                value={row.from}
+                                onChange={(e) => {
+                                  const ranges = [...(draftDefaults.notifierScaleRanges ?? [])];
+                                  ranges[idx] = { ...ranges[idx], from: e.target.value };
+                                  setDraftDefaults((p) => ({ ...p, notifierScaleRanges: ranges }));
+                                }}
+                                className="ml-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                              >
+                                {RANK_RANGE_OPTIONS.map((v) => (
+                                  <option key={v} value={v}>
+                                    {v}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="text-[10px] uppercase text-slate-500">
+                              To
+                              <select
+                                value={row.to}
+                                onChange={(e) => {
+                                  const ranges = [...(draftDefaults.notifierScaleRanges ?? [])];
+                                  ranges[idx] = { ...ranges[idx], to: e.target.value };
+                                  setDraftDefaults((p) => ({ ...p, notifierScaleRanges: ranges }));
+                                }}
+                                className="ml-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                              >
+                                {RANK_RANGE_OPTIONS.map((v) => (
+                                  <option key={v} value={v}>
+                                    {v}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="text-[10px] uppercase text-slate-500">
+                              Scale
+                              <input
+                                type="number"
+                                step={0.05}
+                                min={0.25}
+                                max={3}
+                                value={row.scale}
+                                onChange={(e) => {
+                                  const ranges = [...(draftDefaults.notifierScaleRanges ?? [])];
+                                  ranges[idx] = { ...ranges[idx], scale: Number(e.target.value) || 1 };
+                                  setDraftDefaults((p) => ({ ...p, notifierScaleRanges: ranges }));
+                                }}
+                                className="ml-1 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="rounded border border-rose-900 px-2 py-1 text-[10px] uppercase text-rose-400"
+                              onClick={() => {
+                                const ranges = [...(draftDefaults.notifierScaleRanges ?? [])];
+                                ranges.splice(idx, 1);
+                                setDraftDefaults((p) => ({ ...p, notifierScaleRanges: ranges }));
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="rounded border border-slate-600 px-3 py-1.5 text-[11px] font-bold uppercase text-slate-300"
+                          onClick={() =>
+                            setDraftDefaults((p) => ({
+                              ...p,
+                              notifierScaleRanges: [...(p.notifierScaleRanges ?? []), { from: '2', to: '10', scale: 1 }],
+                            }))
+                          }
+                        >
+                          Add notifier range
+                        </button>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Corner text position</p>
+                        <p className="mb-2 text-xs text-slate-400">
+                          Offsets are % of card width (horizontal) and height (vertical). Applied to both corners.
+                        </p>
+                        <div className="flex flex-wrap gap-3">
+                          <label className="text-[11px] text-slate-400">
+                            Text scale
+                            <input
+                              type="number"
+                              step={0.05}
+                              min={0.25}
+                              max={3}
+                              value={draftDefaults.cornerText?.scale ?? 1}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  cornerText: {
+                                    ...prev.cornerText,
+                                    scale: Number(e.target.value) || 1,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                          <label className="text-[11px] text-slate-400">
+                            Offset X %
+                            <input
+                              type="number"
+                              step={0.5}
+                              value={draftDefaults.cornerText?.offsetLeftXPct ?? 0}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  cornerText: {
+                                    ...prev.cornerText,
+                                    offsetLeftXPct: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                          <label className="text-[11px] text-slate-400">
+                            Offset Y %
+                            <input
+                              type="number"
+                              step={0.5}
+                              value={draftDefaults.cornerText?.offsetTopYPct ?? 0}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  cornerText: {
+                                    ...prev.cornerText,
+                                    offsetTopYPct: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   )}
 

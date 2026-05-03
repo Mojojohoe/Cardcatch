@@ -4,7 +4,10 @@ import { cardArtAssetUrl, cardBackgroundUrlCandidates } from './paths';
 import { defaultPipCellsForRank } from './pipLayouts';
 
 export function rankValueIndex(v: string): number {
-  return (VALUES as readonly string[]).indexOf(v);
+  const i = (VALUES as readonly string[]).indexOf(v as (typeof VALUES)[number]);
+  if (i >= 0) return i;
+  if (v === 'G') return VALUES.length;
+  return -1;
 }
 
 export function rankInClosedRange(rank: string, from: string, to: string): boolean {
@@ -20,6 +23,15 @@ export function rankInClosedRange(rank: string, from: string, to: string): boole
 export function resolvePipScale(rank: string, defaults?: CardArtGlobalDefaults): number {
   let scale = 1;
   for (const range of defaults?.pipScaleRanges ?? []) {
+    if (rankInClosedRange(rank, range.from, range.to)) scale = range.scale;
+  }
+  return scale;
+}
+
+/** Corner rank + notifier suit — independent from centre pip scale. */
+export function resolveNotifierScale(rank: string, defaults?: CardArtGlobalDefaults): number {
+  let scale = 1;
+  for (const range of defaults?.notifierScaleRanges ?? []) {
     if (rankInClosedRange(rank, range.from, range.to)) scale = range.scale;
   }
   return scale;
@@ -41,7 +53,7 @@ export function rasterCandidatesForFileStem(stem: string): string[] {
  * Face background: suit-specific file(s) first, then CardBasicLight fallbacks.
  */
 export function resolveFaceBackgroundCandidates(suit: string, defaults?: CardArtGlobalDefaults): string[] {
-  const raw = defaults?.suitBackgroundFile?.[suit as keyof NonNullable<CardArtGlobalDefaults['suitBackgroundFile']>];
+  const raw = defaults?.suitBackgroundFile?.[suit];
   const suitChain = raw ? rasterCandidatesForFileStem(raw) : [];
   const seen = new Set<string>();
   const out: string[] = [];
