@@ -72,6 +72,15 @@ const PLAYING_CARD_RANK_TITLE: Record<string, string> = {
   J: 'Jack',
 };
 
+/**
+ * Classic white stock in {@link CardVisual} vector mode: `SUIT_COLORS.Diamonds` is white (for dark HUDs),
+ * which is invisible on the white card face — use red like Hearts (standard decks).
+ */
+function vectorWhiteStockSuitClass(suit: string): string {
+  if (suit === 'Diamonds') return 'text-red-600';
+  return SUIT_COLORS[suit] ?? 'text-red-600';
+}
+
 /** Title + printed rank for hover (no lust virtual bump / no greed tax — table context only). */
 function playingCardHoverCaption(cardStr: string): string | null {
   const p = parseCard(cardStr);
@@ -396,6 +405,13 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     () => resolvedFaceTextOpacity(cardArtOverride, cardArt?.defaults),
     [cardArtOverride, cardArt?.defaults],
   );
+  /** Raster “assembled” can dim type to 0; vector chrome must stay readable when toggling modes. */
+  const vectorCornerOpacity = useMemo(() => {
+    if (cardArt?.mode === 'vector' && !useAssembledFace) {
+      return Math.max(faceTextOpacity, 0.82);
+    }
+    return faceTextOpacity;
+  }, [cardArt?.mode, useAssembledFace, faceTextOpacity]);
 
   useEffect(() => {
     return () => {
@@ -406,6 +422,10 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const isCrownsSuit = suit === 'Crowns';
   const isGrovelsSuit = suit === 'Grovels';
   const isSwordsSuit = suit === 'Swords';
+  const vectorSuitGlyphClass =
+    isMoonSuit || isCrownsSuit || isGrovelsSuit || isSwordsSuit
+      ? (SUIT_COLORS[suit] ?? 'text-red-400')
+      : vectorWhiteStockSuitClass(suit);
   const wrathPen = isSwordsSuit && revealed && card ? getWrathMagnitude(card) : 0;
   const entrance = playingCardEntranceMotion({
     noAnimate,
@@ -571,7 +591,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         </div>
       )}
       <motion.div
-        key={`${resolutionMorph ?? 'idle'}-${card}`}
+        key={`${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}`}
         className={`relative z-[1] flex flex-1 flex-col justify-between overflow-hidden rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : 'min-h-[5.5rem] sm:min-h-[8.25rem]'}`}
         style={{ transformStyle: 'preserve-3d' }}
         animate={
@@ -618,8 +638,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         ) : (
         <>
         <div
-          className={`relative z-[2] flex flex-col items-start leading-[0.9] ${SUIT_COLORS[suit] ?? 'text-red-400'}`}
-          style={{ opacity: faceTextOpacity }}
+          className={`relative z-[2] flex flex-col items-start leading-[0.9] ${vectorSuitGlyphClass}`}
+          style={{ opacity: vectorCornerOpacity }}
         >
           {isGrovelsSuit ? (
             <span
@@ -641,7 +661,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
 
         <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
           <div
-            className={`${centerGlyph} ${isSwordsSuit ? 'opacity-[0.24]' : 'opacity-[0.08]'} ${SUIT_COLORS[suit] ?? 'text-red-500'}`}
+            className={`${centerGlyph} ${isSwordsSuit ? 'opacity-[0.24]' : 'opacity-[0.08]'} ${vectorSuitGlyphClass}`}
           >
             {isGrovelsSuit ? (
               <SuitGlyph suit="Grovels" className={`text-violet-500/35 ${centerGlyph}`} />
@@ -654,8 +674,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         </div>
 
         <div
-          className={`relative z-[2] flex flex-col items-start leading-[0.9] self-end rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-400'}`}
-          style={{ opacity: faceTextOpacity }}
+          className={`relative z-[2] flex flex-col items-start leading-[0.9] self-end rotate-180 ${vectorSuitGlyphClass}`}
+          style={{ opacity: vectorCornerOpacity }}
         >
           {isGrovelsSuit ? (
             <span
