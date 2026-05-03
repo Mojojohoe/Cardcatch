@@ -13,6 +13,7 @@ import {
   ChatMessageEntry,
   ActiveCurseState,
   SlothDreamResult,
+  type CardArtSessionPayload,
 } from '../types';
 import { DESPERATION_GAME_SLICES, FORTUNE_GAME_SLICES, SLOTH_DREAM_GAME_SLICES } from '../wheels/presets';
 import {
@@ -748,6 +749,17 @@ export class GameService {
 
   getState(): RoomData | null {
     return this.state;
+  }
+
+  /** Dev only: publish Card Creator pack for guest browsers that do not share the host’s localStorage. */
+  publishCardArtSession(payload: CardArtSessionPayload) {
+    if (!import.meta.env.DEV || !this.isHost || !this.state) return;
+    this.state = {
+      ...this.state,
+      cardArtSession: payload,
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
   }
 
   /**

@@ -107,7 +107,8 @@ import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
-import { useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
+import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
+import { mergeCardArtWithRoom, useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
 import { CardCreator } from './cardCreator/CardCreator';
 import {
@@ -2734,11 +2735,16 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   }, [room?.status, room?.players[myUid]?.secretIntel, room?.currentTurn, lastResolvedTurn]);
 
   const cardArtCtx = useOptionalCardArt();
+  const isHostPlayer = serviceRef.current.getIsHost();
+  const cardArtForUi = useMemo(
+    () => (cardArtCtx ? mergeCardArtWithRoom(cardArtCtx, room, isHostPlayer) : null),
+    [cardArtCtx, room, room.cardArtSession, room.updatedAt, isHostPlayer],
+  );
   const deckBackRasterUrl = useMemo(() => {
-    const m = cardArtCtx?.manifest?.['back-deck'];
-    if (cardArtCtx?.mode !== 'raster' || !m) return null;
+    const m = cardArtForUi?.manifest?.['back-deck'];
+    if (cardArtForUi?.mode !== 'raster' || !m) return null;
     return m.customDataUrl ?? (m.customImageFile?.trim() ? cardArtAssetUrl(m.customImageFile.trim()) : null);
-  }, [cardArtCtx?.mode, cardArtCtx?.manifest, cardArtCtx?.manifestVersion]);
+  }, [cardArtForUi?.mode, cardArtForUi?.manifest, cardArtForUi?.manifestVersion]);
 
   const handleCreateRoom = async () => {
     if (!playerName) { setError('Please enter your name'); return; }
@@ -3094,9 +3100,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         : 'Resolving power cards…'
       : null;
 
-  const artworkFelt = cardArtCtx?.mode === 'raster';
+  const artworkFelt = cardArtForUi?.mode === 'raster';
 
   return (
+    <CardArtSessionBridge room={room} myUid={myUid} serviceRef={serviceRef}>
     <div
       className={`relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 p-4 ${
         artworkFelt ? 'bg-emerald-950/25' : 'bg-emerald-950/40'
@@ -3294,7 +3301,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="flex h-44 items-end justify-center -space-x-8 overflow-x-auto px-2 opacity-80 flex-nowrap sm:-space-x-12 sm:scale-100 scale-90">
+              <div className="mx-auto flex h-44 w-max max-w-full items-end justify-center -space-x-8 overflow-x-auto px-2 opacity-80 flex-nowrap sm:-space-x-12 sm:scale-100 scale-90">
                 {Array.from({ length: opponent.hand.length }).map((_, i) => (
                   <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
                 ))}
@@ -3370,7 +3377,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         </span>
                       </motion.div>
                     )}
-                  <div className="flex min-w-0 flex-nowrap items-center justify-center -space-x-7 sm:-space-x-10">
+                  <div className="mx-auto flex w-max max-w-full min-w-0 flex-nowrap items-center justify-center -space-x-7 sm:-space-x-10">
                     {Array.from({ length: opponent.hand.length }).map((_, i) => (
                       <CardVisual key={`og-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
                     ))}
@@ -3610,7 +3617,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            {joint ? (
                              <DualTableTrumpCard suits={joint} />
                            ) : ts ? (
-                             cardArtCtx?.mode === 'raster' ? (
+                             cardArtForUi?.mode === 'raster' ? (
                                <div
                                  className={`
                          relative flex h-[9.75rem] w-[6.75rem] flex-col items-center justify-center overflow-hidden rounded-2xl border-4 border-amber-700/85 shadow-[0_0_40px_rgba(251,191,36,0.22)]
@@ -3666,13 +3673,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                <DualTrumpTableLabel
                                  suits={joint}
                                  className="uppercase tracking-[0.12em]"
-                                 dividerClassName={cardArtCtx?.mode === 'raster' ? 'text-slate-300' : 'text-slate-400'}
-                                 suitNamesOnGreenFelt={cardArtCtx?.mode === 'raster'}
+                                 dividerClassName={cardArtForUi?.mode === 'raster' ? 'text-slate-300' : 'text-slate-400'}
+                                 suitNamesOnGreenFelt={cardArtForUi?.mode === 'raster'}
                                />
                              ) : ts ? (
                                <span
                                  className={
-                                   cardArtCtx?.mode === 'raster' ? tableTrumpSuitNameClass(ts) : SUIT_COLORS[ts] ?? ''
+                                   cardArtForUi?.mode === 'raster' ? tableTrumpSuitNameClass(ts) : SUIT_COLORS[ts] ?? ''
                                  }
                                >
                                  {ts}
@@ -4120,6 +4127,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         {showRules && <RulesSheet key="rules-modal" settings={room.settings} onClose={() => setShowRules(false)} />}
       </AnimatePresence>
     </div>
+    </CardArtSessionBridge>
   );
 };
 
@@ -4191,7 +4199,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-emerald-950 text-white selection:bg-yellow-400 selection:text-black font-sans overflow-hidden">
-      <CardArtHud />
+      {import.meta.env.DEV ? <CardArtHud /> : null}
       {/* Dev Toggle */}
       <div className="fixed top-4 left-4 z-[220] flex gap-2">
         <button 

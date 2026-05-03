@@ -1,3 +1,7 @@
+import type { CardArtSessionPayload } from './cardArt/syncPayload';
+
+export type { CardArtSessionPayload };
+
 export const SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades'] as const;
 /** Sloth curse dream-wheel outcomes (five equal weights in logic). */
 export type SlothDreamResult = 'NOTHING' | 'STARS' | 'MOONS' | 'STARS_AND_MOONS' | 'SUN';
@@ -275,6 +279,11 @@ export interface RoomData {
    */
   awaitingPowerShowdown?: boolean;
   pendingPowerDecisions?: Record<string, PendingPowerDecision | null>;
+  /**
+   * **Dev only:** host-published Card Creator state so a second browser matches localStorage edits.
+   * Production uses bundled `src/cardArt/shippedPack.json` only — this field is unused.
+   */
+  cardArtSession?: CardArtSessionPayload | null;
   /** Ring buffer of lobby / in-game messages (host-owned). */
   chatMessages?: ChatMessageEntry[];
   /** Curses currently affecting the table (e.g. Lust). */
