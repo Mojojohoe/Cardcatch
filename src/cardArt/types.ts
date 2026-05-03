@@ -50,6 +50,11 @@ export type CardArtOverride = {
    * Ace / God pip-as-picture fallback, royalty picture, joker centre, or bare slot fallback — tried before `{cardId}.png`.
    */
   centrePictureFile?: string;
+  /**
+   * Scale factor for the large centre raster (Ace / God / royalty / Joker picture slot).
+   * Merged with {@link CardArtGlobalDefaults.centrePictureScale}; default 1.
+   */
+  centrePictureScale?: number;
   /** Pip centres + optional flip per pip */
   pipGrid?: PipSlot[];
   /** Opacity 0–1 for face typography (corner rank, captions, royalty rank line). Default 1. */
@@ -91,6 +96,11 @@ export type CardArtGlobalDefaults = {
    * Positive X moves right, positive Y moves down.
    */
   courtCentreOffsetPct?: { x?: number; y?: number };
+  /**
+   * Default scale for centre court raster art when a card does not set {@link CardArtOverride.centrePictureScale}.
+   * Typical range 0.25–3; values are clamped at render time.
+   */
+  centrePictureScale?: number;
   /** Default caption for any background-only face unless the card override replaces it. */
   backgroundCaptionDefaults?: BackgroundCaptionConfig;
   /**

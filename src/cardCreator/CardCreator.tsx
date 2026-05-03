@@ -214,6 +214,10 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
     const centre = draft?.centrePictureFile?.trim();
     if (centre) clean.centrePictureFile = centre;
+    const cps = draft?.centrePictureScale;
+    if (typeof cps === 'number' && Number.isFinite(cps)) {
+      clean.centrePictureScale = Math.min(3, Math.max(0.25, cps));
+    }
     if (Object.keys(clean).length === 0) {
       updateOverride(selected, null);
     } else {
@@ -776,6 +780,36 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             placeholder={`e.g. ${selected}-ace-art (no extension)`}
                             className="w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs"
                           />
+                          <label className="mt-2 block text-[11px] text-slate-400">
+                            Centre image scale (0.25–3, blank = use defaults)
+                            <input
+                              type="number"
+                              step={0.05}
+                              min={0.25}
+                              max={3}
+                              value={
+                                draft?.centrePictureScale !== undefined && draft?.centrePictureScale !== null
+                                  ? draft.centrePictureScale
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                setDraft((prev) => {
+                                  const base = { ...(prev ?? {}) };
+                                  if (!raw.length) {
+                                    delete base.centrePictureScale;
+                                    return Object.keys(base).length ? base : null;
+                                  }
+                                  const n = Number(raw);
+                                  if (!Number.isFinite(n)) return prev;
+                                  base.centrePictureScale = Math.min(3, Math.max(0.25, n));
+                                  return base;
+                                });
+                              }}
+                              placeholder="from Defaults (1)"
+                              className="mt-1 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                            />
+                          </label>
                         </div>
                       )}
                     </div>
@@ -1528,6 +1562,45 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             />
                           </label>
                         </div>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Centre court image scale</p>
+                        <p className="mb-2 text-[10px] text-slate-500">
+                          Uniform scale for Ace / God / royalty / Joker centre rasters (assembled mode). Per-card scale
+                          overrides this. Blank = 1.
+                        </p>
+                        <label className="text-[11px] text-slate-400">
+                          Scale
+                          <input
+                            type="number"
+                            step={0.05}
+                            min={0.25}
+                            max={3}
+                            value={
+                              draftDefaults.centrePictureScale !== undefined &&
+                              draftDefaults.centrePictureScale !== null
+                                ? draftDefaults.centrePictureScale
+                                : ''
+                            }
+                            onChange={(e) => {
+                              const raw = e.target.value.trim();
+                              setDraftDefaults((prev) => {
+                                const next = { ...prev };
+                                if (!raw.length) {
+                                  delete next.centrePictureScale;
+                                  return next;
+                                }
+                                const n = Number(raw);
+                                if (!Number.isFinite(n)) return prev;
+                                next.centrePictureScale = Math.min(3, Math.max(0.25, n));
+                                return next;
+                              });
+                            }}
+                            placeholder="1"
+                            className="ml-2 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                          />
+                        </label>
                       </div>
                     </div>
                   )}

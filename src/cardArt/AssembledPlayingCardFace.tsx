@@ -206,19 +206,28 @@ function BackgroundCaptionLayers({
   );
 }
 
+function clampCentrePictureScale(n: number | undefined | null): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return 1;
+  return Math.min(3, Math.max(0.25, n));
+}
+
 /** Try `{cardId}.png` etc.; then render fallback (pip court or glyph). */
 function RasterPictureOr({
   cardId,
   pictureStem,
+  pictureScale = 1,
   fallback,
 }: {
   cardId: string;
   /** Tried before `{cardId}` (see {@link CardArtOverride.centrePictureFile}). */
   pictureStem?: string | null;
+  /** Uniform scale of the raster inside the court frame (see {@link CardArtOverride.centrePictureScale}). */
+  pictureScale?: number;
   fallback: React.ReactNode;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, pictureStem), [cardId, pictureStem]);
   const [attempt, setAttempt] = useState(0);
+  const s = clampCentrePictureScale(pictureScale);
 
   useEffect(() => {
     setAttempt(0);
@@ -230,13 +239,18 @@ function RasterPictureOr({
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]">
-      <img
-        src={candidates[attempt]}
-        alt=""
-        className="max-h-[72%] max-w-full object-contain drop-shadow"
-        draggable={false}
-        onError={() => setAttempt((a) => a + 1)}
-      />
+      <div
+        className="flex max-h-[72%] max-w-full items-center justify-center"
+        style={{ transform: s !== 1 ? `scale(${s})` : undefined }}
+      >
+        <img
+          src={candidates[attempt]}
+          alt=""
+          className="max-h-full max-w-full object-contain drop-shadow"
+          draggable={false}
+          onError={() => setAttempt((a) => a + 1)}
+        />
+      </div>
     </div>
   );
 }
@@ -328,6 +342,9 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
 
   const courtOX = defaults?.courtCentreOffsetPct?.x ?? 0;
   const courtOY = defaults?.courtCentreOffsetPct?.y ?? 0;
+  const centrePictureScale = clampCentrePictureScale(
+    override?.centrePictureScale ?? defaults?.centrePictureScale ?? 1,
+  );
 
   return (
     <div
@@ -424,6 +441,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
             <RasterPictureOr
               cardId={card}
               pictureStem={override?.centrePictureFile}
+              pictureScale={centrePictureScale}
               fallback={
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className={`opacity-90 ${SUIT_COLORS['Joker'] ?? 'text-purple-500'}`}>
@@ -441,6 +459,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               defaults={defaults}
               textOpacity={faceTextOpacity}
               centrePictureStem={override?.centrePictureFile}
+              centrePictureScale={centrePictureScale}
             />
           ) : (
             <CenterFill
@@ -450,6 +469,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               override={override}
               defaults={defaults}
               pipScale={pipScale}
+              centrePictureScale={centrePictureScale}
             />
           )}
         </div>
@@ -474,6 +494,7 @@ function PictureInterior({
   defaults,
   textOpacity,
   centrePictureStem,
+  centrePictureScale,
 }: {
   suit: string;
   value: string;
@@ -482,9 +503,11 @@ function PictureInterior({
   defaults?: CardArtGlobalDefaults;
   textOpacity: number;
   centrePictureStem?: string | null;
+  centrePictureScale: number;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, centrePictureStem), [cardId, centrePictureStem]);
   const [attempt, setAttempt] = useState(0);
+  const s = clampCentrePictureScale(centrePictureScale);
 
   useEffect(() => {
     setAttempt(0);
@@ -495,13 +518,18 @@ function PictureInterior({
   if (attempt < candidates.length) {
     return (
       <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]">
-        <img
-          src={candidates[attempt]}
-          alt=""
-          className="max-h-[72%] max-w-full object-contain drop-shadow"
-          draggable={false}
-          onError={() => setAttempt((a) => a + 1)}
-        />
+        <div
+          className="flex max-h-[72%] max-w-full items-center justify-center"
+          style={{ transform: s !== 1 ? `scale(${s})` : undefined }}
+        >
+          <img
+            src={candidates[attempt]}
+            alt=""
+            className="max-h-full max-w-full object-contain drop-shadow"
+            draggable={false}
+            onError={() => setAttempt((a) => a + 1)}
+          />
+        </div>
       </div>
     );
   }
@@ -536,6 +564,7 @@ function CenterFill({
   override,
   defaults,
   pipScale,
+  centrePictureScale,
 }: {
   card: string;
   suit: string;
@@ -543,6 +572,7 @@ function CenterFill({
   override?: CardArtOverride;
   defaults?: CardArtGlobalDefaults;
   pipScale: number;
+  centrePictureScale: number;
 }) {
   const slots = resolvePipSlots(value, override, defaults);
   const aceOrGod = value === 'A' || value === 'G';
@@ -562,6 +592,7 @@ function CenterFill({
       <RasterPictureOr
         cardId={card}
         pictureStem={centreStem}
+        pictureScale={centrePictureScale}
         fallback={
           <div className="pointer-events-none absolute inset-0 z-[2]">
             <PipInterior suit={suit} value={value} override={override} defaults={defaults} pipScale={pipScale} />
@@ -575,6 +606,7 @@ function CenterFill({
     <RasterPictureOr
       cardId={card}
       pictureStem={centreStem}
+      pictureScale={centrePictureScale}
       fallback={
         <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center opacity-[0.22]">
           <div className={`${SUIT_COLORS[suit] ?? 'text-red-500'}`}>
