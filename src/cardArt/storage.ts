@@ -1,6 +1,7 @@
-import type { CardArtDisplayMode, CardArtManifest, CardArtOverride } from './types';
+import type { CardArtDisplayMode, CardArtGlobalDefaults, CardArtManifest, CardArtOverride } from './types';
 
 const MANIFEST_KEY = 'cardcatch-card-art-manifest';
+const DEFAULTS_KEY = 'cardcatch-card-art-defaults';
 const MODE_KEY = 'cardcatch-card-art-mode';
 
 export function loadCardArtManifest(): CardArtManifest {
@@ -46,6 +47,25 @@ export function loadDisplayMode(): CardArtDisplayMode {
 export function saveDisplayMode(mode: CardArtDisplayMode): void {
   try {
     localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadCardArtDefaults(): CardArtGlobalDefaults {
+  try {
+    const raw = localStorage.getItem(DEFAULTS_KEY);
+    if (!raw) return {};
+    const p = JSON.parse(raw) as CardArtGlobalDefaults;
+    return p && typeof p === 'object' ? p : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveCardArtDefaults(d: CardArtGlobalDefaults): void {
+  try {
+    localStorage.setItem(DEFAULTS_KEY, JSON.stringify(d));
   } catch {
     /* ignore */
   }

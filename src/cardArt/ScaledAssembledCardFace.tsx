@@ -1,17 +1,26 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { AssembledPlayingCardFace, CARD_ART_HEIGHT, CARD_ART_WIDTH } from './AssembledPlayingCardFace';
-import type { CardArtOverride } from './types';
+import { useOptionalCardArt } from './cardArtContext';
+import type { CardArtGlobalDefaults, CardArtOverride } from './types';
 
 type Props = {
   card: string;
   override?: CardArtOverride;
   className?: string;
+  /**
+   * When provided, used instead of persisted context defaults (Card Creator live preview).
+   * Pass `undefined` to use context only.
+   */
+  previewDefaults?: CardArtGlobalDefaults;
 };
 
 /**
  * Scales the 256×374 art to the width of the parent while locking aspect ratio.
  */
-export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, className }) => {
+export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, className, previewDefaults }) => {
+  const ctx = useOptionalCardArt();
+  const defaults = previewDefaults !== undefined ? previewDefaults : ctx?.defaults;
+
   const wrapRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
@@ -41,7 +50,7 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
           transformOrigin: 'top left',
         }}
       >
-        <AssembledPlayingCardFace card={card} override={override} />
+        <AssembledPlayingCardFace card={card} override={override} defaults={defaults} />
       </div>
     </div>
   );

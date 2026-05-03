@@ -1,6 +1,13 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import type { CardArtDisplayMode, CardArtManifest, CardArtOverride } from './types';
-import { loadCardArtManifest, loadDisplayMode, saveCardArtManifest, saveDisplayMode } from './storage';
+import type { CardArtDisplayMode, CardArtGlobalDefaults, CardArtManifest, CardArtOverride } from './types';
+import {
+  loadCardArtDefaults,
+  loadCardArtManifest,
+  loadDisplayMode,
+  saveCardArtDefaults,
+  saveCardArtManifest,
+  saveDisplayMode,
+} from './storage';
 
 type Ctx = {
   mode: CardArtDisplayMode;
@@ -10,6 +17,10 @@ type Ctx = {
   updateOverride: (cardId: string, o: CardArtOverride | null) => void;
   manifestVersion: number;
   bumpManifest: () => void;
+  defaults: CardArtGlobalDefaults;
+  setDefaults: (d: CardArtGlobalDefaults) => void;
+  updateDefaults: (patch: Partial<CardArtGlobalDefaults>) => void;
+  defaultsVersion: number;
 };
 
 const CardArtContext = createContext<Ctx | null>(null);
@@ -18,6 +29,8 @@ export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [mode, setModeState] = useState<CardArtDisplayMode>(() => loadDisplayMode());
   const [manifest, setManifestState] = useState<CardArtManifest>(() => loadCardArtManifest());
   const [manifestVersion, setManifestVersion] = useState(0);
+  const [defaults, setDefaultsState] = useState<CardArtGlobalDefaults>(() => loadCardArtDefaults());
+  const [defaultsVersion, setDefaultsVersion] = useState(0);
 
   const setMode = useCallback((m: CardArtDisplayMode) => {
     setModeState(m);
@@ -46,6 +59,21 @@ export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setManifestVersion((v) => v + 1);
   }, []);
 
+  const setDefaults = useCallback((d: CardArtGlobalDefaults) => {
+    setDefaultsState(d);
+    saveCardArtDefaults(d);
+    setDefaultsVersion((v) => v + 1);
+  }, []);
+
+  const updateDefaults = useCallback((patch: Partial<CardArtGlobalDefaults>) => {
+    setDefaultsState((prev) => {
+      const next = { ...prev, ...patch };
+      saveCardArtDefaults(next);
+      setDefaultsVersion((v) => v + 1);
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
     () =>
       ({
@@ -56,8 +84,24 @@ export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateOverride,
         manifestVersion,
         bumpManifest,
+        defaults,
+        setDefaults,
+        updateDefaults,
+        defaultsVersion,
       }) satisfies Ctx,
-    [mode, setMode, manifest, setManifest, updateOverride, manifestVersion, bumpManifest],
+    [
+      mode,
+      setMode,
+      manifest,
+      setManifest,
+      updateOverride,
+      manifestVersion,
+      bumpManifest,
+      defaults,
+      setDefaults,
+      updateDefaults,
+      defaultsVersion,
+    ],
   );
 
   return <CardArtContext.Provider value={value}>{children}</CardArtContext.Provider>;
