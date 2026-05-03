@@ -2737,10 +2737,11 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
   const cardArtCtx = useOptionalCardArt();
   const isHostPlayer = serviceRef.current.getIsHost();
-  const cardArtForUi = useMemo(
-    () => (cardArtCtx ? mergeCardArtWithRoom(cardArtCtx, room, isHostPlayer) : null),
-    [cardArtCtx, room, room.cardArtSession, room.updatedAt, isHostPlayer],
-  );
+  const cardArtForUi = useMemo(() => {
+    if (!cardArtCtx) return null;
+    if (!room) return cardArtCtx;
+    return mergeCardArtWithRoom(cardArtCtx, room, isHostPlayer);
+  }, [cardArtCtx, room, room?.cardArtSession, room?.updatedAt, isHostPlayer]);
   const deckBackRasterUrl = useMemo(() => {
     const m = cardArtForUi?.manifest?.['back-deck'];
     if (cardArtForUi?.mode !== 'raster' || !m) return null;
