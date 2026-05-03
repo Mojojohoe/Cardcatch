@@ -759,6 +759,15 @@ export const PowerCardVisual: React.FC<{
       ? cardArtAssetUrl(powerManifestOv.customImageFile.trim())
       : null);
 
+  const majorBackOv = cardArtPower?.manifest['back-power'];
+  const majorAnonymousBackUrl =
+    !curseDef && cardArtPower?.mode === 'raster'
+      ? majorBackOv?.customDataUrl ??
+        (majorBackOv?.customImageFile?.trim()
+          ? cardArtAssetUrl(majorBackOv.customImageFile.trim())
+          : null)
+      : null;
+
   if (!revealed) {
     const backW = matchHandCard
       ? 'w-12 h-18 sm:w-24 sm:h-36'
@@ -771,6 +780,31 @@ export const PowerCardVisual: React.FC<{
       ? 'bg-zinc-950 border-2 border-red-900/70 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:9px_9px]'
       : 'bg-slate-300 border-2 border-slate-400 bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px]';
     const shellClass = `${backW} rounded-lg shadow-lg flex items-center justify-center relative overflow-hidden ${backCurse} ${selected ? 'ring-4 ring-yellow-400' : ''} ${disabled ? 'opacity-75 saturate-[0.72] brightness-95 cursor-not-allowed' : staticBackdrop ? 'cursor-default select-none' : 'cursor-pointer'}`;
+    if (majorAnonymousBackUrl && !curseDef) {
+      const anonShell = `${backW} rounded-lg shadow-lg relative overflow-hidden border-2 border-slate-700 ${selected ? 'ring-4 ring-yellow-400' : ''} ${disabled ? 'opacity-75 saturate-[0.72] brightness-95 cursor-not-allowed' : staticBackdrop ? 'cursor-default select-none' : 'cursor-pointer'}`;
+      if (staticBackdrop) {
+        return (
+          <div role="presentation" className={anonShell}>
+            <img
+              src={majorAnonymousBackUrl}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
+        );
+      }
+      return (
+        <motion.div
+          whileHover={!disabled ? { scale: 1.1, rotateY: 10 } : {}}
+          onClick={onClick}
+          className={`${anonShell} perspective-1000 flex items-center justify-center`}
+        >
+          <img src={majorAnonymousBackUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+        </motion.div>
+      );
+    }
+
     const backChildren = (
       <>
         <div className={`absolute inset-0 bg-linear-to-br ${curseDef ? 'from-red-950/40 to-transparent' : 'from-slate-400/20 to-transparent'}`} />

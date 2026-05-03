@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X, Image as ImageIcon, Grid3x3, Trash2, Save, Layers, SlidersHorizontal } from 'lucide-react';
 import { SUITS, VALUES } from '../types';
 import { useCardArt } from '../cardArt/cardArtContext';
-import type { CardArtGlobalDefaults, CardArtOverride, PipSlot } from '../cardArt/types';
+import type { BackgroundCaptionConfig, CardArtGlobalDefaults, CardArtOverride, PipSlot } from '../cardArt/types';
 import { PIP_GRID_COLS, PIP_GRID_ROWS } from '../cardArt/types';
 import { defaultPipCellsForRank } from '../cardArt/pipLayouts';
 import { cyclePipAtCell } from '../cardArt/resolveCardArt';
@@ -11,7 +11,7 @@ import { cardArtAssetUrl } from '../cardArt/paths';
 import { isAssembledRasterCardId } from '../cardArt/assembledRaster';
 import { PowerCardVisual } from '../components/GameVisuals';
 import { WRATH_MINION_BY_ROUND } from '../services/gameService';
-import { CURSE_IDS } from '../curses';
+import { CURSE_IDS, CURSES } from '../curses';
 
 const ALL_SUIT_CARDS: string[] = [];
 for (const s of SUITS) {
@@ -33,7 +33,9 @@ const JOKER_CARDS = ['Joker-1', 'Joker-2'] as const;
 
 const POWER_MANIFEST_KEYS = Array.from({ length: 22 }, (_, i) => `power-${i}` as const);
 const CURSE_MANIFEST_KEYS = CURSE_IDS.map((id) => `curse-${id}` as const);
-const BACK_MANIFEST_KEYS = ['back-prey', 'back-predator', 'back-preydator', 'back-deck'] as const;
+/** Face-down majors in the opponent row (`staticBackdrop`) — maps to raster mode custom art */
+const BACK_POWER_MAJOR = 'back-power' as const;
+const BACK_ROLE_KEYS = ['back-prey', 'back-predator', 'back-preydator', 'back-deck'] as const;
 
 /** Ranks 2…A and God of Hearts (G) for shared layouts + scale ranges. */
 const SHARED_RANK_OPTIONS = [...VALUES, 'G'].filter((v) => !['J', 'Q', 'K'].includes(v));
@@ -180,17 +182,31 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const previewCurseId = selected.startsWith('curse-') ? Number(selected.slice(6)) : NaN;
   const previewIsBack = selected.startsWith('back-');
 
+  const pruneBackgroundCaption = (bc?: BackgroundCaptionConfig): BackgroundCaptionConfig | undefined => {
+    if (!bc) return undefined;
+    const next: BackgroundCaptionConfig = {};
+    if (bc.text?.trim()) next.text = bc.text.trim();
+    if (bc.scale != null) next.scale = bc.scale;
+    if (bc.anchorXPct != null) next.anchorXPct = bc.anchorXPct;
+    if (bc.anchorYPct != null) next.anchorYPct = bc.anchorYPct;
+    if (bc.maxWidthPct != null) next.maxWidthPct = bc.maxWidthPct;
+    return Object.keys(next).length > 0 ? next : undefined;
+  };
+
   const handleSaveCard = () => {
     const clean: CardArtOverride = {};
     if (draft?.customDataUrl) clean.customDataUrl = draft.customDataUrl;
     if (draft?.customImageFile?.trim()) clean.customImageFile = draft.customImageFile.trim();
     if (draft?.pipGrid?.length) clean.pipGrid = draft.pipGrid;
     if (draft?.backgroundOnly) clean.backgroundOnly = true;
+    const capSaved = pruneBackgroundCaption(draft?.backgroundCaption);
+    if (capSaved) clean.backgroundCaption = capSaved;
     if (
       !clean.customDataUrl &&
       !clean.customImageFile &&
       !clean.pipGrid?.length &&
-      !clean.backgroundOnly
+      !clean.backgroundOnly &&
+      !clean.backgroundCaption
     ) {
       updateOverride(selected, null);
     } else {
@@ -337,9 +353,75 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </button>
             ))}
           </div>
-          <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Power · curse · backs</p>
-          <div className="flex max-h-44 flex-col gap-0.5 overflow-y-auto">
-            {[...POWER_MANIFEST_KEYS, ...CURSE_MANIFEST_KEYS, ...BACK_MANIFEST_KEYS].map((rowId) => (
+          <p className="mb-1 text-[9px] font-black uppercase text-slate-500">Power faces</p>
+          <p className="mb-2 text-[8px] leading-snug text-slate-600">Manifest keys · power-0 … power-21 (Major Arcana)</p>
+          <div className="mb-3 flex max-h-28 flex-col gap-0.5 overflow-y-auto">
+            {POWER_MANIFEST_KEYS.map((rowId) => (
+              <button
+                key={rowId}
+                type="button"
+                onClick={() => setSelected(rowId)}
+                className={`rounded px-2 py-1.5 text-left text-[10px] font-mono ${
+                  selected === rowId ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                {rowId}
+                {manifest[rowId] ? ' *' : ''}
+              </button>
+            ))}
+          </div>
+
+          <p className="mb-1 text-[9px] font-black uppercase text-slate-500">Curses</p>
+          <p className="mb-2 text-[8px] leading-snug text-slate-600">
+            curse-105 = Envy / green-eyed monster (face-up curse art). Listed with sin name · title.
+          </p>
+          <div className="mb-3 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+            {CURSE_MANIFEST_KEYS.map((rowId) => {
+              const num = Number(rowId.slice('curse-'.length));
+              const def = CURSES[num];
+              return (
+                <button
+                  key={rowId}
+                  type="button"
+                  onClick={() => setSelected(rowId)}
+                  className={`rounded px-2 py-1 text-left ${
+                    selected === rowId ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="block font-mono text-[10px]">
+                    {rowId}
+                    {manifest[rowId] ? ' *' : ''}
+                  </span>
+                  {def ? (
+                    <span className="block truncate text-[8px] opacity-75">
+                      {def.sin} · {def.name}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="mb-1 text-[9px] font-black uppercase text-slate-500">Opponent pile (majors)</p>
+          <p className="mb-2 text-[8px] leading-snug text-slate-600">
+            Face-down anonymous power cards (staticBackdrop) use key <span className="font-mono">back-power</span>.
+          </p>
+          <div className="mb-3">
+            <button
+              type="button"
+              onClick={() => setSelected(BACK_POWER_MAJOR)}
+              className={`w-full rounded px-2 py-1.5 text-left text-[10px] font-mono ${
+                selected === BACK_POWER_MAJOR ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+              }`}
+            >
+              {BACK_POWER_MAJOR}
+              {manifest[BACK_POWER_MAJOR] ? ' *' : ''}
+            </button>
+          </div>
+
+          <p className="mb-1 text-[9px] font-black uppercase text-slate-500">Deck &amp; role backs</p>
+          <div className="flex max-h-24 flex-col gap-0.5 overflow-y-auto">
+            {BACK_ROLE_KEYS.map((rowId) => (
               <button
                 key={rowId}
                 type="button"
@@ -457,6 +539,102 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           background image already includes the full design.
                         </span>
                       </label>
+                      <div className="rounded border border-slate-800 p-3 text-[11px] text-slate-400">
+                        <p className="mb-2 font-bold text-slate-300">Overlay caption (shows when Background only is on)</p>
+                        <p className="mb-2 text-[10px] text-slate-500">
+                          Merged over Defaults caption. Anchor 50/50 is card centre (transform-centered).
+                        </p>
+                        <textarea
+                          value={draft?.backgroundCaption?.text ?? ''}
+                          onChange={(e) =>
+                            setDraft((prev) => ({
+                              ...(prev ?? {}),
+                              backgroundCaption: { ...prev?.backgroundCaption, text: e.target.value },
+                            }))
+                          }
+                          rows={3}
+                          placeholder="Optional printed text on this card…"
+                          className="mb-2 w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-sans text-xs text-slate-200"
+                        />
+                        <div className="flex flex-wrap gap-3">
+                          <label className="text-slate-400">
+                            Scale
+                            <input
+                              type="number"
+                              step={0.05}
+                              min={0.25}
+                              max={4}
+                              value={draft?.backgroundCaption?.scale ?? 1}
+                              onChange={(e) =>
+                                setDraft((prev) => ({
+                                  ...(prev ?? {}),
+                                  backgroundCaption: {
+                                    ...prev?.backgroundCaption,
+                                    scale: Number(e.target.value) || 1,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                            />
+                          </label>
+                          <label className="text-slate-400">
+                            Anchor X %
+                            <input
+                              type="number"
+                              step={0.5}
+                              value={draft?.backgroundCaption?.anchorXPct ?? 50}
+                              onChange={(e) =>
+                                setDraft((prev) => ({
+                                  ...(prev ?? {}),
+                                  backgroundCaption: {
+                                    ...prev?.backgroundCaption,
+                                    anchorXPct: Number(e.target.value) ?? 50,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                            />
+                          </label>
+                          <label className="text-slate-400">
+                            Anchor Y %
+                            <input
+                              type="number"
+                              step={0.5}
+                              value={draft?.backgroundCaption?.anchorYPct ?? 50}
+                              onChange={(e) =>
+                                setDraft((prev) => ({
+                                  ...(prev ?? {}),
+                                  backgroundCaption: {
+                                    ...prev?.backgroundCaption,
+                                    anchorYPct: Number(e.target.value) ?? 50,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                            />
+                          </label>
+                          <label className="text-slate-400">
+                            Max width %
+                            <input
+                              type="number"
+                              step={1}
+                              min={10}
+                              max={100}
+                              value={draft?.backgroundCaption?.maxWidthPct ?? 88}
+                              onChange={(e) =>
+                                setDraft((prev) => ({
+                                  ...(prev ?? {}),
+                                  backgroundCaption: {
+                                    ...prev?.backgroundCaption,
+                                    maxWidthPct: Number(e.target.value) || 88,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-14 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                            />
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   )}
                   {cardTab === 'upload' && (
@@ -682,6 +860,81 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs"
                         />
                       </label>
+
+                      <p className="mt-4 text-[11px] font-bold text-slate-300">Background-only caption defaults</p>
+                      <p className="mb-2 text-[10px] text-slate-500">
+                        Used when Background only + no caption on the card itself.
+                      </p>
+                      <textarea
+                        value={draftDefaults.backgroundCaptionDefaults?.text ?? ''}
+                        onChange={(e) =>
+                          setDraftDefaults((prev) => ({
+                            ...prev,
+                            backgroundCaptionDefaults: {
+                              ...prev.backgroundCaptionDefaults,
+                              text: e.target.value,
+                            },
+                          }))
+                        }
+                        rows={2}
+                        className="mb-2 w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
+                        placeholder="Default overlay text…"
+                      />
+                      <div className="flex flex-wrap gap-3">
+                        <label className="text-[11px] text-slate-400">
+                          Scale
+                          <input
+                            type="number"
+                            step={0.05}
+                            min={0.25}
+                            max={4}
+                            value={draftDefaults.backgroundCaptionDefaults?.scale ?? 1}
+                            onChange={(e) =>
+                              setDraftDefaults((prev) => ({
+                                ...prev,
+                                backgroundCaptionDefaults: {
+                                  ...prev.backgroundCaptionDefaults,
+                                  scale: Number(e.target.value) || 1,
+                                },
+                              }))
+                            }
+                            className="ml-2 w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                          />
+                        </label>
+                        <label className="text-[11px] text-slate-400">
+                          Anchors X/Y
+                          <input
+                            type="number"
+                            step={0.5}
+                            value={draftDefaults.backgroundCaptionDefaults?.anchorXPct ?? 50}
+                            onChange={(e) =>
+                              setDraftDefaults((prev) => ({
+                                ...prev,
+                                backgroundCaptionDefaults: {
+                                  ...prev.backgroundCaptionDefaults,
+                                  anchorXPct: Number(e.target.value) ?? 50,
+                                },
+                              }))
+                            }
+                            className="ml-2 w-14 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                          />
+                          <input
+                            type="number"
+                            step={0.5}
+                            value={draftDefaults.backgroundCaptionDefaults?.anchorYPct ?? 50}
+                            onChange={(e) =>
+                              setDraftDefaults((prev) => ({
+                                ...prev,
+                                backgroundCaptionDefaults: {
+                                  ...prev.backgroundCaptionDefaults,
+                                  anchorYPct: Number(e.target.value) ?? 50,
+                                },
+                              }))
+                            }
+                            className="ml-1 w-14 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                          />
+                        </label>
+                      </div>
                     </div>
                   )}
 
@@ -915,6 +1168,70 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                   cornerText: {
                                     ...prev.cornerText,
                                     offsetTopYPct: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                        </div>
+                        <label className="mt-2 flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={draftDefaults.cornerText?.symmetricCorners !== false}
+                            onChange={(e) =>
+                              setDraftDefaults((prev) => {
+                                const ct = { ...prev.cornerText };
+                                if (e.target.checked) delete ct.symmetricCorners;
+                                else ct.symmetricCorners = false;
+                                return { ...prev, cornerText: ct };
+                              })
+                            }
+                            className="mt-0.5"
+                          />
+                          <span>
+                            <strong className="text-slate-300">Symmetric offsets</strong> — bottom-right mirrors top-left toward
+                            the card centre (same offset sign).
+                          </span>
+                        </label>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Centre court shift</p>
+                        <p className="mb-2 text-[10px] text-slate-500">
+                          Moves royalty / pip / joker centre art as % of card size (+X → right, +Y → down).
+                        </p>
+                        <div className="flex flex-wrap gap-3">
+                          <label className="text-[11px] text-slate-400">
+                            X %
+                            <input
+                              type="number"
+                              step={0.25}
+                              value={draftDefaults.courtCentreOffsetPct?.x ?? 0}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  courtCentreOffsetPct: {
+                                    ...prev.courtCentreOffsetPct,
+                                    x: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                          <label className="text-[11px] text-slate-400">
+                            Y %
+                            <input
+                              type="number"
+                              step={0.25}
+                              value={draftDefaults.courtCentreOffsetPct?.y ?? 0}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  courtCentreOffsetPct: {
+                                    ...prev.courtCentreOffsetPct,
+                                    y: Number(e.target.value) || 0,
                                   },
                                 }))
                               }

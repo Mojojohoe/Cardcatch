@@ -7,9 +7,10 @@ import {
   pictureCardUrlCandidates,
   suitRasterUrlCandidates,
 } from './paths';
-import type { CardArtGlobalDefaults, CardArtOverride, PipOrient, PipSlot } from './types';
+import type { BackgroundCaptionConfig, CardArtGlobalDefaults, CardArtOverride, PipOrient, PipSlot } from './types';
 import { pipGridCellToFraction } from './pipLayouts';
 import {
+  mergedBackgroundCaption,
   resolveFaceBackgroundCandidates,
   resolveNotifierScale,
   resolvePipScale,
@@ -118,6 +119,30 @@ function CornerSuitRaster({ suit, sizePx }: { suit: string; sizePx: number }) {
   );
 }
 
+function BackgroundCaptionLayer({ config }: { config: BackgroundCaptionConfig }) {
+  const t = config.text?.trim();
+  if (!t) return null;
+  const sx = config.scale ?? 1;
+  const ax = config.anchorXPct ?? 50;
+  const ay = config.anchorYPct ?? 50;
+  const maxW = config.maxWidthPct ?? 88;
+  return (
+    <div
+      className="pointer-events-none absolute z-[4] whitespace-pre-wrap px-1 text-center font-bold leading-tight tracking-tight text-zinc-950 drop-shadow-[0_0_3px_rgba(255,255,255,0.95),0_1px_2px_rgba(0,0,0,0.25)]"
+      style={{
+        left: `${ax}%`,
+        top: `${ay}%`,
+        transform: 'translate(-50%, -50%)',
+        fontSize: Math.max(8, Math.round(12 * sx * (CARD_ART_WIDTH / 256))),
+        width: `${maxW}%`,
+        maxWidth: `${maxW}%`,
+      }}
+    >
+      {t}
+    </div>
+  );
+}
+
 /** Try `{cardId}.png` etc.; then render fallback (pip court or glyph). */
 function RasterPictureOr({
   cardId,
@@ -182,6 +207,12 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
     setCustomBroken(!customFullBleed);
   }, [customFullBleed]);
 
+  const bgOnlyEarly = override?.backgroundOnly ?? defaults?.backgroundOnly ?? false;
+  const captionConfig = useMemo(
+    () => mergedBackgroundCaption(defaults?.backgroundCaptionDefaults, override?.backgroundCaption),
+    [defaults?.backgroundCaptionDefaults, override?.backgroundCaption],
+  );
+
   if (customFullBleed && !customBroken) {
     return (
       <div
@@ -195,6 +226,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
           draggable={false}
           onError={() => setCustomBroken(true)}
         />
+        {bgOnlyEarly && captionConfig ? <BackgroundCaptionLayer config={captionConfig} /> : null}
       </div>
     );
   }
@@ -206,14 +238,18 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   const textScaleMul = (ct.scale ?? 1) * notifierScale;
   const offLX = ct.offsetLeftXPct ?? 0;
   const offTY = ct.offsetTopYPct ?? 0;
+  const symmetricCorners = ct.symmetricCorners !== false;
 
   const cornerFontPx = Math.round(CARD_ART_WIDTH * 0.085 * textScaleMul);
   const cornerGlyphPx = CARD_ART_WIDTH * 0.12 * notifierScale;
 
-  const bgOnly = override?.backgroundOnly ?? defaults?.backgroundOnly ?? false;
+  const bgOnly = bgOnlyEarly;
   const underlay = defaults?.faceUnderlayColor ?? '#000000';
 
   const royalPicture = value === 'J' || value === 'Q' || value === 'K';
+
+  const courtOX = defaults?.courtCentreOffsetPct?.x ?? 0;
+  const courtOY = defaults?.courtCentreOffsetPct?.y ?? 0;
 
   return (
     <div
@@ -250,8 +286,12 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
           <div
             className={`pointer-events-none absolute z-[3] flex flex-col items-start leading-[0.85] rotate-180 ${SUIT_COLORS[suit] ?? 'text-red-600'}`}
             style={{
-              right: `calc(${CORNER_SIDE} - ${offLX}%)`,
-              bottom: `calc(${CORNER_TOP} - ${offTY}%)`,
+              right: symmetricCorners
+                ? `calc(${CORNER_SIDE} + ${offLX}%)`
+                : `calc(${CORNER_SIDE} - ${offLX}%)`,
+              bottom: symmetricCorners
+                ? `calc(${CORNER_TOP} + ${offTY}%)`
+                : `calc(${CORNER_TOP} - ${offTY}%)`,
             }}
           >
             <span className="font-card-rank font-black text-zinc-900" style={{ fontSize: cornerFontPx }}>
@@ -262,33 +302,38 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
         </>
       )}
 
-      {!bgOnly && isJoker && (
-        <RasterPictureOr
-          cardId={card}
-          fallback={
-            <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center">
-              <div className={`opacity-90 ${SUIT_COLORS['Joker'] ?? 'text-purple-500'}`}>
-                <SuitGlyph suit="Joker" className="h-[min(42vw,7rem)] w-[min(42vw,7rem)] max-h-[55%] max-w-[55%]" />
-              </div>
-            </div>
-          }
-        />
+      {!bgOnly && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[2]"
+          style={{ transform: `translate(${courtOX}%, ${courtOY}%)` }}
+        >
+          {isJoker ? (
+            <RasterPictureOr
+              cardId={card}
+              fallback={
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className={`opacity-90 ${SUIT_COLORS['Joker'] ?? 'text-purple-500'}`}>
+                    <SuitGlyph suit="Joker" className="h-[min(42vw,7rem)] w-[min(42vw,7rem)] max-h-[55%] max-w-[55%]" />
+                  </div>
+                </div>
+              }
+            />
+          ) : royalPicture ? (
+            <PictureInterior suit={suit} value={value} cardId={card} pipScale={pipScale} />
+          ) : (
+            <CenterFill
+              card={card}
+              suit={suit}
+              value={value}
+              override={override}
+              defaults={defaults}
+              pipScale={pipScale}
+            />
+          )}
+        </div>
       )}
 
-      {!bgOnly && !isJoker && royalPicture && (
-        <PictureInterior suit={suit} value={value} cardId={card} pipScale={pipScale} />
-      )}
-
-      {!bgOnly && !isJoker && !royalPicture && (
-        <CenterFill
-          card={card}
-          suit={suit}
-          value={value}
-          override={override}
-          defaults={defaults}
-          pipScale={pipScale}
-        />
-      )}
+      {bgOnly && captionConfig ? <BackgroundCaptionLayer config={captionConfig} /> : null}
     </div>
   );
 };

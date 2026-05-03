@@ -1,5 +1,11 @@
 import { VALUES } from '../types';
-import type { CardArtGlobalDefaults, CardArtOverride, PipOrient, PipSlot } from './types';
+import type {
+  BackgroundCaptionConfig,
+  CardArtGlobalDefaults,
+  CardArtOverride,
+  PipOrient,
+  PipSlot,
+} from './types';
 import { cardArtAssetUrl, cardBackgroundUrlCandidates } from './paths';
 import { defaultPipCellsForRank } from './pipLayouts';
 
@@ -92,6 +98,22 @@ export function cyclePipAtCell(slots: PipSlot[], col: number, row: number): PipS
 
 export function normalizePipSlot(p: PipSlot): PipSlot {
   return { col: p.col, row: p.row, o: normalizePipOrient(p.o) };
+}
+
+/** Merged caption for background-only faces (override wins per field; text can fall back to defaults). */
+export function mergedBackgroundCaption(
+  defaultsCap?: BackgroundCaptionConfig,
+  overrideCap?: BackgroundCaptionConfig,
+): BackgroundCaptionConfig | undefined {
+  const text = (overrideCap?.text?.trim() || defaultsCap?.text?.trim()) ?? '';
+  if (!text) return undefined;
+  return {
+    text,
+    scale: overrideCap?.scale ?? defaultsCap?.scale,
+    anchorXPct: overrideCap?.anchorXPct ?? defaultsCap?.anchorXPct ?? 50,
+    anchorYPct: overrideCap?.anchorYPct ?? defaultsCap?.anchorYPct ?? 50,
+    maxWidthPct: overrideCap?.maxWidthPct ?? defaultsCap?.maxWidthPct ?? 88,
+  };
 }
 
 export function resolvePipSlots(
