@@ -49,6 +49,7 @@ function PipImage({
     width: `${maxSideFrac * 100}%`,
     height: `${maxSideFrac * 100}%`,
     transform: 'translate(-50%, -50%)',
+    zIndex: 2,
   };
 
   const color = SUIT_COLORS[suit] ?? 'text-red-600';
@@ -193,7 +194,9 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override }) =>
       {pictureRank ? (
         <PictureInterior suit={suit} value={value} cardId={card} />
       ) : (
-        <PipInterior suit={suit} value={value} override={override} />
+        <div className="pointer-events-none absolute inset-0 z-[1]">
+          <PipInterior suit={suit} value={value} override={override} />
+        </div>
       )}
     </div>
   );
@@ -240,7 +243,8 @@ function PictureInterior({ suit, value, cardId }: { suit: string; value: string;
 function PipInterior({ suit, value, override }: { suit: string; value: string; override?: CardArtOverride }) {
   let cells: PipGridCell[] | null = null;
   if (value === 'A') {
-    cells = [{ col: 6, row: 8 }];
+    /** 11×17 grid: centre cell is col 5, row 8 */
+    cells = [{ col: 5, row: 8 }];
   } else if (override?.pipGrid && override.pipGrid.length > 0) {
     cells = override.pipGrid;
   } else {

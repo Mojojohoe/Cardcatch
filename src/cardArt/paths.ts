@@ -5,23 +5,41 @@ export function cardArtAssetUrl(fileName: string): string {
   return `${base.endsWith('/') ? base : `${base}/`}assets/images/${path}`;
 }
 
-/** Try these in order until one loads (png / webp / jpg). */
-const RASTER_EXTS = ['.png', '.webp', '.jpg'] as const;
+/** Raster extensions tried in order (svg included for vector suit packs). */
+const RASTER_EXTS = ['.png', '.webp', '.jpg', '.svg'] as const;
 
 export function cardBackgroundUrlCandidates(): string[] {
   return RASTER_EXTS.map((ext) => cardArtAssetUrl(`CardBasicLight${ext}`));
 }
 
-/** Suit pip / corner art: `SuitHearts.png`, `SuitDiamonds.webp`, … */
+/**
+ * Suit pip / corner art — tries several stems because asset packs vary (SuitHearts vs Hearts only, etc.).
+ */
 export function suitRasterUrlCandidates(suit: string): string[] {
-  return RASTER_EXTS.map((ext) => cardArtAssetUrl(`Suit${suit}${ext}`));
+  const stems = [
+    `Suit${suit}`,
+    `${suit}`,
+    `${suit.toLowerCase()}`,
+    `suit_${suit}`,
+    `Suit_${suit}`,
+    `suits/Suit${suit}`,
+    `suits/${suit}`,
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const stem of stems) {
+    for (const ext of RASTER_EXTS) {
+      const url = cardArtAssetUrl(`${stem}${ext}`);
+      if (!seen.has(url)) {
+        seen.add(url);
+        out.push(url);
+      }
+    }
+  }
+  return out;
 }
 
 /** Full-bleed picture card: `Hearts-K.png` etc. */
 export function pictureCardUrlCandidates(cardId: string): string[] {
-  const out: string[] = [];
-  for (const ext of RASTER_EXTS) {
-    out.push(cardArtAssetUrl(`${cardId}${ext}`));
-  }
-  return out;
+  return RASTER_EXTS.map((ext) => cardArtAssetUrl(`${cardId}${ext}`));
 }

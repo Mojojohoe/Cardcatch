@@ -1,6 +1,6 @@
-/** Design-time canvas: pip snaps for ranks 2–10. */
-export const PIP_GRID_COLS = 12;
-export const PIP_GRID_ROWS = 18;
+/** Design-time canvas: odd × odd so one cell is the true centre (e.g. col 5 / row 8 for 11×17). */
+export const PIP_GRID_COLS = 11;
+export const PIP_GRID_ROWS = 17;
 
 export type PipGridCell = { col: number; row: number };
 
