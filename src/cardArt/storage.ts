@@ -1,9 +1,15 @@
 import type { CardArtDisplayMode, CardArtGlobalDefaults, CardArtManifest, CardArtOverride } from './types';
 import { SHIPPED_CARD_ART_MODE } from './shippedPack';
 
-const MANIFEST_KEY = 'cardcatch-card-art-manifest';
-const DEFAULTS_KEY = 'cardcatch-card-art-defaults';
-const MODE_KEY = 'cardcatch-card-art-mode';
+export const CARD_ART_LOCAL_STORAGE_KEYS = {
+  manifest: 'cardcatch-card-art-manifest',
+  defaults: 'cardcatch-card-art-defaults',
+  mode: 'cardcatch-card-art-mode',
+} as const;
+
+const MANIFEST_KEY = CARD_ART_LOCAL_STORAGE_KEYS.manifest;
+const DEFAULTS_KEY = CARD_ART_LOCAL_STORAGE_KEYS.defaults;
+const MODE_KEY = CARD_ART_LOCAL_STORAGE_KEYS.mode;
 
 export function loadCardArtManifest(): CardArtManifest {
   try {

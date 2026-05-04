@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { usePowerTooltipPosition } from './hooks/usePowerTooltipPosition';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -4148,6 +4149,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 function CardArtHud() {
   const { mode, setMode } = useCardArt();
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const sync = () => setCreatorOpen(window.location.hash === '#card-creator');
@@ -4156,7 +4162,9 @@ function CardArtHud() {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
-  return (
+  if (!mounted || typeof document === 'undefined') return null;
+
+  return createPortal(
     <>
       {creatorOpen && (
         <CardCreator
@@ -4166,7 +4174,7 @@ function CardArtHud() {
           }}
         />
       )}
-      <div className="pointer-events-auto fixed top-4 right-4 z-[2500] flex flex-col items-end gap-2">
+      <div className="pointer-events-auto fixed top-4 right-4 z-[3000] flex flex-col items-end gap-2">
         <div className="flex items-center gap-1 rounded-lg border border-emerald-800 bg-emerald-950/95 px-2 py-1.5 text-[9px] font-black uppercase shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm">
           <span className="text-slate-500">Art</span>
           <button
@@ -4204,7 +4212,8 @@ function CardArtHud() {
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -4241,7 +4250,7 @@ export default function App() {
         )}
       </div>
 
-      {(import.meta.env.DEV || import.meta.env.VITE_CARD_ART_TOOLS === '1') && <CardArtHud />}
+      {(!import.meta.env.PROD || import.meta.env.VITE_CARD_ART_TOOLS === '1') && <CardArtHud />}
 
       <footer className="fixed bottom-4 left-4 pointer-events-none opacity-20 text-[8px] font-black uppercase tracking-[0.4em]">
          TACTICAL NEXUS v2.0.0 - PURE P2P NO-BACKEND MODE
