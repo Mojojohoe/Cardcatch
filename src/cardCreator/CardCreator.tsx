@@ -44,6 +44,43 @@ const SHARED_RANK_OPTIONS = [...VALUES, 'G'].filter((v) => !['J', 'Q', 'K'].incl
 
 const RANK_RANGE_OPTIONS = [...VALUES, 'G'];
 
+function pruneBackgroundCaption(bc?: BackgroundCaptionConfig): BackgroundCaptionConfig | undefined {
+  if (!bc) return undefined;
+  const next: BackgroundCaptionConfig = {};
+  if (bc.text?.trim()) next.text = bc.text.trim();
+  if (bc.scale != null) next.scale = bc.scale;
+  if (bc.anchorXPct != null) next.anchorXPct = bc.anchorXPct;
+  if (bc.anchorYPct != null) next.anchorYPct = bc.anchorYPct;
+  if (bc.maxWidthPct != null) next.maxWidthPct = bc.maxWidthPct;
+  if (bc.mirrorDual === true) next.mirrorDual = true;
+  if (bc.color?.trim()) next.color = bc.color.trim();
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+/** Same shape as persisted overrides (matches "Save card"). */
+function buildCleanCardOverrideForPack(draft: CardArtOverride | null): CardArtOverride | null {
+  if (!draft) return null;
+  const clean: CardArtOverride = {};
+  if (draft.customDataUrl) clean.customDataUrl = draft.customDataUrl;
+  if (draft.customImageFile?.trim()) clean.customImageFile = draft.customImageFile.trim();
+  if (draft.pipGrid?.length) clean.pipGrid = draft.pipGrid;
+  if (draft.backgroundOnly) clean.backgroundOnly = true;
+  const capSaved = pruneBackgroundCaption(draft.backgroundCaption);
+  if (capSaved) clean.backgroundCaption = capSaved;
+  const opDraft = draft.faceTextOpacity;
+  if (typeof opDraft === 'number' && Number.isFinite(opDraft)) {
+    const c = Math.min(1, Math.max(0, opDraft));
+    if (c !== 1) clean.faceTextOpacity = c;
+  }
+  const centre = draft.centrePictureFile?.trim();
+  if (centre) clean.centrePictureFile = centre;
+  const cps = draft.centrePictureScale;
+  if (typeof cps === 'number' && Number.isFinite(cps)) {
+    clean.centrePictureScale = Math.min(3, Math.max(0.25, cps));
+  }
+  return Object.keys(clean).length === 0 ? null : clean;
+}
+
 function trySplitPlaying(id: string): { suit: string; value: string } | null {
   if (id.startsWith('power-') || id.startsWith('curse-') || id.startsWith('back-')) return null;
   const i = id.indexOf('-');
@@ -159,7 +196,15 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const draft = localOverride;
 
   const handleExportCardArtPack = useCallback(() => {
-    const pack = buildCardArtPackExport(displayMode, manifest, defaults);
+    // Defaults tab edits live in `draftDefaults` until "Save defaults"; export must include that or the JSON is empty.
+    const mergedManifest = { ...manifest };
+    const cleanCard = buildCleanCardOverrideForPack(localOverride);
+    if (cleanCard) mergedManifest[selected] = cleanCard;
+
+    const pack = buildCardArtPackExport(displayMode, mergedManifest, draftDefaults);
+    setDefaults(draftDefaults);
+    if (cleanCard) updateOverride(selected, cleanCard);
+
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -169,9 +214,9 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     URL.revokeObjectURL(url);
     setPackIoBanner({
       type: 'ok',
-      text: `Downloaded ${PUBLIC_CARD_ART_PACK_FILENAME}. Put it in the project public/ folder and reload — all clients load it for Artwork (bundled shipped pack stays as base; dev localStorage can still override).`,
+      text: `Downloaded ${PUBLIC_CARD_ART_PACK_FILENAME} (includes current Defaults tab + this card if edited). Put it in public/ and reload.`,
     });
-  }, [displayMode, manifest, defaults]);
+  }, [displayMode, manifest, draftDefaults, selected, localOverride, setDefaults, updateOverride]);
 
   const handleImportCardArtPackFile = useCallback(
     (file: File) => {
@@ -245,39 +290,9 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const previewCurseId = selected.startsWith('curse-') ? Number(selected.slice(6)) : NaN;
   const previewIsBack = selected.startsWith('back-');
 
-  const pruneBackgroundCaption = (bc?: BackgroundCaptionConfig): BackgroundCaptionConfig | undefined => {
-    if (!bc) return undefined;
-    const next: BackgroundCaptionConfig = {};
-    if (bc.text?.trim()) next.text = bc.text.trim();
-    if (bc.scale != null) next.scale = bc.scale;
-    if (bc.anchorXPct != null) next.anchorXPct = bc.anchorXPct;
-    if (bc.anchorYPct != null) next.anchorYPct = bc.anchorYPct;
-    if (bc.maxWidthPct != null) next.maxWidthPct = bc.maxWidthPct;
-    if (bc.mirrorDual === true) next.mirrorDual = true;
-    if (bc.color?.trim()) next.color = bc.color.trim();
-    return Object.keys(next).length > 0 ? next : undefined;
-  };
-
   const handleSaveCard = () => {
-    const clean: CardArtOverride = {};
-    if (draft?.customDataUrl) clean.customDataUrl = draft.customDataUrl;
-    if (draft?.customImageFile?.trim()) clean.customImageFile = draft.customImageFile.trim();
-    if (draft?.pipGrid?.length) clean.pipGrid = draft.pipGrid;
-    if (draft?.backgroundOnly) clean.backgroundOnly = true;
-    const capSaved = pruneBackgroundCaption(draft?.backgroundCaption);
-    if (capSaved) clean.backgroundCaption = capSaved;
-    const opDraft = draft?.faceTextOpacity;
-    if (typeof opDraft === 'number' && Number.isFinite(opDraft)) {
-      const c = Math.min(1, Math.max(0, opDraft));
-      if (c !== 1) clean.faceTextOpacity = c;
-    }
-    const centre = draft?.centrePictureFile?.trim();
-    if (centre) clean.centrePictureFile = centre;
-    const cps = draft?.centrePictureScale;
-    if (typeof cps === 'number' && Number.isFinite(cps)) {
-      clean.centrePictureScale = Math.min(3, Math.max(0.25, cps));
-    }
-    if (Object.keys(clean).length === 0) {
+    const clean = buildCleanCardOverrideForPack(draft);
+    if (clean === null) {
       updateOverride(selected, null);
     } else {
       updateOverride(selected, clean);
@@ -311,7 +326,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <div className="min-w-0 flex-1">
             <h1 className="text-sm font-black uppercase tracking-[0.2em] text-amber-200">Card Creator</h1>
             <p className="text-[10px] text-slate-500">
-              Per-card overrides vs global defaults (all Hearts background, pip scales, shared rank layouts).
+              Per-card overrides vs global defaults. Export JSON uses your current Defaults tab and the selected card as shown — you do not need to click Save defaults / Save card first (export also persists them here).
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">

@@ -3,6 +3,8 @@ Optional table-art pack (Card Creator export)
 
 1. In Card Creator, use "Export JSON". You get a file named:
    cardcatch-card-art-pack.json
+   (Export includes your current Defaults tab and the selected card as on screen — no need to click
+   "Save defaults" / "Save card" first; export also writes them to this browser.)
 
 2. Copy that file into this public/ folder (same level as this .txt file).
 
