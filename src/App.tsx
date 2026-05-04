@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { usePowerTooltipPosition } from './hooks/usePowerTooltipPosition';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -3007,6 +3006,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
     return (
       <div className="flex h-full flex-col space-y-6 overflow-y-auto p-6">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <CardArtToolbar />
+        </div>
         {isHost ? (
           <HostLobbyPanel
             room={room}
@@ -3257,6 +3259,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 justify-self-end sm:gap-4">
+          <CardArtToolbar />
           <button
             type="button"
             onClick={() => setIsDevMenuOpen(true)}
@@ -4146,14 +4149,50 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   );
 };
 
-function CardArtHud() {
+/** In-game header controls (not viewport-fixed) so they stay visible beside Dev / Rules in dual-pane and normal play. */
+function CardArtToolbar() {
   const { mode, setMode } = useCardArt();
-  const [creatorOpen, setCreatorOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  return (
+    <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1 rounded-lg border border-emerald-800 bg-emerald-950/95 px-2 py-1.5 text-[9px] font-black uppercase shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+      <span className="text-slate-500">Art</span>
+      <button
+        type="button"
+        onClick={() => setMode('vector')}
+        className={`rounded border px-2 py-0.5 transition-colors ${
+          mode === 'vector'
+            ? 'border-amber-400 bg-amber-400/25 text-amber-100'
+            : 'border-transparent text-slate-400 hover:text-slate-200'
+        }`}
+      >
+        Vector
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode('raster')}
+        className={`rounded border px-2 py-0.5 transition-colors ${
+          mode === 'raster'
+            ? 'border-amber-400 bg-amber-400/25 text-amber-100'
+            : 'border-transparent text-slate-400 hover:text-slate-200'
+        }`}
+      >
+        Artwork
+      </button>
+      <span className="mx-0.5 hidden h-4 w-px bg-emerald-800 sm:mx-1 sm:block" aria-hidden />
+      <button
+        type="button"
+        onClick={() => {
+          window.location.hash = '#card-creator';
+        }}
+        className="rounded border border-emerald-700 px-2 py-0.5 text-emerald-300 hover:bg-emerald-900/80"
+      >
+        Card Creator
+      </button>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+function CardCreatorHashOverlay() {
+  const [creatorOpen, setCreatorOpen] = useState(false);
 
   useEffect(() => {
     const sync = () => setCreatorOpen(window.location.hash === '#card-creator');
@@ -4162,58 +4201,15 @@ function CardArtHud() {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
-  if (!mounted || typeof document === 'undefined') return null;
+  if (!creatorOpen) return null;
 
-  return createPortal(
-    <>
-      {creatorOpen && (
-        <CardCreator
-          onClose={() => {
-            window.location.hash = '';
-            setCreatorOpen(false);
-          }}
-        />
-      )}
-      <div className="pointer-events-auto fixed top-4 right-4 z-[3000] flex flex-col items-end gap-2">
-        <div className="flex items-center gap-1 rounded-lg border border-emerald-800 bg-emerald-950/95 px-2 py-1.5 text-[9px] font-black uppercase shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-          <span className="text-slate-500">Art</span>
-          <button
-            type="button"
-            onClick={() => setMode('vector')}
-            className={`rounded border px-2 py-0.5 transition-colors ${
-              mode === 'vector'
-                ? 'border-amber-400 bg-amber-400/25 text-amber-100'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Vector
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('raster')}
-            className={`rounded border px-2 py-0.5 transition-colors ${
-              mode === 'raster'
-                ? 'border-amber-400 bg-amber-400/25 text-amber-100'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Artwork
-          </button>
-          <span className="mx-1 h-4 w-px bg-emerald-800" aria-hidden />
-          <button
-            type="button"
-            onClick={() => {
-              window.location.hash = '#card-creator';
-              setCreatorOpen(true);
-            }}
-            className="rounded border border-emerald-700 px-2 py-0.5 text-emerald-300 hover:bg-emerald-900/80"
-          >
-            Card Creator
-          </button>
-        </div>
-      </div>
-    </>,
-    document.body,
+  return (
+    <CardCreator
+      onClose={() => {
+        window.location.hash = '';
+        setCreatorOpen(false);
+      }}
+    />
   );
 }
 
@@ -4221,7 +4217,10 @@ export default function App() {
   const [isDual, setIsDual] = useState(false);
 
   return (
-    <div className="min-h-screen bg-emerald-950 text-white selection:bg-yellow-400 selection:text-black font-sans overflow-hidden">
+    <>
+      {/* CardCreator is fixed full-screen; keep outside overflow-hidden so it is not clipped. */}
+      <CardCreatorHashOverlay />
+      <div className="min-h-screen bg-emerald-950 text-white selection:bg-yellow-400 selection:text-black font-sans overflow-hidden">
       {/* Dev Toggle */}
       <div className="fixed top-4 left-4 z-[220] flex gap-2">
         <button 
@@ -4250,11 +4249,10 @@ export default function App() {
         )}
       </div>
 
-      {(!import.meta.env.PROD || import.meta.env.VITE_CARD_ART_TOOLS === '1') && <CardArtHud />}
-
       <footer className="fixed bottom-4 left-4 pointer-events-none opacity-20 text-[8px] font-black uppercase tracking-[0.4em]">
          TACTICAL NEXUS v2.0.0 - PURE P2P NO-BACKEND MODE
       </footer>
     </div>
+    </>
   );
 }

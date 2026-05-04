@@ -246,7 +246,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[500] flex flex-col bg-slate-950 text-slate-100">
+    <div className="fixed inset-0 z-[6000] flex flex-col bg-slate-950 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
         <div>
           <h1 className="text-sm font-black uppercase tracking-[0.2em] text-amber-200">Card Creator</h1>
