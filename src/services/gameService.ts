@@ -15,6 +15,7 @@ import {
   SlothDreamResult,
   type CardArtSessionPayload,
 } from '../types';
+import { CARD_ART_TOOLS_ENABLED } from '../cardArt/toolsAccess';
 import { DESPERATION_GAME_SLICES, FORTUNE_GAME_SLICES, SLOTH_DREAM_GAME_SLICES } from '../wheels/presets';
 import {
   CURSE_GLUTTONY,
@@ -753,7 +754,7 @@ export class GameService {
 
   /** Dev only: publish Card Creator pack for guest browsers that do not share the host’s localStorage. */
   publishCardArtSession(payload: CardArtSessionPayload) {
-    if (!import.meta.env.DEV || !this.isHost || !this.state) return;
+    if (!CARD_ART_TOOLS_ENABLED || !this.isHost || !this.state) return;
     this.state = {
       ...this.state,
       cardArtSession: payload,

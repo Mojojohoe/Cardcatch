@@ -10,6 +10,7 @@ import {
   saveDisplayMode,
 } from './storage';
 import { SHIPPED_CARD_ART_DEFAULTS, SHIPPED_CARD_ART_MANIFEST, SHIPPED_CARD_ART_MODE } from './shippedPack';
+import { CARD_ART_TOOLS_ENABLED } from './toolsAccess';
 
 export type CardArtCtx = {
   mode: CardArtDisplayMode;
@@ -26,11 +27,11 @@ export type CardArtCtx = {
 };
 
 /**
- * **Dev only:** merge host `cardArtSession` so a guest browser picks up Card Creator + localStorage from the host.
- * Production builds skip this (everyone uses the same shipped pack from static hosting).
+ * When {@link CARD_ART_TOOLS_ENABLED}: merge host `cardArtSession` so a guest browser picks up Card Creator
+ * without the host’s localStorage. Otherwise returns `parent` (shipped pack / no P2P art sync).
  */
 export function mergeCardArtWithRoom(parent: CardArtCtx, room: RoomData, isHost: boolean): CardArtCtx {
-  if (!import.meta.env.DEV) return parent;
+  if (!CARD_ART_TOOLS_ENABLED) return parent;
   const s = room.cardArtSession;
   if (!isHost && s) {
     return {
@@ -49,36 +50,36 @@ export const CardArtContext = createContext<CardArtCtx | null>(null);
 
 export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mode, setModeState] = useState<CardArtDisplayMode>(() =>
-    import.meta.env.DEV ? loadDisplayMode() : SHIPPED_CARD_ART_MODE,
+    CARD_ART_TOOLS_ENABLED ? loadDisplayMode() : SHIPPED_CARD_ART_MODE,
   );
   const [manifest, setManifestState] = useState<CardArtManifest>(() =>
-    import.meta.env.DEV
+    CARD_ART_TOOLS_ENABLED
       ? { ...SHIPPED_CARD_ART_MANIFEST, ...loadCardArtManifest() }
       : { ...SHIPPED_CARD_ART_MANIFEST },
   );
   const [manifestVersion, setManifestVersion] = useState(0);
   const [defaults, setDefaultsState] = useState<CardArtGlobalDefaults>(() =>
-    import.meta.env.DEV
+    CARD_ART_TOOLS_ENABLED
       ? { ...SHIPPED_CARD_ART_DEFAULTS, ...loadCardArtDefaults() }
       : { ...SHIPPED_CARD_ART_DEFAULTS },
   );
   const [defaultsVersion, setDefaultsVersion] = useState(0);
 
   const setMode = useCallback((m: CardArtDisplayMode) => {
-    if (!import.meta.env.DEV) return;
+    if (!CARD_ART_TOOLS_ENABLED) return;
     setModeState(m);
     saveDisplayMode(m);
   }, []);
 
   const setManifest = useCallback((m: CardArtManifest) => {
-    if (!import.meta.env.DEV) return;
+    if (!CARD_ART_TOOLS_ENABLED) return;
     setManifestState(m);
     saveCardArtManifest(m);
     setManifestVersion((v) => v + 1);
   }, []);
 
   const updateOverride = useCallback((cardId: string, o: CardArtOverride | null) => {
-    if (!import.meta.env.DEV) return;
+    if (!CARD_ART_TOOLS_ENABLED) return;
     setManifestState((prev) => {
       const next = { ...prev };
       if (o == null) delete next[cardId];
@@ -90,7 +91,7 @@ export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const bumpManifest = useCallback(() => {
-    if (import.meta.env.DEV) {
+    if (CARD_ART_TOOLS_ENABLED) {
       setManifestState({ ...SHIPPED_CARD_ART_MANIFEST, ...loadCardArtManifest() });
     } else {
       setManifestState({ ...SHIPPED_CARD_ART_MANIFEST });
@@ -99,14 +100,14 @@ export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const setDefaults = useCallback((d: CardArtGlobalDefaults) => {
-    if (!import.meta.env.DEV) return;
+    if (!CARD_ART_TOOLS_ENABLED) return;
     setDefaultsState(d);
     saveCardArtDefaults(d);
     setDefaultsVersion((v) => v + 1);
   }, []);
 
   const updateDefaults = useCallback((patch: Partial<CardArtGlobalDefaults>) => {
-    if (!import.meta.env.DEV) return;
+    if (!CARD_ART_TOOLS_ENABLED) return;
     setDefaultsState((prev) => {
       const next = { ...prev, ...patch };
       saveCardArtDefaults(next);

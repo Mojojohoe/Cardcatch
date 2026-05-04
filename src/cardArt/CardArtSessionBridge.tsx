@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import type { RoomData } from '../types';
 import type { GameService } from '../services/gameService';
 import { CardArtContext, mergeCardArtWithRoom, useCardArt } from './cardArtContext';
+import { CARD_ART_TOOLS_ENABLED } from './toolsAccess';
 import { buildCardArtSessionPayload } from './syncPayload';
 
 type Props = {
@@ -12,11 +13,11 @@ type Props = {
 };
 
 /**
- * **Dev only:** pushes Card Creator + localStorage onto `room.cardArtSession` so a second dev browser matches the host.
- * Production: no-op wrapper — all clients use the same shipped static pack from the site bundle.
+ * When {@link CARD_ART_TOOLS_ENABLED}: pushes Card Creator state onto `room.cardArtSession` for guests.
+ * Otherwise a no-op wrapper (shipped pack only).
  */
 export const CardArtSessionBridge: React.FC<Props> = ({ room, myUid, serviceRef, children }) => {
-  if (!import.meta.env.DEV) return <>{children}</>;
+  if (!CARD_ART_TOOLS_ENABLED) return <>{children}</>;
   const parent = useCardArt();
   const isHost = myUid === room.hostUid;
   const lastSentSig = useRef('');
