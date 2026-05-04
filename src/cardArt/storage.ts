@@ -1,4 +1,5 @@
 import type { CardArtDisplayMode, CardArtGlobalDefaults, CardArtManifest, CardArtOverride } from './types';
+import { SHIPPED_CARD_ART_MODE } from './shippedPack';
 
 const MANIFEST_KEY = 'cardcatch-card-art-manifest';
 const DEFAULTS_KEY = 'cardcatch-card-art-defaults';
@@ -41,7 +42,8 @@ export function loadDisplayMode(): CardArtDisplayMode {
   } catch {
     /* ignore */
   }
-  return 'vector';
+  /** Match {@link SHIPPED_CARD_ART_MODE} so dev without prefs uses the bundled table (raster + public assets). */
+  return SHIPPED_CARD_ART_MODE;
 }
 
 export function saveDisplayMode(mode: CardArtDisplayMode): void {

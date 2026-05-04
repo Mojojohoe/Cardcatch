@@ -19,7 +19,11 @@ type Props = {
 export const CardArtSessionBridge: React.FC<Props> = ({ room, myUid, serviceRef, children }) => {
   if (!CARD_ART_TOOLS_ENABLED) return <>{children}</>;
   const parent = useCardArt();
-  const isHost = myUid === room.hostUid;
+  /**
+   * Prefer room roster, but if `hostUid` is briefly wrong vs PeerJS id while `GameService` still knows we’re
+   * hosting, treat as host — otherwise guest merge can replace local manifest with an empty `cardArtSession`.
+   */
+  const isHost = myUid === room.hostUid || serviceRef.current.getIsHost();
   const lastSentSig = useRef('');
 
   const merged = useMemo(() => mergeCardArtWithRoom(parent, room, isHost), [parent, room, isHost]);

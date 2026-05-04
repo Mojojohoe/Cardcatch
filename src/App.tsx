@@ -110,8 +110,8 @@ import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation
 import { playerHandFanMotion } from './playerHandFan';
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
 import { mergeCardArtWithRoom, useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
-import { CARD_ART_TOOLS_ENABLED } from './cardArt/toolsAccess';
 import { cardArtAssetUrl } from './cardArt/paths';
+import { shippedPlayingCardBackRasterUrl } from './cardArt/shippedRasterFallbacks';
 import { CardCreator } from './cardCreator/CardCreator';
 import {
   CURSE_GLUTTONY,
@@ -2740,13 +2740,15 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const cardArtForUi = useMemo(() => {
     if (!cardArtCtx) return null;
     if (!room) return cardArtCtx;
-    const isHostAtTable = room.hostUid === myUid;
+    const isHostAtTable = room.hostUid === myUid || serviceRef.current.getIsHost();
     return mergeCardArtWithRoom(cardArtCtx, room, isHostAtTable);
   }, [cardArtCtx, room, room?.cardArtSession, room?.updatedAt, myUid]);
   const deckBackRasterUrl = useMemo(() => {
+    if (cardArtForUi?.mode !== 'raster') return null;
     const m = cardArtForUi?.manifest?.['back-deck'];
-    if (cardArtForUi?.mode !== 'raster' || !m) return null;
-    return m.customDataUrl ?? (m.customImageFile?.trim() ? cardArtAssetUrl(m.customImageFile.trim()) : null);
+    const fromManifest =
+      m?.customDataUrl ?? (m?.customImageFile?.trim() ? cardArtAssetUrl(m.customImageFile.trim()) : null);
+    return fromManifest ?? shippedPlayingCardBackRasterUrl('back-deck');
   }, [cardArtForUi?.mode, cardArtForUi?.manifest, cardArtForUi?.manifestVersion]);
 
   const handleCreateRoom = async () => {
@@ -4239,7 +4241,7 @@ export default function App() {
         )}
       </div>
 
-      {CARD_ART_TOOLS_ENABLED ? <CardArtHud /> : null}
+      {(import.meta.env.DEV || import.meta.env.VITE_CARD_ART_TOOLS === '1') && <CardArtHud />}
 
       <footer className="fixed bottom-4 left-4 pointer-events-none opacity-20 text-[8px] font-black uppercase tracking-[0.4em]">
          TACTICAL NEXUS v2.0.0 - PURE P2P NO-BACKEND MODE

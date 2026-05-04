@@ -34,11 +34,18 @@ export function mergeCardArtWithRoom(parent: CardArtCtx, room: RoomData, isHost:
   if (!CARD_ART_TOOLS_ENABLED) return parent;
   const s = room.cardArtSession;
   if (!isHost && s) {
+    /** Empty `{}` from an early / failed publish must not wipe the guest (or a misclassified host’s) manifest. */
+    const sessionHasManifest =
+      s.manifest && typeof s.manifest === 'object' && Object.keys(s.manifest).length > 0;
+    const nextManifest = sessionHasManifest ? s.manifest : parent.manifest;
+    const nextMode = s.mode ?? parent.mode;
+    const nextDefaults =
+      s.defaults && typeof s.defaults === 'object' ? { ...parent.defaults, ...s.defaults } : parent.defaults;
     return {
       ...parent,
-      mode: s.mode,
-      manifest: s.manifest,
-      defaults: s.defaults,
+      mode: nextMode,
+      manifest: nextManifest,
+      defaults: nextDefaults,
       manifestVersion: s.seq,
       defaultsVersion: s.seq,
     };

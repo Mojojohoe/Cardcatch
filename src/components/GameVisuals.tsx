@@ -36,6 +36,11 @@ import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide
 import { useOptionalCardArt } from '../cardArt/cardArtContext';
 import { isAssembledRasterCardId } from '../cardArt/assembledRaster';
 import { cardArtAssetUrl } from '../cardArt/paths';
+import {
+  shippedBundledPowerBackUrl,
+  shippedBundledPowerFaceUrl,
+  shippedPlayingCardBackRasterUrl,
+} from '../cardArt/shippedRasterFallbacks';
 import { resolvedFaceTextOpacity } from '../cardArt/resolveCardArt';
 import { ScaledAssembledCardFace } from '../cardArt/ScaledAssembledCardFace';
 import {
@@ -477,11 +482,14 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           ? 'back-prey'
           : 'back-deck';
     const backOv = cardArt?.manifest[backKey];
-    const backRasterUrl =
+    const backRasterFromManifest =
       cardArt?.mode === 'raster' && backOv
         ? backOv.customDataUrl ??
           (backOv.customImageFile?.trim() ? cardArtAssetUrl(backOv.customImageFile.trim()) : null)
         : null;
+    const backRasterUrl =
+      backRasterFromManifest ??
+      (cardArt?.mode === 'raster' ? shippedPlayingCardBackRasterUrl(backKey) : null);
     let backClasses = 'bg-blue-950 border-blue-800/80 text-blue-500 bg-[radial-gradient(circle_at_center,#172554_1px,transparent_1px)] bg-[size:8px_8px]';
     if (isPredator) backClasses = 'bg-red-950 border-red-800/80 text-red-500 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:8px_8px]';
     else if (isPreydator) backClasses = 'bg-purple-950 border-purple-800/80 text-purple-500 bg-[radial-gradient(circle_at_center,#3b0764_1px,transparent_1px)] bg-[size:8px_8px]';
@@ -820,6 +828,11 @@ export const PowerCardVisual: React.FC<{
     (powerManifestOv?.customImageFile?.trim()
       ? cardArtAssetUrl(powerManifestOv.customImageFile.trim())
       : null);
+  const shippedPowerFaceUrl =
+    cardArtPower?.mode === 'raster' && !customPowerFaceUrl
+      ? shippedBundledPowerFaceUrl(cardId, Boolean(curseDef))
+      : null;
+  const effectivePowerFaceUrl = customPowerFaceUrl ?? shippedPowerFaceUrl;
 
   const majorBackOv = cardArtPower?.manifest['back-power'];
   const majorAnonymousBackUrl =
@@ -827,7 +840,7 @@ export const PowerCardVisual: React.FC<{
       ? majorBackOv?.customDataUrl ??
         (majorBackOv?.customImageFile?.trim()
           ? cardArtAssetUrl(majorBackOv.customImageFile.trim())
-          : null)
+          : shippedBundledPowerBackUrl())
       : null;
 
   if (!revealed) {
@@ -904,7 +917,7 @@ export const PowerCardVisual: React.FC<{
     );
   }
 
-  const rasterFullBleed = Boolean(cardArtPower?.mode === 'raster' && customPowerFaceUrl);
+  const rasterFullBleed = Boolean(cardArtPower?.mode === 'raster' && effectivePowerFaceUrl);
   const faceBorder = rasterFullBleed ? 'border-0' : matchHandCard ? 'border-2' : 'border-4';
   const faceShell = rasterFullBleed
     ? 'bg-transparent overflow-hidden shadow-xl'
@@ -925,7 +938,7 @@ export const PowerCardVisual: React.FC<{
       : ''
   } ${curseRackPeek ? 'cursor-help' : disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`;
 
-  if (cardArtPower?.mode === 'raster' && customPowerFaceUrl) {
+  if (cardArtPower?.mode === 'raster' && effectivePowerFaceUrl) {
     return (
       <motion.div
         ref={rootRef}
@@ -953,7 +966,7 @@ export const PowerCardVisual: React.FC<{
         className={powerShellClass}
       >
         <img
-          src={customPowerFaceUrl}
+          src={effectivePowerFaceUrl}
           alt=""
           draggable={false}
           className={`absolute inset-0 z-[25] h-full w-full object-cover ${matchHandCard ? 'rounded-md' : 'rounded-2xl'}`}
