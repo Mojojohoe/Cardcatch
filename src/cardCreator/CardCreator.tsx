@@ -78,6 +78,13 @@ function buildCleanCardOverrideForPack(draft: CardArtOverride | null): CardArtOv
   if (typeof cps === 'number' && Number.isFinite(cps)) {
     clean.centrePictureScale = Math.min(3, Math.max(0.25, cps));
   }
+  const cpo = draft.centrePictureOffsetPct;
+  if (cpo && (typeof cpo.x === 'number' || typeof cpo.y === 'number')) {
+    const nextOff: { x?: number; y?: number } = {};
+    if (typeof cpo.x === 'number' && Number.isFinite(cpo.x)) nextOff.x = cpo.x;
+    if (typeof cpo.y === 'number' && Number.isFinite(cpo.y)) nextOff.y = cpo.y;
+    if (Object.keys(nextOff).length) clean.centrePictureOffsetPct = nextOff;
+  }
   return Object.keys(clean).length === 0 ? null : clean;
 }
 
@@ -157,7 +164,6 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     updateOverride,
     setMode,
     mode: displayMode,
-    manifestVersion,
     defaults,
     setDefaults,
     defaultsVersion,
@@ -177,6 +183,10 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const [sharedRank, setSharedRank] = useState<string>('2');
 
+  /** Always read latest manifest without re-running the draft sync effect on every manifest bump (that wiped unsaved card edits). */
+  const manifestRef = useRef(manifest);
+  manifestRef.current = manifest;
+
   const playingParts = useMemo(() => trySplitPlaying(selected), [selected]);
   const showCentrePictureField = Boolean(
     selected.startsWith('Joker') ||
@@ -184,10 +194,10 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 
   useEffect(() => {
-    const m = manifest[selected];
+    const m = manifestRef.current[selected];
     setLocalOverride(m ? { ...m } : null);
     setFileName(m?.customImageFile ?? '');
-  }, [selected, manifestVersion, manifest]);
+  }, [selected]);
 
   useEffect(() => {
     setDraftDefaults({ ...defaults });
@@ -203,7 +213,11 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     const pack = buildCardArtPackExport(displayMode, mergedManifest, draftDefaults);
     setDefaults(draftDefaults);
-    if (cleanCard) updateOverride(selected, cleanCard);
+    if (cleanCard) {
+      updateOverride(selected, cleanCard);
+      setLocalOverride({ ...cleanCard });
+      setFileName(cleanCard.customImageFile ?? '');
+    }
 
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -239,6 +253,9 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           setMode(parsed.pack.mode);
           setManifest(parsed.pack.manifest);
           setDefaults(parsed.pack.defaults);
+          const imp = parsed.pack.manifest[selected];
+          setLocalOverride(imp ? { ...imp } : null);
+          setFileName(imp?.customImageFile ?? '');
           setPackIoBanner({
             type: 'ok',
             text: "Imported. Your pack is saved to this browser's local storage again.",
@@ -294,13 +311,18 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const clean = buildCleanCardOverrideForPack(draft);
     if (clean === null) {
       updateOverride(selected, null);
+      setLocalOverride(null);
+      setFileName('');
     } else {
       updateOverride(selected, clean);
+      setLocalOverride({ ...clean });
+      setFileName(clean.customImageFile ?? '');
     }
   };
 
   const handleClearCard = () => {
     setLocalOverride(null);
+    setFileName('');
     updateOverride(selected, null);
   };
 
@@ -926,6 +948,70 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                               className="mt-1 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
                             />
                           </label>
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            <label className="text-[11px] text-slate-400">
+                              Image position X % (blank line uses Defaults)
+                              <input
+                                type="number"
+                                step={0.25}
+                                value={
+                                  draft?.centrePictureOffsetPct?.x !== undefined &&
+                                  draft?.centrePictureOffsetPct?.x !== null
+                                    ? draft.centrePictureOffsetPct.x
+                                    : ''
+                                }
+                                onChange={(e) => {
+                                  const raw = e.target.value.trim();
+                                  setDraft((prev) => {
+                                    const base = { ...(prev ?? {}) };
+                                    const cur = { ...base.centrePictureOffsetPct };
+                                    if (!raw.length) {
+                                      delete cur.x;
+                                      if (Object.keys(cur).length === 0) delete base.centrePictureOffsetPct;
+                                      else base.centrePictureOffsetPct = cur;
+                                    } else {
+                                      cur.x = Number(raw) || 0;
+                                      base.centrePictureOffsetPct = cur;
+                                    }
+                                    return Object.keys(base).length ? base : null;
+                                  });
+                                }}
+                                placeholder="defaults"
+                                className="mt-1 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                              />
+                            </label>
+                            <label className="text-[11px] text-slate-400">
+                              Image position Y %
+                              <input
+                                type="number"
+                                step={0.25}
+                                value={
+                                  draft?.centrePictureOffsetPct?.y !== undefined &&
+                                  draft?.centrePictureOffsetPct?.y !== null
+                                    ? draft.centrePictureOffsetPct.y
+                                    : ''
+                                }
+                                onChange={(e) => {
+                                  const raw = e.target.value.trim();
+                                  setDraft((prev) => {
+                                    const base = { ...(prev ?? {}) };
+                                    const cur = { ...base.centrePictureOffsetPct };
+                                    if (!raw.length) {
+                                      delete cur.y;
+                                      if (Object.keys(cur).length === 0) delete base.centrePictureOffsetPct;
+                                      else base.centrePictureOffsetPct = cur;
+                                    } else {
+                                      cur.y = Number(raw) || 0;
+                                      base.centrePictureOffsetPct = cur;
+                                    }
+                                    return Object.keys(base).length ? base : null;
+                                  });
+                                }}
+                                placeholder="defaults"
+                                className="mt-1 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                              />
+                            </label>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1636,9 +1722,10 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       </div>
 
                       <div>
-                        <p className="mb-2 text-[11px] font-bold text-slate-300">Centre court shift</p>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Whole court shift</p>
                         <p className="mb-2 text-[10px] text-slate-500">
-                          Moves royalty / pip / joker centre art as % of card size (+X → right, +Y → down).
+                          Moves pip grid <em>and</em> centre image together (% of card; +X → right, +Y → down). For raster-only
+                          nudges, use <strong>Centre court image position</strong> below.
                         </p>
                         <div className="flex flex-wrap gap-3">
                           <label className="text-[11px] text-slate-400">
@@ -1717,6 +1804,51 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             className="ml-2 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
                           />
                         </label>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Centre court image position</p>
+                        <p className="mb-2 text-[10px] text-slate-500">
+                          Shifts only the large centre raster (Ace / God / royalty / Joker), not pip courts on 2–10.
+                        </p>
+                        <div className="flex flex-wrap gap-3">
+                          <label className="text-[11px] text-slate-400">
+                            Image X %
+                            <input
+                              type="number"
+                              step={0.25}
+                              value={draftDefaults.centrePictureOffsetPct?.x ?? 0}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  centrePictureOffsetPct: {
+                                    ...prev.centrePictureOffsetPct,
+                                    x: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                          <label className="text-[11px] text-slate-400">
+                            Image Y %
+                            <input
+                              type="number"
+                              step={0.25}
+                              value={draftDefaults.centrePictureOffsetPct?.y ?? 0}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  centrePictureOffsetPct: {
+                                    ...prev.centrePictureOffsetPct,
+                                    y: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                        </div>
                       </div>
                     </div>
                   )}

@@ -55,6 +55,11 @@ export type CardArtOverride = {
    * Merged with {@link CardArtGlobalDefaults.centrePictureScale}; default 1.
    */
   centrePictureScale?: number;
+  /**
+   * Shift only the large centre court **image** (not pip grids). % of card width/height; +X right, +Y down.
+   * Merged with {@link CardArtGlobalDefaults.centrePictureOffsetPct}; default 0,0.
+   */
+  centrePictureOffsetPct?: { x?: number; y?: number };
   /** Pip centres + optional flip per pip */
   pipGrid?: PipSlot[];
   /** Opacity 0–1 for face typography (corner rank, captions, royalty rank line). Default 1. */
@@ -92,8 +97,8 @@ export type CardArtGlobalDefaults = {
   notifierScaleRanges?: { from: string; to: string; scale: number }[];
   cornerText?: CornerTextConfig;
   /**
-   * Shift centre court art (pips, royalty picture, joker centre) as % of the card size.
-   * Positive X moves right, positive Y moves down.
+   * Shift the whole centre **court** layer (pip grid + centre image + joker art) as % of card size.
+   * For raster-only nudges of royalty / ace / joker **images**, prefer {@link centrePictureOffsetPct}.
    */
   courtCentreOffsetPct?: { x?: number; y?: number };
   /**
@@ -101,6 +106,11 @@ export type CardArtGlobalDefaults = {
    * Typical range 0.25–3; values are clamped at render time.
    */
   centrePictureScale?: number;
+  /**
+   * Default shift for centre court **images** only (royalty / ace / joker rasters), not pip courts.
+   * See {@link CardArtOverride.centrePictureOffsetPct}.
+   */
+  centrePictureOffsetPct?: { x?: number; y?: number };
   /** Default caption for any background-only face unless the card override replaces it. */
   backgroundCaptionDefaults?: BackgroundCaptionConfig;
   /**

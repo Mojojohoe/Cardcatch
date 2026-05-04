@@ -8,6 +8,18 @@ import {
   suitRasterUrlCandidates,
 } from './paths';
 import type { BackgroundCaptionConfig, CardArtGlobalDefaults, CardArtOverride, PipOrient, PipSlot } from './types';
+
+function mergeCentrePictureOffsetPct(
+  override?: CardArtOverride,
+  defaults?: CardArtGlobalDefaults,
+): { x: number; y: number } {
+  const x = override?.centrePictureOffsetPct?.x ?? defaults?.centrePictureOffsetPct?.x ?? 0;
+  const y = override?.centrePictureOffsetPct?.y ?? defaults?.centrePictureOffsetPct?.y ?? 0;
+  return {
+    x: typeof x === 'number' && Number.isFinite(x) ? x : 0,
+    y: typeof y === 'number' && Number.isFinite(y) ? y : 0,
+  };
+}
 import { pipGridCellToFraction } from './pipLayouts';
 import {
   mergedBackgroundCaption,
@@ -216,6 +228,8 @@ function RasterPictureOr({
   cardId,
   pictureStem,
   pictureScale = 1,
+  offsetXPct = 0,
+  offsetYPct = 0,
   fallback,
 }: {
   cardId: string;
@@ -223,22 +237,37 @@ function RasterPictureOr({
   pictureStem?: string | null;
   /** Uniform scale of the raster inside the court frame (see {@link CardArtOverride.centrePictureScale}). */
   pictureScale?: number;
+  /** Nudge centre image only (% of card); see {@link CardArtOverride.centrePictureOffsetPct}. */
+  offsetXPct?: number;
+  offsetYPct?: number;
   fallback: React.ReactNode;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, pictureStem), [cardId, pictureStem]);
   const [attempt, setAttempt] = useState(0);
   const s = clampCentrePictureScale(pictureScale);
+  const t =
+    offsetXPct !== 0 || offsetYPct !== 0 ? `translate(${offsetXPct}%, ${offsetYPct}%)` : undefined;
 
   useEffect(() => {
     setAttempt(0);
   }, [cardId, pictureStem]);
 
   if (attempt >= candidates.length) {
-    return <>{fallback}</>;
+    return (
+      <div
+        className="pointer-events-none absolute inset-0 z-[2]"
+        style={t ? { transform: t } : undefined}
+      >
+        {fallback}
+      </div>
+    );
   }
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]">
+    <div
+      className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+      style={t ? { transform: t } : undefined}
+    >
       <div
         className="flex max-h-[72%] max-w-full items-center justify-center"
         style={{ transform: s !== 1 ? `scale(${s})` : undefined }}
@@ -345,6 +374,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   const centrePictureScale = clampCentrePictureScale(
     override?.centrePictureScale ?? defaults?.centrePictureScale ?? 1,
   );
+  const centrePicOff = mergeCentrePictureOffsetPct(override, defaults);
 
   return (
     <div
@@ -442,6 +472,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               cardId={card}
               pictureStem={override?.centrePictureFile}
               pictureScale={centrePictureScale}
+              offsetXPct={centrePicOff.x}
+              offsetYPct={centrePicOff.y}
               fallback={
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className={`opacity-90 ${SUIT_COLORS['Joker'] ?? 'text-purple-500'}`}>
@@ -460,6 +492,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               textOpacity={faceTextOpacity}
               centrePictureStem={override?.centrePictureFile}
               centrePictureScale={centrePictureScale}
+              offsetXPct={centrePicOff.x}
+              offsetYPct={centrePicOff.y}
             />
           ) : (
             <CenterFill
@@ -471,6 +505,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               pipScale={pipScale}
               centrePictureScale={centrePictureScale}
               textOpacity={faceTextOpacity}
+              centrePictureOffsetXPct={centrePicOff.x}
+              centrePictureOffsetYPct={centrePicOff.y}
             />
           )}
         </div>
@@ -496,6 +532,8 @@ function PictureInterior({
   textOpacity,
   centrePictureStem,
   centrePictureScale,
+  offsetXPct = 0,
+  offsetYPct = 0,
 }: {
   suit: string;
   value: string;
@@ -505,10 +543,14 @@ function PictureInterior({
   textOpacity: number;
   centrePictureStem?: string | null;
   centrePictureScale: number;
+  offsetXPct?: number;
+  offsetYPct?: number;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, centrePictureStem), [cardId, centrePictureStem]);
   const [attempt, setAttempt] = useState(0);
   const s = clampCentrePictureScale(centrePictureScale);
+  const t =
+    offsetXPct !== 0 || offsetYPct !== 0 ? `translate(${offsetXPct}%, ${offsetYPct}%)` : undefined;
 
   useEffect(() => {
     setAttempt(0);
@@ -518,7 +560,10 @@ function PictureInterior({
 
   if (attempt < candidates.length) {
     return (
-      <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]">
+      <div
+        className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+        style={t ? { transform: t } : undefined}
+      >
         <div
           className="flex max-h-[72%] max-w-full items-center justify-center"
           style={{ transform: s !== 1 ? `scale(${s})` : undefined }}
@@ -536,7 +581,10 @@ function PictureInterior({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1 px-[10%]">
+    <div
+      className="pointer-events-none absolute inset-0 z-[2] flex flex-col items-center justify-center gap-1 px-[10%]"
+      style={t ? { transform: t } : undefined}
+    >
       <div
         className="flex max-h-[42%] max-w-[55%] items-center justify-center"
         style={{ transform: `scale(${pipScale})` }}
@@ -606,6 +654,8 @@ function CenterFill({
   pipScale,
   centrePictureScale,
   textOpacity,
+  centrePictureOffsetXPct,
+  centrePictureOffsetYPct,
 }: {
   card: string;
   suit: string;
@@ -615,6 +665,8 @@ function CenterFill({
   pipScale: number;
   centrePictureScale: number;
   textOpacity: number;
+  centrePictureOffsetXPct: number;
+  centrePictureOffsetYPct: number;
 }) {
   const slots = resolvePipSlots(value, override, defaults);
   const aceOrGod = value === 'A' || value === 'G';
@@ -635,6 +687,8 @@ function CenterFill({
         cardId={card}
         pictureStem={centreStem}
         pictureScale={centrePictureScale}
+        offsetXPct={centrePictureOffsetXPct}
+        offsetYPct={centrePictureOffsetYPct}
         fallback={
           <AceOrGodCentreFallback
             suit={suit}
@@ -653,6 +707,8 @@ function CenterFill({
       cardId={card}
       pictureStem={centreStem}
       pictureScale={centrePictureScale}
+      offsetXPct={centrePictureOffsetXPct}
+      offsetYPct={centrePictureOffsetYPct}
       fallback={
         <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center opacity-[0.22]">
           <div className={`${SUIT_COLORS[suit] ?? 'text-red-500'}`}>
