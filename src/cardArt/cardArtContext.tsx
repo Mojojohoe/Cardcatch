@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { RoomData } from '../types';
 import type { CardArtDisplayMode, CardArtGlobalDefaults, CardArtManifest, CardArtOverride } from './types';
 import {
@@ -11,6 +11,8 @@ import {
 } from './storage';
 import { SHIPPED_CARD_ART_DEFAULTS, SHIPPED_CARD_ART_MANIFEST, SHIPPED_CARD_ART_MODE } from './shippedPack';
 import { CARD_ART_TOOLS_ENABLED } from './toolsAccess';
+import type { CardArtPackV1 } from './packExport';
+import { tryLoadPublicCardArtPack } from './publicPack';
 
 export type CardArtCtx = {
   mode: CardArtDisplayMode;
@@ -55,22 +57,56 @@ export function mergeCardArtWithRoom(parent: CardArtCtx, room: RoomData, isHost:
 
 export const CardArtContext = createContext<CardArtCtx | null>(null);
 
+function mergeManifestLayers(publicPack: CardArtPackV1 | null): CardArtManifest {
+  const ls = CARD_ART_TOOLS_ENABLED ? loadCardArtManifest() : {};
+  return {
+    ...SHIPPED_CARD_ART_MANIFEST,
+    ...(publicPack?.manifest && typeof publicPack.manifest === 'object' ? publicPack.manifest : {}),
+    ...ls,
+  };
+}
+
+function mergeDefaultsLayers(publicPack: CardArtPackV1 | null): CardArtGlobalDefaults {
+  const ls = CARD_ART_TOOLS_ENABLED ? loadCardArtDefaults() : {};
+  return {
+    ...SHIPPED_CARD_ART_DEFAULTS,
+    ...(publicPack?.defaults && typeof publicPack.defaults === 'object' ? publicPack.defaults : {}),
+    ...ls,
+  };
+}
+
 export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [publicPack, setPublicPack] = useState<CardArtPackV1 | null>(null);
+
   const [mode, setModeState] = useState<CardArtDisplayMode>(() =>
     CARD_ART_TOOLS_ENABLED ? loadDisplayMode() : SHIPPED_CARD_ART_MODE,
   );
   const [manifest, setManifestState] = useState<CardArtManifest>(() =>
-    CARD_ART_TOOLS_ENABLED
-      ? { ...SHIPPED_CARD_ART_MANIFEST, ...loadCardArtManifest() }
-      : { ...SHIPPED_CARD_ART_MANIFEST },
+    mergeManifestLayers(null),
   );
   const [manifestVersion, setManifestVersion] = useState(0);
   const [defaults, setDefaultsState] = useState<CardArtGlobalDefaults>(() =>
-    CARD_ART_TOOLS_ENABLED
-      ? { ...SHIPPED_CARD_ART_DEFAULTS, ...loadCardArtDefaults() }
-      : { ...SHIPPED_CARD_ART_DEFAULTS },
+    mergeDefaultsLayers(null),
   );
   const [defaultsVersion, setDefaultsVersion] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void tryLoadPublicCardArtPack().then((pack) => {
+      if (cancelled || !pack) return;
+      setPublicPack(pack);
+      setManifestState(mergeManifestLayers(pack));
+      setDefaultsState(mergeDefaultsLayers(pack));
+      setManifestVersion((v) => v + 1);
+      setDefaultsVersion((v) => v + 1);
+      if (!CARD_ART_TOOLS_ENABLED) {
+        setModeState(pack.mode);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const setMode = useCallback((m: CardArtDisplayMode) => {
     if (!CARD_ART_TOOLS_ENABLED) return;
@@ -98,13 +134,9 @@ export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const bumpManifest = useCallback(() => {
-    if (CARD_ART_TOOLS_ENABLED) {
-      setManifestState({ ...SHIPPED_CARD_ART_MANIFEST, ...loadCardArtManifest() });
-    } else {
-      setManifestState({ ...SHIPPED_CARD_ART_MANIFEST });
-    }
+    setManifestState(mergeManifestLayers(publicPack));
     setManifestVersion((v) => v + 1);
-  }, []);
+  }, [publicPack]);
 
   const setDefaults = useCallback((d: CardArtGlobalDefaults) => {
     if (!CARD_ART_TOOLS_ENABLED) return;

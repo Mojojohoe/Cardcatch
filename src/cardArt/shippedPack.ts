@@ -1,9 +1,9 @@
 /**
- * Release card-art source of truth: bundled JSON shipped with the app (GitHub Pages, etc.).
- * Every client loads the same instructions + `public/assets/images/` paths — no P2P image transfer.
+ * Release card-art baseline: bundled JSON compiled into the app.
+ * Optional runtime overlay: drop Card Creator export as `public/cardcatch-card-art-pack.json`
+ * (see {@link ./publicPack.ts}) — merged on top for every client in Artwork mode without P2P.
  *
- * Before release: export manifest + defaults from Card Creator (dev) and paste into `shippedPack.json`
- * (or replace this file via your build pipeline). File names in `manifest` reference static URLs only.
+ * Paths in `manifest` / defaults should reference `public/assets/images/` (or data URLs from export).
  */
 import type { CardArtDisplayMode, CardArtGlobalDefaults, CardArtManifest } from './types';
 import raw from './shippedPack.json';

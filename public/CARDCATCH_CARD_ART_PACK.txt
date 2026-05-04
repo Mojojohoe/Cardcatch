@@ -1,0 +1,13 @@
+Optional table-art pack (Card Creator export)
+==============================================
+
+1. In Card Creator, use "Export JSON". You get a file named:
+   cardcatch-card-art-pack.json
+
+2. Copy that file into this public/ folder (same level as this .txt file).
+
+3. Restart or hard-reload the app. Every browser loads it from the site root
+   (respects Vite base path). It is merged OVER src/cardArt/shippedPack.json
+   but UNDER dev localStorage overrides when dev tools are on.
+
+4. Commit the JSON if you want everyone on the team / production build to use it.

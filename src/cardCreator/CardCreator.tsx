@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { X, Image as ImageIcon, Grid3x3, Trash2, Save, Layers, SlidersHorizontal } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { X, Image as ImageIcon, Grid3x3, Trash2, Save, Layers, SlidersHorizontal, Download, Upload } from 'lucide-react';
 import { SUITS, VALUES } from '../types';
 import { useCardArt } from '../cardArt/cardArtContext';
 import type { BackgroundCaptionConfig, CardArtGlobalDefaults, CardArtOverride, PipSlot } from '../cardArt/types';
@@ -9,6 +9,8 @@ import { cyclePipAtCell } from '../cardArt/resolveCardArt';
 import { ScaledAssembledCardFace } from '../cardArt/ScaledAssembledCardFace';
 import { cardArtAssetUrl } from '../cardArt/paths';
 import { isAssembledRasterCardId } from '../cardArt/assembledRaster';
+import { buildCardArtPackExport, parseCardArtPackImport } from '../cardArt/packExport';
+import { PUBLIC_CARD_ART_PACK_FILENAME, publicCardArtPackFetchUrl } from '../cardArt/publicPack';
 import { PowerCardVisual } from '../components/GameVisuals';
 import { WRATH_MINION_BY_ROUND } from '../services/gameService';
 import { CURSE_IDS, CURSES } from '../curses';
@@ -114,6 +116,7 @@ function PipGridEditor({
 export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const {
     manifest,
+    setManifest,
     updateOverride,
     setMode,
     mode: displayMode,
@@ -122,6 +125,9 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     setDefaults,
     defaultsVersion,
   } = useCardArt();
+
+  const packImportInputRef = useRef<HTMLInputElement>(null);
+  const [packIoBanner, setPackIoBanner] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const [scope, setScope] = useState<Scope>('card');
   const [cardTab, setCardTab] = useState<CardTab>('info');
@@ -151,6 +157,59 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   }, [defaults, defaultsVersion]);
 
   const draft = localOverride;
+
+  const handleExportCardArtPack = useCallback(() => {
+    const pack = buildCardArtPackExport(displayMode, manifest, defaults);
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = PUBLIC_CARD_ART_PACK_FILENAME;
+    a.click();
+    URL.revokeObjectURL(url);
+    setPackIoBanner({
+      type: 'ok',
+      text: `Downloaded ${PUBLIC_CARD_ART_PACK_FILENAME}. Put it in the project public/ folder and reload — all clients load it for Artwork (bundled shipped pack stays as base; dev localStorage can still override).`,
+    });
+  }, [displayMode, manifest, defaults]);
+
+  const handleImportCardArtPackFile = useCallback(
+    (file: File) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const raw = JSON.parse(String(reader.result));
+          const parsed = parseCardArtPackImport(raw);
+          if (parsed.ok === false) {
+            setPackIoBanner({ type: 'err', text: parsed.error });
+            return;
+          }
+          if (
+            !window.confirm(
+              'Replace all table art in this browser from this file? Unsaved changes and current localStorage pack will be overwritten.',
+            )
+          ) {
+            return;
+          }
+          setMode(parsed.pack.mode);
+          setManifest(parsed.pack.manifest);
+          setDefaults(parsed.pack.defaults);
+          setPackIoBanner({
+            type: 'ok',
+            text: "Imported. Your pack is saved to this browser's local storage again.",
+          });
+        } catch (e) {
+          setPackIoBanner({
+            type: 'err',
+            text: e instanceof Error ? e.message : 'Could not read JSON.',
+          });
+        }
+      };
+      reader.onerror = () => setPackIoBanner({ type: 'err', text: 'Could not read file.' });
+      reader.readAsText(file, 'utf-8');
+    },
+    [setMode, setManifest, setDefaults],
+  );
 
   const setDraft = useCallback(
     (
@@ -247,39 +306,77 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[6000] flex flex-col bg-slate-950 text-slate-100">
-      <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-        <div>
-          <h1 className="text-sm font-black uppercase tracking-[0.2em] text-amber-200">Card Creator</h1>
-          <p className="text-[10px] text-slate-500">
-            Per-card overrides vs global defaults (all Hearts background, pip scales, shared rank layouts).
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="mr-2 flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500">
-            <span>Table art</span>
+      <header className="border-b border-slate-800 px-4 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-sm font-black uppercase tracking-[0.2em] text-amber-200">Card Creator</h1>
+            <p className="text-[10px] text-slate-500">
+              Per-card overrides vs global defaults (all Hearts background, pip scales, shared rank layouts).
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <input
+              ref={packImportInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) handleImportCardArtPackFile(f);
+              }}
+            />
             <button
               type="button"
-              onClick={() => setMode('vector')}
-              className={`rounded border px-2 py-1 ${displayMode === 'vector' ? 'border-amber-400 bg-amber-400/20 text-amber-200' : 'border-slate-700'}`}
+              onClick={handleExportCardArtPack}
+              className="flex items-center gap-1 rounded-lg border border-sky-700/80 bg-sky-950/50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-sky-200 hover:bg-sky-900/60"
+              title={`Save as ${PUBLIC_CARD_ART_PACK_FILENAME} in public/ — runtime URL ${publicCardArtPackFetchUrl()}`}
             >
-              Vector
+              <Download className="h-3.5 w-3.5" /> Export JSON
             </button>
             <button
               type="button"
-              onClick={() => setMode('raster')}
-              className={`rounded border px-2 py-1 ${displayMode === 'raster' ? 'border-amber-400 bg-amber-400/20 text-amber-200' : 'border-slate-700'}`}
+              onClick={() => packImportInputRef.current?.click()}
+              className="flex items-center gap-1 rounded-lg border border-slate-600 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-300 hover:bg-slate-800"
+              title="Load a previously exported pack into this browser"
             >
-              Artwork
+              <Upload className="h-3.5 w-3.5" /> Import…
+            </button>
+            <div className="mr-1 flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500">
+              <span>Table art</span>
+              <button
+                type="button"
+                onClick={() => setMode('vector')}
+                className={`rounded border px-2 py-1 ${displayMode === 'vector' ? 'border-amber-400 bg-amber-400/20 text-amber-200' : 'border-slate-700'}`}
+              >
+                Vector
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('raster')}
+                className={`rounded border px-2 py-1 ${displayMode === 'raster' ? 'border-amber-400 bg-amber-400/20 text-amber-200' : 'border-slate-700'}`}
+              >
+                Artwork
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1 rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-bold uppercase text-slate-300 hover:bg-slate-800"
+            >
+              <X className="h-4 w-4" /> Close
             </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center gap-1 rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-bold uppercase text-slate-300 hover:bg-slate-800"
-          >
-            <X className="h-4 w-4" /> Close
-          </button>
         </div>
+        {packIoBanner && (
+          <p
+            className={`mt-2 text-[10px] font-bold uppercase tracking-wide ${
+              packIoBanner.type === 'ok' ? 'text-emerald-400' : 'text-rose-400'
+            }`}
+          >
+            {packIoBanner.text}
+          </p>
+        )}
       </header>
 
       <div className="flex min-h-0 flex-1">
