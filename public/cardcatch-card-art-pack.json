@@ -1,8 +1,24 @@
 {
   "kind": "cardcatch-card-art-pack",
   "version": 1,
-  "exportedAt": "2026-05-04T02:59:16.633Z",
+  "exportedAt": "2026-05-04T04:20:54.472Z",
   "mode": "raster",
   "manifest": {},
-  "defaults": {}
+  "defaults": {
+    "suitBackgroundFile": {
+      "Hearts": "CardBasicDark.png",
+      "Diamonds": "CardBasicDark.png",
+      "Moons": "CardBasicDark.png",
+      "Frogs": "CardBasicDark.png",
+      "Coins": "CardBasicDark.png",
+      "Bones": "CardBasicDark.png",
+      "Crowns": "GoldCard.png"
+    },
+    "cornerText": {
+      "scale": 2,
+      "offsetLeftXPct": 4.5,
+      "offsetTopYPct": -2,
+      "notifierOffsetLeftXPct": 1
+    }
+  }
 }

@@ -681,15 +681,9 @@ function PipInterior({
 
   if (!cells.length) return null;
 
-  const count = cells.length;
-  const baseMax =
-    value === 'A' || value === 'G'
-      ? 0.28
-      : count >= 9
-        ? PIP_FRAC * 0.92
-        : count >= 6
-          ? PIP_FRAC * 1.05
-          : PIP_FRAC * 1.2;
+  // Uniform pip raster size for every rank (2–10). Count-based shrinking made 10s visibly smaller than 2s;
+  // density is already handled by the grid in pipLayouts / Card Creator.
+  const baseMax = PIP_FRAC * 1.2;
   const maxSide = baseMax * pipScale;
 
   return (
