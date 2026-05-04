@@ -630,7 +630,11 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         )}
                       </div>
                     ) : (
-                      <ScaledAssembledCardFace card={selected} override={draft ?? undefined} />
+                      <ScaledAssembledCardFace
+                        card={selected}
+                        override={draft ?? undefined}
+                        previewDefaults={draftDefaults}
+                      />
                     )}
                   </div>
                 </div>

@@ -15,3 +15,5 @@ Card Creator pip grid is 11×17 (odd×odd) so the middle cell is a true centre.
 Picture cards (optional full art):
 
   Hearts-J.png, Hearts-K.png, …  (game id with hyphen, e.g. Spades-A.png)
+  For Ace / God, the centre tries your usual suit symbol files (SuitHearts.png, …) before SuitHeartAce.png
+  or Hearts-A.png; see pictureCardUrlCandidates in src/cardArt/paths.ts.
