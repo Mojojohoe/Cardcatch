@@ -1,0 +1,72 @@
+# Card hover / tooltip language pack (English)
+# Format: key=value
+
+# Plain-card pieces
+suit.Hearts=Hearts
+suit.Diamonds=Diamonds
+suit.Clubs=Clubs
+suit.Spades=Spades
+suit.Stars=Stars
+suit.Moons=Moons
+suit.Frogs=Frogs
+suit.Coins=Coins
+suit.Bones=Bones
+suit.Crowns=Crowns
+suit.Grovels=Grovels
+suit.Swords=Swords
+suit.Joker=Joker
+
+rank.2=2
+rank.3=3
+rank.4=4
+rank.5=5
+rank.6=6
+rank.7=7
+rank.8=8
+rank.9=9
+rank.10=10
+rank.J=Jack
+rank.Q=Queen
+rank.K=King
+rank.A=Ace
+rank.G=God
+rank.E=Emperor
+
+label.joker=Joker
+label.emperor_of_crowns=Emperor of Crowns
+label.god_of_hearts=God of Hearts
+label.of=of
+
+# Major arcana descriptions by id
+power.0=Swaps both committed suit cards before clash resolution. Wrath’s agent stays visually over the same seat while the card beneath swaps.
+power.1=Cast Spell: steal a Joker or transmute opponent card into a Frog 1.
+power.2=If opponent uses a power card: three draft decoys plus optional swap of your suit play. If not: glimpse one power card still in their pile (when they have any).
+power.3=Gain copies of both resulting suit cards after the round — the final cards on the table after transforms, frogging, and curse clash effects.
+power.4=Changes your card to the target suit and adds 2 to its value.
+power.5=Reveals half of the opponent's hand after the round, including power cards.
+power.6=Changes the target suit to hearts before round resolution.
+power.7=If the player loses the round, their suit card is returned to their hand with +1 value.
+power.8=Increases the played card value by 4.
+power.9=Swaps your play for a hand card that wins or draws against the opponent after clash penalties (e.g. Wrath debuffs on effective rank).
+power.10=Spins seven weighted chaos outcomes—when two Wheels fire, initiative coin decides which resolves first.
+power.11=Conjures a brand-new suit card on the legal table suit; opponent must beat BOTH your play and this ally.
+power.12=Player forfeits the round, but gains 3 cards.
+power.13=Wins the round outright unless blocked by The Tower.
+power.14=The round is drawn. Players get suit cards back, power cards are consumed.
+power.15=Devil Deal: bend your suit to a King or spin the trump wheel against the opponent's suit. Pact injects a random curse next round (skipped if any curse holds the table). If you lose, you discard 1 random card.
+power.16=Stops the effects of an opponent's power card.
+power.17=Adds 'Stars' suit to the target wheel. Star suit transforms all played cards to Stars.
+power.18=Adds 'Moons' suit to target wheel and deck. Also conjures two Moons-suited suit cards next round.
+power.19=Gain a copy of your committed suit card exactly as it was locked in before any round modifiers — before powers, curses, or transforms resolve.
+power.20=Inverts round resolution: whoever would have won loses, and vice versa.
+power.21=Grants a random Major from the deck and conjures a brand-new random suit card (not drawn from the table deck).
+
+# Curse descriptions by id
+curse.100=Hearts dominate the target wheel. Hearts played bump +3 ranks (past Ace becomes God at 19). Lust meter feeds until 100 or no hearts remain in deck or hands.
+curse.101=Heart plays return to owners as bone cards. Feed it hearts or it starves away after six heartless rounds.
+curse.102=Diamond plays lose 1 clash value and Coins lose 2 (tax to the crown). A full Coins suit enters the deck. Hearts, Clubs, and Spades are halved on the trump wheel; on Diamonds, Coins count as trump too. Ends at crown 17 or when no Diamonds or Coins remain in deck or hands.
+curse.103=Each round a random card of the table suit sets a pride barrier — you cannot play that suit at or above its rank. If you cannot play otherwise, you receive Grovel (face shows Grovel text; clashes as rank 0, never trump). Pride ends when someone plays Grovel.
+curse.104=Each round a black coin marks one player; an agent of Swords drains their played card’s clash rank (−1 to −5 over five rounds). Jokers are spared. Ends after the Warlord.
+curse.105=While Envy holds the table, the Green-Eyed Monster covets the highest clash-value card on the table suit among open hands (Jokers and Grovels ignored); if none on suit, the highest such card in any suit. Feed it that card or envy seals it. Each round your plays strike the monster’s HP; at 0 the curse ends. Grovel can free a trapped hand without ending Envy.
+curse.107=The creature itself: same curse as Envy — it covets the highest table-suit card showing (no Jokers), seals copies you refuse to feed, and loses HP each round until slain or the table breaks the spell.
+curse.106=The table drifts into dream: the trump wheel shows only Stars and Moons until the curse ends. Each resolved round spins a dream wheel—Nothing, Stars, Moons, both suits on the field, or rare Sun light that wakes Sloth and restores the wheel.

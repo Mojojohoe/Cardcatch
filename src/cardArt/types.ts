@@ -17,6 +17,8 @@ export type BackgroundCaptionConfig = {
   color?: string;
   /** Multiplier on default caption size (1 ≈ 12px at 256px card width). */
   scale?: number;
+  /** CSS `letter-spacing` in em (0 default). Positive widens, negative tightens. */
+  letterSpacingEm?: number;
   /** Anchor 0–100 from left edge (50 = horizontal centre). */
   anchorXPct?: number;
   anchorYPct?: number;

@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePowerTooltipPosition } from '../hooks/usePowerTooltipPosition';
+import {
+  localizedCurseDescription,
+  localizedLabel,
+  localizedPowerDescription,
+  localizedRankLabel,
+  localizedSuitName,
+} from '../cardDescriptions';
 import { motion } from 'motion/react';
 import {
   BicepsFlexed,
@@ -85,13 +92,6 @@ export { SUIT_COLORS };
 /** Corner rank / pip letters on playing-card faces (`GameVisuals` only; tooltips/UI stay sans). */
 const CARD_FACE_RANK_CLASS = 'font-card-rank tracking-tighter';
 
-const PLAYING_CARD_RANK_TITLE: Record<string, string> = {
-  A: 'Ace',
-  K: 'King',
-  Q: 'Queen',
-  J: 'Jack',
-};
-
 /**
  * Classic white stock in {@link CardVisual} vector mode: `SUIT_COLORS.Diamonds` is white (for dark HUDs),
  * which is invisible on the white card face — use red like Hearts (standard decks).
@@ -105,14 +105,17 @@ function vectorWhiteStockSuitClass(suit: string): string {
 function playingCardHoverCaption(cardStr: string): string | null {
   const p = parseCard(cardStr);
   const bracket = tooltipPrintedStrengthLabel(cardStr);
-  if (p.isJoker) return `Joker — (${bracket})`;
+  if (p.isJoker) return `${localizedLabel('joker', 'Joker')} — (${bracket})`;
   if (p.suit === 'Grovels') return null;
-  if (p.suit === 'Crowns' && p.value === 'E') return `Emperor of Crowns — (${bracket})`;
-  if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) {
-    return `God of Hearts — (${bracket})`;
+  if (p.suit === 'Crowns' && p.value === 'E') {
+    return `${localizedLabel('emperor_of_crowns', 'Emperor of Crowns')} — (${bracket})`;
   }
-  const rank = PLAYING_CARD_RANK_TITLE[p.value] ?? p.value;
-  return `${rank} of ${p.suit} — (${bracket})`;
+  if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) {
+    return `${localizedLabel('god_of_hearts', 'God of Hearts')} — (${bracket})`;
+  }
+  const rank = localizedRankLabel(p.value);
+  const suit = localizedSuitName(p.suit);
+  return `${rank} ${localizedLabel('of', 'of')} ${suit} — (${bracket})`;
 }
 
 /** Lucide (SVG) mapping for major arcana `icon` field — placeholder until final artwork. */
@@ -766,10 +769,15 @@ export const PowerCardVisual: React.FC<{
   const cardArtPower = useOptionalCardArt();
   const curseDef = isCurseCardId(cardId) ? CURSES[cardId] : undefined;
   const card = curseDef ? null : MAJOR_ARCANA[cardId];
-  const tip = curseDef
-    ? `${curseDef.sin} — ${curseDef.name}: ${curseDef.description}`
+  const description = curseDef
+    ? localizedCurseDescription(cardId, curseDef.description)
     : card
-      ? `${card.name}: ${card.description}`
+      ? localizedPowerDescription(cardId, card.description)
+      : '';
+  const tip = curseDef
+    ? `${curseDef.sin} — ${curseDef.name}: ${description}`
+    : card
+      ? `${card.name}: ${description}`
       : '';
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -1005,7 +1013,7 @@ export const PowerCardVisual: React.FC<{
                   >
                     {curseDef ? curseDef.name : card!.name}
                   </p>
-                  <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{curseDef ? curseDef.description : card!.description}</p>
+                  <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{description}</p>
                 </div>
               </div>
             </div>,
@@ -1096,7 +1104,7 @@ export const PowerCardVisual: React.FC<{
         className={`font-bold leading-snug z-10 w-full px-2 mt-auto ${curseChrome ? curseChrome.body : 'text-slate-700'} ${panel || small || matchHandCard ? 'hidden' : 'block'}`}
       >
         <p className={`font-medium ${small ? 'text-[7px]' : 'text-[11px] sm:text-sm'} line-clamp-3 min-h-[3em] ${curseChrome ? curseChrome.body : 'text-slate-500'}`}>
-          {curseDef ? curseDef.description : card!.description}
+          {description}
         </p>
       </div>
 
@@ -1140,7 +1148,7 @@ export const PowerCardVisual: React.FC<{
                 >
                   {curseDef ? curseDef.name : card!.name}
                 </p>
-                <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{curseDef ? curseDef.description : card!.description}</p>
+                <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{description}</p>
               </div>
             </div>
           </div>,

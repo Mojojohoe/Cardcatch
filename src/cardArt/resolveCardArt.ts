@@ -122,6 +122,7 @@ export function mergedBackgroundCaption(
     text,
     color: colorRaw || undefined,
     scale: overrideCap?.scale ?? defaultsCap?.scale,
+    letterSpacingEm: overrideCap?.letterSpacingEm ?? defaultsCap?.letterSpacingEm,
     anchorXPct: overrideCap?.anchorXPct ?? defaultsCap?.anchorXPct ?? 50,
     anchorYPct: overrideCap?.anchorYPct ?? defaultsCap?.anchorYPct ?? 50,
     maxWidthPct: overrideCap?.maxWidthPct ?? defaultsCap?.maxWidthPct ?? 88,

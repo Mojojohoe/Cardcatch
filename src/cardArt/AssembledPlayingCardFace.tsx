@@ -141,6 +141,25 @@ function captionTypographyStyle(scale: number, maxW: number, rotate180: boolean)
   };
 }
 
+function displayRankToken(value: string): string {
+  if (value === 'A') return 'Ace';
+  if (value === 'K') return 'King';
+  if (value === 'Q') return 'Queen';
+  if (value === 'J') return 'Jack';
+  if (value === 'G') return 'God';
+  if (value === 'E') return 'Emperor';
+  return value;
+}
+
+function applyCaptionTokens(template: string, card: { suit: string; value: string; id: string }): string {
+  return template
+    .replaceAll('{value}', card.value)
+    .replaceAll('{number}', card.value)
+    .replaceAll('{rank}', displayRankToken(card.value))
+    .replaceAll('{suit}', card.suit)
+    .replaceAll('{card}', card.id);
+}
+
 function hexRgb(hex: string): [number, number, number] | null {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return null;
@@ -166,16 +185,19 @@ function contrastTextShadow(fill: string): React.CSSProperties {
 /** One or two blocks (dual mirrors through card centre like corner indices). */
 function BackgroundCaptionLayers({
   config,
+  text,
   textColor,
   opacity,
 }: {
   config: BackgroundCaptionConfig;
+  text: string;
   textColor: string;
   opacity: number;
 }) {
-  const t = config.text?.trim();
+  const t = text.trim();
   if (!t) return null;
   const sx = config.scale ?? 1;
+  const ls = config.letterSpacingEm ?? 0;
   const ax = config.anchorXPct ?? 50;
   const ay = config.anchorYPct ?? 50;
   const maxW = config.maxWidthPct ?? 88;
@@ -193,6 +215,7 @@ function BackgroundCaptionLayers({
           top: `${ay}%`,
           color: textColor,
           opacity,
+          letterSpacing: `${ls}em`,
           ...captionTypographyStyle(sx, maxW, false),
           ...shadow,
         }}
@@ -207,6 +230,7 @@ function BackgroundCaptionLayers({
             top: `${100 - ay}%`,
             color: textColor,
             opacity,
+            letterSpacing: `${ls}em`,
             ...captionTypographyStyle(sx, maxW, true),
             ...shadow,
           }}
@@ -321,6 +345,11 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
     () => mergedBackgroundCaption(defaults?.backgroundCaptionDefaults, override?.backgroundCaption),
     [defaults?.backgroundCaptionDefaults, override?.backgroundCaption],
   );
+  const captionText = useMemo(() => {
+    const raw = captionConfig?.text?.trim();
+    if (!raw) return '';
+    return applyCaptionTokens(raw, { suit: bgSuitKey, value, id: card });
+  }, [captionConfig?.text, bgSuitKey, value, card]);
   const faceTextFill = resolveSuitFaceTextColor(bgSuitKey, defaults?.suitFaceTextColor);
   const faceTextOpacity = resolvedFaceTextOpacity(override, defaults);
 
@@ -340,6 +369,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
         {bgOnlyEarly && captionConfig ? (
           <BackgroundCaptionLayers
             config={captionConfig}
+            text={captionText}
             textColor={captionConfig.color?.trim() || faceTextFill}
             opacity={faceTextOpacity}
           />
@@ -515,6 +545,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
       {bgOnly && captionConfig ? (
         <BackgroundCaptionLayers
           config={captionConfig}
+          text={captionText}
           textColor={captionConfig.color?.trim() || faceTextFill}
           opacity={faceTextOpacity}
         />

@@ -49,6 +49,7 @@ function pruneBackgroundCaption(bc?: BackgroundCaptionConfig): BackgroundCaption
   const next: BackgroundCaptionConfig = {};
   if (bc.text?.trim()) next.text = bc.text.trim();
   if (bc.scale != null) next.scale = bc.scale;
+  if (bc.letterSpacingEm != null) next.letterSpacingEm = bc.letterSpacingEm;
   if (bc.anchorXPct != null) next.anchorXPct = bc.anchorXPct;
   if (bc.anchorYPct != null) next.anchorYPct = bc.anchorYPct;
   if (bc.maxWidthPct != null) next.maxWidthPct = bc.maxWidthPct;
@@ -721,6 +722,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <p className="mb-2 text-[10px] text-slate-500">
                           Per-card text merges over <strong className="text-slate-400">Defaults → Background-only caption defaults</strong>.
                           Leave blank here to use defaults only (still movable there). Anchor 50/50 is card centre.
+                          Tokens: <code className="text-slate-300">{'{value}'}</code>, <code className="text-slate-300">{'{rank}'}</code>, <code className="text-slate-300">{'{suit}'}</code>, <code className="text-slate-300">{'{card}'}</code>.
                         </p>
                         <textarea
                           value={draft?.backgroundCaption?.text ?? ''}
@@ -734,6 +736,26 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           placeholder="Optional printed text on this card…"
                           className="mb-2 w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-sans text-xs text-slate-200"
                         />
+                        <div className="mb-2 flex flex-wrap gap-1">
+                          {['{value}', '{rank}', '{suit}', '{card}'].map((tk) => (
+                            <button
+                              key={tk}
+                              type="button"
+                              onClick={() =>
+                                setDraft((prev) => ({
+                                  ...(prev ?? {}),
+                                  backgroundCaption: {
+                                    ...prev?.backgroundCaption,
+                                    text: `${prev?.backgroundCaption?.text ?? ''}${tk}`,
+                                  },
+                                }))
+                              }
+                              className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[10px] text-slate-300 hover:bg-slate-800"
+                            >
+                              {tk}
+                            </button>
+                          ))}
+                        </div>
                         <label className="mb-2 block max-w-md text-[11px] text-slate-400">
                           Caption colour (CSS, optional — else suit preset)
                           <input
@@ -768,6 +790,26 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                   backgroundCaption: {
                                     ...prev?.backgroundCaption,
                                     scale: Number(e.target.value) || 1,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                            />
+                          </label>
+                          <label className="text-slate-400">
+                            Letter spacing (em)
+                            <input
+                              type="number"
+                              step={0.01}
+                              min={-0.2}
+                              max={1}
+                              value={draft?.backgroundCaption?.letterSpacingEm ?? 0}
+                              onChange={(e) =>
+                                setDraft((prev) => ({
+                                  ...(prev ?? {}),
+                                  backgroundCaption: {
+                                    ...prev?.backgroundCaption,
+                                    letterSpacingEm: Number(e.target.value) || 0,
                                   },
                                 }))
                               }
@@ -1252,7 +1294,8 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <p className="mt-4 text-[11px] font-bold text-slate-300">Background-only caption defaults</p>
                       <p className="mb-2 text-[10px] text-slate-500">
                         Shown on any background-only card when the card does not override caption text. Anchors and dual
-                        mirror apply; you can mirror here and override only the string on a card.
+                        mirror apply; you can mirror here and override only the string on a card. Tokens:
+                        <code className="text-slate-300">{'{value}'}</code>, <code className="text-slate-300">{'{rank}'}</code>, <code className="text-slate-300">{'{suit}'}</code>, <code className="text-slate-300">{'{card}'}</code>.
                       </p>
                       <textarea
                         value={draftDefaults.backgroundCaptionDefaults?.text ?? ''}
@@ -1269,6 +1312,26 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         className="mb-2 w-full max-w-md rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
                         placeholder="Default overlay text…"
                       />
+                      <div className="mb-2 flex flex-wrap gap-1">
+                        {['{value}', '{rank}', '{suit}', '{card}'].map((tk) => (
+                          <button
+                            key={`defaults-${tk}`}
+                            type="button"
+                            onClick={() =>
+                              setDraftDefaults((prev) => ({
+                                ...prev,
+                                backgroundCaptionDefaults: {
+                                  ...prev.backgroundCaptionDefaults,
+                                  text: `${prev.backgroundCaptionDefaults?.text ?? ''}${tk}`,
+                                },
+                              }))
+                            }
+                            className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[10px] text-slate-300 hover:bg-slate-800"
+                          >
+                            {tk}
+                          </button>
+                        ))}
+                      </div>
                       <label className="mb-2 block max-w-md text-[11px] text-slate-400">
                         Default caption colour (optional — overrides suit preset for captions)
                         <input
@@ -1304,6 +1367,26 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 backgroundCaptionDefaults: {
                                   ...prev.backgroundCaptionDefaults,
                                   scale: Number(e.target.value) || 1,
+                                },
+                              }))
+                            }
+                            className="ml-2 w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-xs"
+                          />
+                        </label>
+                        <label className="text-[11px] text-slate-400">
+                          Letter spacing (em)
+                          <input
+                            type="number"
+                            step={0.01}
+                            min={-0.2}
+                            max={1}
+                            value={draftDefaults.backgroundCaptionDefaults?.letterSpacingEm ?? 0}
+                            onChange={(e) =>
+                              setDraftDefaults((prev) => ({
+                                ...prev,
+                                backgroundCaptionDefaults: {
+                                  ...prev.backgroundCaptionDefaults,
+                                  letterSpacingEm: Number(e.target.value) || 0,
                                 },
                               }))
                             }
