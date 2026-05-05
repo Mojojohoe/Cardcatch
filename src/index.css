@@ -36,3 +36,10 @@
   width: 100% !important;
   height: 100% !important;
 }
+
+/* threejs dice-box appends a plain canvas without the old class name. */
+.dice-box-test-mount > canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}

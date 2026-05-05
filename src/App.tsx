@@ -3154,9 +3154,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const powerCount = me.powerCards.length;
   const powerBlockWidth =
     powerCount > 0 ? powerCount * powerCardWidth - Math.max(0, powerCount - 1) * powerOverlap : 0;
+  const powerClearancePx = powerCount > 0 ? Math.min(220, fanOverflowPx) : 0;
   const handPowerGapPx = (handFanLayout === 'wide' ? 40 : 16) + Math.min(220, fanOverflowPx);
   const handCenterShiftPx =
-    powerCount > 0 && handFanLayout === 'wide' ? -Math.round((powerBlockWidth + handPowerGapPx) / 2) : 0;
+    powerCount > 0 && handFanLayout === 'wide'
+      ? -Math.round((powerBlockWidth + handPowerGapPx + powerClearancePx) / 2)
+      : 0;
 
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
@@ -4056,7 +4059,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
             <div
               className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-10 pb-4 sm:w-auto sm:max-w-none sm:shrink-0 sm:items-end sm:pb-2 sm:pt-8"
-              style={fanOverflowPx > 0 ? { marginRight: `${Math.min(220, fanOverflowPx)}px` } : undefined}
+              style={powerClearancePx > 0 ? { marginRight: `${powerClearancePx}px` } : undefined}
             >
               <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
                 Your powers
@@ -4088,6 +4091,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               className={`flex min-h-[12rem] w-full items-end justify-center overflow-visible -space-x-6 flex-nowrap px-1 transition-[filter,opacity] duration-300 sm:min-h-[11.5rem] sm:-space-x-9 ${
                 me.confirmed ? 'saturate-[0.68] brightness-95 opacity-[0.92]' : ''
               }`}
+              style={{ transform: 'translateY(-8px)' }}
             >
               {me.hand.map((card, i) => {
                 const selected = selectedCardIndex === i;

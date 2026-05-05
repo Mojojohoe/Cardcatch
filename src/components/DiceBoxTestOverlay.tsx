@@ -100,9 +100,14 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         diceRef.current?.clear?.();
         const [d1, d2] = roll.dice;
         const notation = `2d6@${d1},${d2}`;
-        await diceRef.current.roll(notation);
-      } catch {
-        /* fall through to synced result only */
+        try {
+          await diceRef.current.roll(notation);
+        } catch {
+          // Fallback animation path if predetermined notation fails in runtime/browser.
+          await diceRef.current.roll('2d6');
+        }
+      } catch (err) {
+        console.warn('DiceBoxTestOverlay roll failed', err);
       }
 
       if (cancelled) return;

@@ -34,9 +34,11 @@ export function playerHandFanMotion(
   const x = d * spreadPx;
   const edge = mid > 0 ? Math.abs(d) / mid : 0;
   /** Outer cards drop lower so top edge reads as a smooth curve (circular-arc easing). */
-  const curveDepth = 8 + Math.min(18, count * 0.9) + (1 - squeeze) * 14;
+  const curveDepth = 12 + Math.min(26, count * 1.2) + (1 - squeeze) * 22;
+  /** Lift the whole hand while keeping proportional outer drop. */
+  const baseLift = 7 + Math.min(6, count * 0.3);
   const edgeEase = 1 - Math.cos(edge * (Math.PI / 2));
-  const y = edgeEase * curveDepth;
+  const y = -baseLift + edgeEase * curveDepth;
   const baseZ = Math.round(14 + mid - Math.abs(index - mid));
   return { rotate, x, y, baseZ };
 }
