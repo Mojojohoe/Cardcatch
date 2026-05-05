@@ -190,7 +190,7 @@ const TyrantCrownTablePiece: React.FC<{ crownTotal: number }> = ({ crownTotal })
       <p className="max-w-[18rem] px-2 text-center text-[10px] font-black uppercase leading-snug tracking-widest text-amber-200/90">
         The Tyrant is dead. Only their crown remains.
       </p>
-      <motion.div
+          <motion.div 
         ref={rootRef}
         layout
         className="relative cursor-pointer"
@@ -212,11 +212,11 @@ const TyrantCrownTablePiece: React.FC<{ crownTotal: number }> = ({ crownTotal })
             className="pointer-events-none fixed z-[400] max-w-[min(18rem,calc(100vw-1.5rem))] rounded-lg border border-amber-800/80 bg-stone-950/98 px-3 py-2 text-[11px] font-semibold leading-snug text-amber-50 shadow-xl"
           >
             {tip}
-          </div>
+        </div>
         )}
       </motion.div>
-    </div>
-  );
+      </div>
+    );
 };
 
 function gluttonyMoodCopy(phase: number): string {
@@ -251,16 +251,16 @@ const CompactTableGlyphRow: React.FC<{
             <SuitRasterOrGlyph
               suit={suit}
               className="h-8 w-8 max-h-[88%] max-w-[88%] object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.42)] sm:h-9 sm:w-9"
-            />
+               />
+            </div>
           </div>
-        </div>
       ) : (
         <div
           className={`flex items-center justify-center gap-1 rounded-full border-2 border-slate-600/90 bg-slate-950/90 px-2 py-1 shadow-md ${SUIT_COLORS[suit]}`}
         >
           <SuitGlyph suit={suit} className="h-8 w-8 sm:h-9 sm:w-9 drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]" />
-        </div>
-      )}
+          </div>
+        )}
     </div>
   );
 };
@@ -284,7 +284,7 @@ const CurseZonePanel: React.FC<{
   if (!lust && !gluttony && !greed && !pride && !envy && !wrath && !sloth)
     return <div className="w-12 sm:w-[4.75rem] shrink-0" aria-hidden />;
   const curseCol = 'relative flex w-[7.5rem] shrink-0 flex-col items-center gap-1.5 overflow-visible sm:w-[8rem]';
-  return (
+    return (
     <div className="relative flex w-full max-w-none shrink-0 flex-row flex-wrap items-start justify-center gap-x-5 gap-y-6 overflow-visible px-0.5 pt-1 pb-2">
       {lust && (
         <motion.div layout className={curseCol}>
@@ -316,12 +316,12 @@ const CurseZonePanel: React.FC<{
               {(greed.greedCrown ?? 0).toString()}/17
             </p>
             <p className="px-0.5 text-center text-[6px] font-bold uppercase tracking-wide text-yellow-500/90">Tax</p>
-          </div>
-        </motion.div>
+           </div>
+      </motion.div>
       )}
       {pride && (
-        <motion.div
-          layout
+    <motion.div
+      layout
           className={`${curseCol} rounded-xl border-2 border-white/25 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]`}
         >
           <Sparkles className="mx-auto h-5 w-5 text-white sm:h-6 sm:w-6" />
@@ -336,17 +336,17 @@ const CurseZonePanel: React.FC<{
                     const pc = parseCard(prideCeilingCard);
                     return pc.suit === 'Crowns' ? displaySuitCardValue(pc.suit, pc.value) : pc.value;
                   })()}
-                </span>
-              </div>
-            </div>
+        </span>
+      </div>
+      </div>
           ) : (
             <p className="mt-1 px-0.5 text-center text-[6px] font-bold text-violet-300/80">Next round…</p>
           )}
-        </motion.div>
+    </motion.div>
       )}
       {envy && (
-        <motion.div
-          layout
+    <motion.div 
+      layout
           className={`${curseCol} gap-1 rounded-xl border-2 border-emerald-700/70 bg-zinc-950 px-1 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]`}
         >
           <PowerCardVisual cardId={CURSE_ENVY} revealed matchHandCard curseRackPeek />
@@ -361,7 +361,7 @@ const CurseZonePanel: React.FC<{
             <p className="px-0.5 text-center text-[6px] font-bold uppercase tracking-wide text-emerald-500/90">
               Monster
             </p>
-          </div>
+      </div>
         </motion.div>
       )}
       {wrath && (
@@ -381,8 +381,8 @@ const CurseZonePanel: React.FC<{
                   small
                   detailTooltip={`${describeWrathMinionTitle(wrathMinionCard)} — mark is chosen when the round resolves.`}
                 />
-              </div>
-            </div>
+      </div>
+      </div>
           ) : (
             <p className="mt-1 px-0.5 text-center text-[6px] font-bold text-red-300/80">Next round…</p>
           )}
@@ -398,8 +398,8 @@ const CurseZonePanel: React.FC<{
           <div className="mt-1 flex items-center justify-center gap-1.5 text-amber-200">
             <SuitGlyph suit="Stars" className="h-5 w-5 sm:h-6 sm:w-6" />
             <SuitGlyph suit="Moons" className="h-5 w-5 sm:h-6 sm:w-6" />
-          </div>
-        </motion.div>
+      </div>
+    </motion.div>
       )}
     </div>
   );
@@ -519,9 +519,9 @@ const InsightModal: React.FC<{
                   ) : (
                     <PowerCardVisual cardId={0} small revealed={false} />
                   )}
-                </div>
-              ))}
             </div>
+                ))}
+              </div>
             {!isPriestess && (
               <p className="text-center text-[10px] uppercase tracking-widest text-yellow-500/80 mt-3">
                 Revealed {Math.min(revealedCount, revealTarget)} of {revealPool.length} cards and powers
@@ -530,8 +530,8 @@ const InsightModal: React.FC<{
             {intel.type === 'Priestess' && intel.powerCards.length > 0 && (
               <div className="mt-4 text-center text-[10px] uppercase tracking-widest text-yellow-500/80">
                 Opponent has {intel.powerCards.length} held power card{intel.powerCards.length === 1 ? '' : 's'}
-              </div>
-            )}
+            </div>
+          )}
           </div>
         </div>
         <button onClick={onClose} className="bg-yellow-500 text-black px-12 py-4 rounded-full font-black uppercase tracking-widest text-base shadow-[0_0_40px_rgba(234,179,8,0.3)] transition-all hover:scale-110 active:scale-95">
@@ -589,7 +589,7 @@ const AcquiredAssets: React.FC<{
                     presentationPace="slow"
                   />
                 ) : (
-                  <CardVisual card={gain.id as string} revealed />
+                <CardVisual card={gain.id as string} revealed />
                 )}
               </div>
             )}
@@ -849,7 +849,7 @@ const DevPowerMenu: React.FC<{
           <X className="w-6 h-6" />
         </button>
       </div>
-
+      
       {onActivateCurseOnTable && onClearActiveCurses && (
         <div className="mb-5 rounded-2xl border border-amber-500/40 bg-amber-950/25 p-4 space-y-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Curses · table zone</p>
@@ -1485,7 +1485,7 @@ const ResolutionSequence: React.FC<{
               setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'transform' }));
               /** Swap near the rotateY flat edge (~48% · see CardVisual `times`) */
               await new Promise((r) => setTimeout(r, 440));
-              if (!active) return;
+        if (!active) return;
               setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.cardId! }));
               await new Promise((r) => setTimeout(r, 520));
               if (!active) return;
@@ -1787,9 +1787,9 @@ const ResolutionSequence: React.FC<{
           )}
         </AnimatePresence>
         <div className="flex w-full flex-col items-center gap-5">
-          <motion.div
-            initial={{ y: -10, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+        <motion.div 
+          initial={{ y: -10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
             className="flex w-full flex-col items-center"
           >
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
@@ -1837,8 +1837,8 @@ const ResolutionSequence: React.FC<{
                 </motion.div>
               )}
               <span className="text-xs font-black uppercase tracking-widest text-slate-400 sm:text-sm">this round</span>
-            </div>
-          </motion.div>
+          </div>
+        </motion.div>
 
           {activeCursesSorted.length > 0 && (
             <div className="flex max-w-[52rem] flex-wrap justify-center gap-x-4 gap-y-4 px-1 sm:gap-x-5">
@@ -1990,7 +1990,7 @@ const ResolutionSequence: React.FC<{
                     />
                   </div>
                 )}
-                <motion.div
+                <motion.div 
                   className="relative z-10 rounded-xl shadow-[0_0_32px_rgba(250,204,21,0.18)] overflow-visible"
                   animate={resolutionColumnMotion(resolutionFx, uid)}
                   transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
@@ -2239,14 +2239,14 @@ const ResolutionSequence: React.FC<{
                 aria-hidden={!wrathAnim}
               >
                 {wrathAnim?.stage === 'center' && wfRes?.minionCard && (
-                  <motion.div
+                    <motion.div 
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="origin-top scale-[0.62] drop-shadow-[0_0_24px_rgba(220,38,38,0.45)] sm:scale-[0.68]"
                   >
                     <CardVisual card={wfRes.minionCard} revealed noAnimate presentation="none" small />
-                  </motion.div>
-                )}
+                    </motion.div>
+                  )}
                 {wrathAnim?.stage === 'coin' && wfRes?.targetUid && (
                   <div className="flex w-full flex-col items-center [perspective:1200px]">
                     <CssCoinEmbed
@@ -2257,9 +2257,9 @@ const ResolutionSequence: React.FC<{
                     <span className="mt-1.5 text-center text-[7px] font-black uppercase tracking-[0.2em] text-red-400/90">
                       Wrath
                     </span>
-                  </div>
-                )}
               </div>
+                )}
+            </div>
             )}
           </React.Fragment>
         ))}
@@ -3080,8 +3080,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
     const copyRoomId = () => {
       navigator.clipboard.writeText(linkCode);
-      setShowCopySuccess(true);
-      setTimeout(() => setShowCopySuccess(false), 2000);
+                  setShowCopySuccess(true);
+                  setTimeout(() => setShowCopySuccess(false), 2000);
     };
 
     const patchLobbySettings = (partial: Partial<GameSettings>) => {
@@ -3100,11 +3100,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       );
     };
 
-    return (
+                      return (
       <div className="flex h-full flex-col space-y-6 overflow-y-auto p-6">
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <CardArtToolbar />
-        </div>
+                  </div>
         {isHost ? (
           <HostLobbyPanel
             room={room}
@@ -3126,8 +3126,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 <p className="text-[11px] font-black uppercase tracking-wider text-amber-100">{room.guestLobbyNotice}</p>
                 <p className="mt-2 text-[10px] font-bold uppercase leading-snug text-amber-400/90">
                   Settings changed — tap Ready below after you have re-read everything.
-                </p>
-              </div>
+                     </p>
+                  </div>
             )}
 
             <div className="flex items-center justify-between rounded-xl border border-emerald-800 bg-emerald-900/30 p-4">
@@ -3137,9 +3137,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   <span className="font-mono text-xl font-black text-white">{linkCode}</span>
                   <button type="button" onClick={copyRoomId} className="p-1 text-yellow-400">
                     {showCopySuccess ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </button>
-                </div>
+                </button>
               </div>
+            </div>
               <div className="text-right">
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">STATUS</span>
                 <div className="animate-pulse text-xs font-black uppercase text-emerald-400">
@@ -3161,7 +3161,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             <p className="px-2 text-center text-[9px] font-bold uppercase tracking-tight text-emerald-600">
               Ready tells the host you have reviewed the rules above. Changing host settings clears Ready.
             </p>
-          </div>
+                  </div>
         )}
       </div>
     );
@@ -3183,7 +3183,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     powerCount > 0 && handFanLayout === 'wide'
       ? -Math.round((powerBlockWidth + handPowerGapPx + powerClearancePx) / 2)
       : 0;
-
+  
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
   const myPendingDecision = room.pendingPowerDecisions?.[myUid] || null;
@@ -3287,11 +3287,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {opponent && <RoomChat room={room} myUid={myUid} serviceRef={serviceRef} />}
-
+      
       {isDevMenuOpen && (
         <DevPowerMenu 
           onSelect={(id) => serviceRef.current.cheatPowerCard(id)} 
-          onClose={() => setIsDevMenuOpen(false)}
+          onClose={() => setIsDevMenuOpen(false)} 
           curseControlsEnabled={Boolean(
             room.settings.enableCurseCards !== false &&
               (room.status === 'playing' || room.status === 'powering' || room.status === 'results'),
@@ -3319,7 +3319,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {(showDesperationWheel || me.desperationSpinning || me.desperationResult) && !room.winner && (
-        <DesperationWheel
+        <DesperationWheel 
           onSpin={handleSpinDesperation}
           onClose={() => setShowDesperationWheel(false)}
           onResolve={handleResolveDesperation}
@@ -3340,11 +3340,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             <span className="truncate text-[8px] font-bold uppercase text-emerald-500">{roomId}</span>
             <button
               type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(roomId);
-                setShowCopySuccess(true);
-                setTimeout(() => setShowCopySuccess(false), 2000);
-              }}
+               onClick={() => {
+                 navigator.clipboard.writeText(roomId);
+                 setShowCopySuccess(true);
+                 setTimeout(() => setShowCopySuccess(false), 2000);
+               }}
               className="shrink-0 text-emerald-700 hover:text-yellow-400"
             >
               {showCopySuccess ? <Check className="h-2 w-2" /> : <Copy className="h-2 w-2" />}
@@ -3380,14 +3380,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 justify-self-end sm:gap-4">
           <CardArtToolbar />
-          <button
+          <button 
             type="button"
             onClick={() => setIsDevMenuOpen(true)}
             className="group flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-800 bg-emerald-900/40 p-1.5 text-[9px] font-black uppercase text-emerald-600 transition-all hover:border-yellow-500 hover:bg-yellow-400 hover:text-emerald-950 sm:p-2 sm:text-[10px]"
           >
             <Sparkles className="h-3 w-3 group-hover:rotate-12" /> Dev
           </button>
-          <button
+          <button 
             type="button"
             onClick={() => setShowRules(true)}
             className="flex shrink-0 items-center gap-1.5 rounded-lg border border-yellow-400/40 bg-yellow-400/20 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-yellow-400 transition-all hover:bg-yellow-400 hover:text-emerald-950 sm:px-4 sm:py-2 sm:text-[10px]"
@@ -3431,10 +3431,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="mx-auto flex h-[13rem] w-max max-w-full items-end justify-center -space-x-9 overflow-x-auto px-2 opacity-80 flex-nowrap sm:h-[13.5rem] sm:-space-x-14 sm:scale-100 scale-90">
-                {Array.from({ length: opponent.hand.length }).map((_, i) => (
-                  <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
-                ))}
-              </div>
+            {Array.from({ length: opponent.hand.length }).map((_, i) => (
+              <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
+            ))}
+          </div>
               <OpposingHandOverlayStack
                 opponent={opponent}
                 roomSettings={room.settings}
@@ -3469,7 +3469,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   offset={myPendingDecision?.wheelOffset ?? 0}
                   sizeClass="w-full"
                 />
-              </div>
+          </div>
             </div>
           )}
 
@@ -3486,7 +3486,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
                     Cards: {opponent.hand.length}
                   </span>
-                </div>
+                       </div>
                 <div className="flex h-[13rem] w-full min-w-0 items-end justify-center gap-1.5 px-2 opacity-[0.82] sm:h-[13.5rem] sm:gap-2 sm:px-4 sm:opacity-95">
                   {room.status === 'playing' &&
                     room.settings.enableCurseCards &&
@@ -3509,9 +3509,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   <div className="mx-auto flex w-max max-w-full min-w-0 flex-nowrap items-center justify-center -space-x-8 sm:-space-x-12">
                     {Array.from({ length: opponent.hand.length }).map((_, i) => (
                       <CardVisual key={`og-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
-                    ))}
-                  </div>
-                </div>
+                ))}
+              </div>
+              </div>
                 <OpposingHandOverlayStack
                   opponent={opponent}
                   roomSettings={room.settings}
@@ -3521,14 +3521,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   opponentPendingDecision={opponentPendingDecision}
                   opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
                 />
-              </div>
+            </div>
               <div className="col-span-full flex min-h-[3.5rem] flex-row flex-wrap justify-center gap-x-4 gap-y-2 self-start overflow-visible py-2 pt-3 opacity-95 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-full sm:max-w-none sm:flex-nowrap sm:justify-end sm:gap-x-6 sm:self-stretch sm:px-1 sm:pb-1 sm:pt-3">
                 {opponent.powerCards.map((pid, i) => (
                   <div key={`ogr-${pid}-${i}`} className="flex shrink-0 flex-none justify-center">
                     <PowerCardVisual cardId={pid} revealed={false} small staticBackdrop />
                   </div>
                 ))}
-              </div>
+          </div>
 
               <aside className="relative z-[6] col-span-full flex min-h-min w-full min-w-0 flex-col items-center gap-2 overflow-visible pb-2 pt-1 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:w-full sm:max-w-[15rem] sm:justify-self-start sm:self-stretch sm:pb-3">
                 <div className="flex w-full shrink-0 flex-col items-stretch overflow-visible px-0.5 py-2">
@@ -3538,7 +3538,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     prideCeilingCard={room.prideCeilingCard}
                     wrathMinionCard={room.wrathMinionCard}
                   />
-                </div>
+                 </div>
               </aside>
 
               <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:w-full sm:max-w-[min(100%,36rem)] sm:px-3">
@@ -3566,9 +3566,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      : isWheelSpinning
                        ? 'DRAWING THIS ROUND’S TABLE SUIT…'
                        : 'TABLE SUIT FOR THIS ROUND'}
-                 </span>
+               </span>
                )}
-
+               
                <AnimatePresence mode="wait">
                  {room.status === 'powering' && me.currentMove && opponent?.currentMove ? (
                    <motion.div
@@ -3741,8 +3741,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                </div>
                                <span className="max-w-[18rem] px-2 text-center text-[9px] font-bold uppercase tracking-wide text-emerald-400/95">
                                  Prey · {room.players[room.envyCovet.uid].name}
-                               </span>
-                             </div>
+                        </span>
+                     </div>
                            )}
                            {joint ? (
                              <DualTableTrumpCard suits={joint} />
@@ -3813,7 +3813,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                  }
                                >
                                  {ts}
-                               </span>
+                     </span>
                              ) : null}
                            </span>
                          </>
@@ -3907,7 +3907,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 {/* Captured Assets Section */}
                 {room.lastOutcome.gains && (
                   <>
-                    <AcquiredAssets
+                    <AcquiredAssets 
                       gains={room.lastOutcome.gains[room.hostUid] || []}
                       side="left"
                       label={room.players[room.hostUid].name}
@@ -3917,7 +3917,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       gains={
                         room.lastOutcome.gains[Object.keys(room.players).find((id) => id !== room.hostUid)!] || []
                       }
-                      side="right"
+                      side="right" 
                       label={room.players[Object.keys(room.players).find((id) => id !== room.hostUid)!].name}
                       acquisitionPace={famineBannerPhase === 'bone_deal' ? 'deliberate' : 'normal'}
                     />
@@ -4206,7 +4206,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               })}
             </div>
           </div>
-          </div>
+        </div>
         </div>
 
         {(room.status === 'playing' || room.status === 'powering') &&
@@ -4293,7 +4293,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       <AnimatePresence>
         {showRules && <RulesSheet key="rules-modal" settings={room.settings} onClose={() => setShowRules(false)} />}
       </AnimatePresence>
-    </div>
+              </div>
     </CardArtSessionBridge>
   );
 };
@@ -4336,7 +4336,7 @@ function CardArtToolbar() {
       >
         Card Creator
       </button>
-    </div>
+              </div>
   );
 }
 
@@ -4369,7 +4369,7 @@ export default function App() {
     <>
       {/* CardCreator is fixed full-screen; keep outside overflow-hidden so it is not clipped. */}
       <CardCreatorHashOverlay />
-      <div className="min-h-screen bg-emerald-950 text-white selection:bg-yellow-400 selection:text-black font-sans overflow-hidden">
+    <div className="min-h-screen bg-emerald-950 text-white selection:bg-yellow-400 selection:text-black font-sans overflow-hidden">
       {/* Dev Toggle */}
       <div className="fixed top-4 left-4 z-[220] flex gap-2">
         <button 

@@ -2,6 +2,31 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DiceTestRollPayload } from '../services/gameService';
 import { Box3, FrontSide, Quaternion, TextureLoader, Vector3, type Object3D, type Texture } from 'three';
 
+/** World-space “table to sky” axis for DiceBox/Ammo setups (three.js convention is Y-up). */
+const DICE_SCENE_WORLD_UP = new Vector3(0, 1, 0);
+
+const DIE_PENDING_FACE_PIN = 'boneDiePendingFacePin';
+
+/** Outward face normals in shell/d6 local space (must match how the GLB maps pips to axes). */
+function faceValueLocalNormal(value: number): Vector3 {
+  switch (value) {
+    case 1:
+      return new Vector3(0, 0, 1);
+    case 2:
+      return new Vector3(0, 1, 0);
+    case 3:
+      return new Vector3(1, 0, 0);
+    case 4:
+      return new Vector3(-1, 0, 0);
+    case 5:
+      return new Vector3(0, -1, 0);
+    case 6:
+      return new Vector3(0, 0, -1);
+    default:
+      return new Vector3(0, 0, 1);
+  }
+}
+
 type DiceBoxInstance = {
   initialize: () => Promise<void>;
   roll: (notation: string) => Promise<unknown>;
@@ -35,7 +60,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   const patchedSpawnRef = useRef(false);
   /** Locks shell/invisible-die bbox ratio so successive spawns aren’t jittery. */
   const attachScaleKRef = useRef<number | null>(null);
-  const shellWorldQuatScratch = useRef(new Quaternion());
+  const scratchPinQuatDie = useRef(new Quaternion());
   const hideTimerRef = useRef<number | null>(null);
   const fadeTimerRef = useRef<number | null>(null);
 
@@ -177,6 +202,50 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     });
   };
 
+  /** Shell is a visual child of the physics die mesh: rotate shell in die-local space so `faceValue` faces world up (authoritative pin). */
+  const pinBoneShellToFaceValue = (dieObj: Object3D, faceValueRaw: unknown): boolean => {
+    const shell = dieObj.getObjectByName?.('bone-die-shell-root');
+    if (!shell || typeof shell.quaternion?.setFromUnitVectors !== 'function') return false;
+    const faceValue = Math.round(Number(faceValueRaw));
+    if (!Number.isFinite(faceValue) || faceValue < 1 || faceValue > 6) return false;
+
+    dieObj.updateWorldMatrix(true);
+    const nFaceLocal = faceValueLocalNormal(faceValue).normalize();
+
+    const qDieWorld = scratchPinQuatDie.current;
+    dieObj.getWorldQuaternion(qDieWorld);
+    const qInv = qDieWorld.clone().invert();
+    const targetDieLocal = DICE_SCENE_WORLD_UP.clone().normalize().applyQuaternion(qInv);
+    shell.quaternion.setFromUnitVectors(nFaceLocal, targetDieLocal.normalize());
+    shell.updateWorldMatrix(true);
+    return true;
+  };
+
+  const reconcileAllShellPinsForRoll = async (values: readonly number[]): Promise<void> => {
+    const dice = diceRef.current as DiceBoxInstance & { diceList?: unknown[] };
+    const list = Array.isArray(dice?.diceList) ? dice.diceList : [];
+    if (!list.length || !values.length) return;
+
+    const maxAttempts = 90;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let allPinsApplied = true;
+      for (let di = 0; di < list.length; di++) {
+        const dieObj = list[di];
+        const vi = Math.min(di, values.length - 1);
+        const value = Math.max(1, Math.min(6, Math.round(values[vi]!)));
+        const hasShell =
+          !!dieObj && typeof dieObj.getObjectByName === 'function' && !!dieObj.getObjectByName('bone-die-shell-root');
+        if (!hasShell) {
+          allPinsApplied = false;
+          continue;
+        }
+        pinBoneShellToFaceValue(dieObj as Object3D, value);
+      }
+      if (allPinsApplied) break;
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    }
+  };
+
   const attachBoneShell = async (dieObj: any): Promise<void> => {
     if (!dieObj || typeof dieObj.add !== 'function') return;
     if (dieObj.getObjectByName?.('bone-die-shell-root')) return;
@@ -205,6 +274,11 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     shell.quaternion.identity();
     dieObj.add(shell);
 
+    const pending = dieObj.userData?.[DIE_PENDING_FACE_PIN];
+    if (pending != null) {
+      pinBoneShellToFaceValue(dieObj as Object3D, pending);
+    }
+
     const mats: any[] = Array.isArray(dieObj.material) ? dieObj.material : dieObj.material ? [dieObj.material] : [];
     for (const m of mats) {
       m.transparent = true;
@@ -212,58 +286,6 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       m.depthWrite = false;
       m.colorWrite = false;
     }
-  };
-
-  const valueNormal = (value: number): Vector3 => {
-    // Canonical d6 local normals (used by many dice systems); can be calibrated if your GLB uses a different layout.
-    switch (value) {
-      case 1:
-        return new Vector3(0, 0, 1);
-      case 2:
-        return new Vector3(0, 1, 0);
-      case 3:
-        return new Vector3(1, 0, 0);
-      case 4:
-        return new Vector3(-1, 0, 0);
-      case 5:
-        return new Vector3(0, -1, 0);
-      case 6:
-        return new Vector3(0, 0, -1);
-      default:
-        return new Vector3(0, 0, 1);
-    }
-  };
-
-  const shellTopValueFromOrientation = (shell: Object3D): number => {
-    shell.updateWorldMatrix(true, false);
-    const wq = shellWorldQuatScratch.current;
-    shell.getWorldQuaternion(wq);
-    const up = new Vector3(0, 0, 1);
-    let bestValue = 1;
-    let bestDot = -Infinity;
-    for (let v = 1; v <= 6; v++) {
-      const n = valueNormal(v).clone().applyQuaternion(wq);
-      const d = n.dot(up);
-      if (d > bestDot) {
-        bestDot = d;
-        bestValue = v;
-      }
-    }
-    return bestValue;
-  };
-
-  const applyForcedFaceSwapToShell = (dieObj: any, toValueRaw: unknown): void => {
-    if (!dieObj) return;
-    const shell = dieObj.getObjectByName?.('bone-die-shell-root');
-    if (!shell) return;
-    const toValue = Number(toValueRaw);
-    if (!Number.isFinite(toValue)) return;
-    const fromValue = shellTopValueFromOrientation(shell);
-    if (fromValue === toValue) return;
-    const targetWas = valueNormal(Math.round(fromValue));
-    const desiredNow = valueNormal(Math.round(toValue));
-    const q = new Quaternion().setFromUnitVectors(desiredNow, targetWas);
-    shell.quaternion.premultiply(q);
   };
 
   const patchSpawnForBoneShell = (dice: DiceBoxInstance): void => {
@@ -290,8 +312,9 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     if (typeof anyDice.swapDiceFace === 'function') {
       const originalSwapDiceFace = anyDice.swapDiceFace.bind(anyDice);
       anyDice.swapDiceFace = (dieObj: any, forcedValue: unknown) => {
+        if (dieObj?.userData) dieObj.userData[DIE_PENDING_FACE_PIN] = forcedValue;
         const out = originalSwapDiceFace(dieObj, forcedValue);
-        applyForcedFaceSwapToShell(dieObj, forcedValue);
+        pinBoneShellToFaceValue(dieObj as Object3D, forcedValue);
         return out;
       };
     }
@@ -420,6 +443,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
           // Avoid instant result pop when physics path failed.
           await sleep(700);
         }
+        await reconcileAllShellPinsForRoll(ds);
       } catch (err) {
         console.warn('DiceBoxTestOverlay roll failed', err);
       }
