@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DiceTestRollPayload } from '../services/gameService';
-import { Box3, FrontSide, Quaternion, Vector3, type Object3D } from 'three';
+import { Box3, FrontSide, Quaternion, TextureLoader, Vector3, type Object3D, type Texture } from 'three';
 
 type DiceBoxInstance = {
   initialize: () => Promise<void>;
@@ -30,6 +30,8 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   const [diceReady, setDiceReady] = useState(false);
   const boneTemplateRef = useRef<Object3D | null>(null);
   const boneLoadPromiseRef = useRef<Promise<Object3D | null> | null>(null);
+  const boneTextureRef = useRef<Texture | null>(null);
+  const boneTexturePromiseRef = useRef<Promise<Texture | null> | null>(null);
   const patchedSpawnRef = useRef(false);
   const hideTimerRef = useRef<number | null>(null);
   const fadeTimerRef = useRef<number | null>(null);
@@ -43,14 +45,41 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
 
   const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
+  const loadBoneTexture = async (): Promise<Texture | null> => {
+    if (boneTextureRef.current) return boneTextureRef.current;
+    if (boneTexturePromiseRef.current) return boneTexturePromiseRef.current;
+    boneTexturePromiseRef.current = (async () => {
+      const loader = new TextureLoader();
+      const texUrl = `${import.meta.env.BASE_URL}assets/models/Bone-dice-tex.png`;
+      const tex = await loader.loadAsync(texUrl);
+      // Keep texture brightness faithful (modern three.js uses colorSpace, older uses encoding).
+      (tex as any).colorSpace = (tex as any).colorSpace ?? 'srgb';
+      tex.flipY = false;
+      tex.needsUpdate = true;
+      boneTextureRef.current = tex;
+      return tex;
+    })();
+    try {
+      return await boneTexturePromiseRef.current;
+    } finally {
+      boneTexturePromiseRef.current = null;
+    }
+  };
+
   const loadBoneTemplate = async (): Promise<Object3D | null> => {
     if (boneTemplateRef.current) return boneTemplateRef.current;
     if (boneLoadPromiseRef.current) return boneLoadPromiseRef.current;
     boneLoadPromiseRef.current = (async () => {
       const [{ GLTFLoader }] = await Promise.all([import('three/examples/jsm/loaders/GLTFLoader.js')]);
       const loader = new GLTFLoader();
-      const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/models/bone_die.glb`);
+      let gltf: any;
+      try {
+        gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/models/bone_dice.glb`);
+      } catch {
+        gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/models/bone_die.glb`);
+      }
       const root = gltf.scene.clone(true);
+      const overrideTex = await loadBoneTexture();
       const box = new Box3().setFromObject(root);
       const size = new Vector3();
       const center = new Vector3();
@@ -77,10 +106,12 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
               m.depthTest = true;
               m.side = FrontSide;
               m.alphaTest = 0.38;
+              if (overrideTex) m.map = overrideTex;
               if (m.color?.multiplyScalar) m.color.multiplyScalar(1.28);
               if ('toneMapped' in m) m.toneMapped = false;
               if ('emissive' in m && m.emissive?.setRGB) m.emissive.setRGB(0.16, 0.12, 0.08);
               if ('emissiveIntensity' in m) m.emissiveIntensity = 0.65;
+              m.needsUpdate = true;
             }
           } else {
             const m = obj.material;
@@ -90,10 +121,12 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
             m.depthTest = true;
             m.side = FrontSide;
             m.alphaTest = 0.38;
+            if (overrideTex) m.map = overrideTex;
             if (m.color?.multiplyScalar) m.color.multiplyScalar(1.28);
             if ('toneMapped' in m) m.toneMapped = false;
             if ('emissive' in m && m.emissive?.setRGB) m.emissive.setRGB(0.16, 0.12, 0.08);
             if ('emissiveIntensity' in m) m.emissiveIntensity = 0.65;
+            m.needsUpdate = true;
           }
         }
       });
@@ -159,13 +192,29 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     }
   };
 
-  const applyForcedFaceSwapToShell = (dieObj: any, fromValueRaw: unknown, toValueRaw: unknown): void => {
+  const shellTopValueFromOrientation = (shell: Object3D): number => {
+    const up = new Vector3(0, 0, 1);
+    let bestValue = 1;
+    let bestDot = -Infinity;
+    for (let v = 1; v <= 6; v++) {
+      const n = valueNormal(v).clone().applyQuaternion(shell.quaternion);
+      const d = n.dot(up);
+      if (d > bestDot) {
+        bestDot = d;
+        bestValue = v;
+      }
+    }
+    return bestValue;
+  };
+
+  const applyForcedFaceSwapToShell = (dieObj: any, toValueRaw: unknown): void => {
     if (!dieObj) return;
     const shell = dieObj.getObjectByName?.('bone-die-shell-root');
     if (!shell) return;
-    const fromValue = Number(fromValueRaw);
     const toValue = Number(toValueRaw);
-    if (!Number.isFinite(fromValue) || !Number.isFinite(toValue) || fromValue === toValue) return;
+    if (!Number.isFinite(toValue)) return;
+    const fromValue = shellTopValueFromOrientation(shell);
+    if (fromValue === toValue) return;
     const targetWas = valueNormal(Math.round(fromValue));
     const desiredNow = valueNormal(Math.round(toValue));
     const q = new Quaternion().setFromUnitVectors(desiredNow, targetWas);
@@ -196,9 +245,8 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     if (typeof anyDice.swapDiceFace === 'function') {
       const originalSwapDiceFace = anyDice.swapDiceFace.bind(anyDice);
       anyDice.swapDiceFace = (dieObj: any, forcedValue: unknown) => {
-        const landedValue = dieObj?.getLastValue?.()?.value;
         const out = originalSwapDiceFace(dieObj, forcedValue);
-        applyForcedFaceSwapToShell(dieObj, landedValue, forcedValue);
+        applyForcedFaceSwapToShell(dieObj, forcedValue);
         return out;
       };
     }

@@ -9,7 +9,9 @@ Optional table-art pack (Card Creator export)
 2. Copy that file into this public/ folder (same level as this .txt file).
 
 3. Restart or hard-reload the app. Every browser loads it from the site root
-   (respects Vite base path). It is merged OVER src/cardArt/shippedPack.json
-   but UNDER dev localStorage overrides when dev tools are on.
+   (respects Vite base path). It is merged OVER src/cardArt/shippedPack.json.
+   When dev tools are on: each export has a new "exportedAt" time. The FIRST load of a NEW export
+   removes overlapping card keys from localStorage so your deployed JSON wins (old dev edits could
+   not). Reloads of the same export still let Card Creator localStorage override the file for quick edits.
 
 4. Commit the JSON if you want everyone on the team / production build to use it.

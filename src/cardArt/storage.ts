@@ -5,6 +5,8 @@ export const CARD_ART_LOCAL_STORAGE_KEYS = {
   manifest: 'cardcatch-card-art-manifest',
   defaults: 'cardcatch-card-art-defaults',
   mode: 'cardcatch-card-art-mode',
+  /** Set when a public pack is applied so the next export can win over stale dev storage. */
+  lastPublicPackExportedAt: 'cardcatch-card-art-last-public-exported-at',
 } as const;
 
 const MANIFEST_KEY = CARD_ART_LOCAL_STORAGE_KEYS.manifest;

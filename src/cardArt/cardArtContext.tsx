@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { RoomData } from '../types';
 import type { CardArtDisplayMode, CardArtGlobalDefaults, CardArtManifest, CardArtOverride } from './types';
 import {
+  CARD_ART_LOCAL_STORAGE_KEYS,
   loadCardArtDefaults,
   loadCardArtManifest,
   loadDisplayMode,
@@ -57,20 +58,29 @@ export function mergeCardArtWithRoom(parent: CardArtCtx, room: RoomData, isHost:
 
 export const CardArtContext = createContext<CardArtCtx | null>(null);
 
+/**
+ * Effective merge: shipped → public pack → localStorage (last wins).
+ * When a **new** public pack is fetched (`exportedAt` changed), overlapping keys are stripped from
+ * localStorage first (see provider `useEffect`) so stale Card Creator data cannot override the deployed JSON.
+ */
 function mergeManifestLayers(publicPack: CardArtPackV1 | null): CardArtManifest {
   const ls = CARD_ART_TOOLS_ENABLED ? loadCardArtManifest() : {};
+  const pub =
+    publicPack?.manifest && typeof publicPack.manifest === 'object' ? publicPack.manifest : {};
   return {
     ...SHIPPED_CARD_ART_MANIFEST,
-    ...(publicPack?.manifest && typeof publicPack.manifest === 'object' ? publicPack.manifest : {}),
+    ...pub,
     ...ls,
   };
 }
 
 function mergeDefaultsLayers(publicPack: CardArtPackV1 | null): CardArtGlobalDefaults {
   const ls = CARD_ART_TOOLS_ENABLED ? loadCardArtDefaults() : {};
+  const pub =
+    publicPack?.defaults && typeof publicPack.defaults === 'object' ? publicPack.defaults : {};
   return {
     ...SHIPPED_CARD_ART_DEFAULTS,
-    ...(publicPack?.defaults && typeof publicPack.defaults === 'object' ? publicPack.defaults : {}),
+    ...pub,
     ...ls,
   };
 }
@@ -95,6 +105,38 @@ export const CardArtProvider: React.FC<{ children: React.ReactNode }> = ({ child
     void tryLoadPublicCardArtPack().then((pack) => {
       if (cancelled || !pack) return;
       setPublicPack(pack);
+
+      if (CARD_ART_TOOLS_ENABLED) {
+        const exportedAt = typeof pack.exportedAt === 'string' ? pack.exportedAt : '';
+        let lastAt = '';
+        try {
+          lastAt = localStorage.getItem(CARD_ART_LOCAL_STORAGE_KEYS.lastPublicPackExportedAt) ?? '';
+        } catch {
+          /* ignore */
+        }
+        const packIsNew = Boolean(exportedAt && exportedAt !== lastAt);
+        if (packIsNew) {
+          try {
+            localStorage.setItem(CARD_ART_LOCAL_STORAGE_KEYS.lastPublicPackExportedAt, exportedAt);
+          } catch {
+            /* ignore */
+          }
+          const pubM =
+            pack.manifest && typeof pack.manifest === 'object' ? pack.manifest : ({} as CardArtManifest);
+          const lsM = loadCardArtManifest();
+          const strippedM: CardArtManifest = { ...lsM };
+          for (const k of Object.keys(pubM)) delete strippedM[k];
+          saveCardArtManifest(strippedM);
+
+          const pubD =
+            pack.defaults && typeof pack.defaults === 'object' ? pack.defaults : ({} as CardArtGlobalDefaults);
+          const lsD = loadCardArtDefaults();
+          const strippedD = { ...lsD } as Record<string, unknown>;
+          for (const k of Object.keys(pubD as object)) delete strippedD[k];
+          saveCardArtDefaults(strippedD as CardArtGlobalDefaults);
+        }
+      }
+
       setManifestState(mergeManifestLayers(pack));
       setDefaultsState(mergeDefaultsLayers(pack));
       setManifestVersion((v) => v + 1);
