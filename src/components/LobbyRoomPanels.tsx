@@ -3,6 +3,7 @@ import {
   Check,
   Copy,
   Dice3,
+  Download,
   Flame,
   Hash,
   Heart,
@@ -113,6 +114,23 @@ export const HostLobbyPanel: React.FC<HostLobbyPanelProps> = ({
     setSaveOpen(false);
     setSaveName('');
     setSaveDesc('');
+  };
+
+  const exportCustomSettings = () => {
+    const payload = {
+      kind: 'cardcatch-custom-lobby-presets',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      activeSettings: normalizeGameSettings({ ...room.settings }),
+      presets: loadCustomPresets(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cardcatch-custom-settings-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const deckHelp = deckBlurb(room.settings);
@@ -516,13 +534,23 @@ export const HostLobbyPanel: React.FC<HostLobbyPanelProps> = ({
         )}
 
         <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setSaveOpen(true)}
-            className="w-full rounded-xl border border-dashed border-yellow-500/45 bg-yellow-500/10 py-3 text-[10px] font-black uppercase tracking-widest text-yellow-200 transition-colors hover:bg-yellow-500/15"
-          >
-            Save settings as preset
-          </button>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setSaveOpen(true)}
+              className="w-full rounded-xl border border-dashed border-yellow-500/45 bg-yellow-500/10 py-3 text-[10px] font-black uppercase tracking-widest text-yellow-200 transition-colors hover:bg-yellow-500/15"
+            >
+              Save settings as preset
+            </button>
+            <button
+              type="button"
+              onClick={exportCustomSettings}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-cyan-500/45 bg-cyan-500/10 py-3 text-[10px] font-black uppercase tracking-widest text-cyan-200 transition-colors hover:bg-cyan-500/15"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export custom settings
+            </button>
+          </div>
           {Object.keys(room.players).length < 2 ? (
             <div className="rounded-xl border border-dashed border-emerald-800 bg-emerald-900/20 py-4 text-center">
               <span className="animate-pulse text-[10px] font-black uppercase text-emerald-700">WAITING FOR PLAYER 2...</span>

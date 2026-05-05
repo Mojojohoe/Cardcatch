@@ -112,6 +112,13 @@ function buildCleanCardOverrideForPack(draft: CardArtOverride | null): CardArtOv
   if (draft.centrePictureBlendMode) {
     clean.centrePictureBlendMode = draft.centrePictureBlendMode;
   }
+  const cpg = draft.centrePictureMirrorGroupOffsetPct;
+  if (cpg && (typeof cpg.x === 'number' || typeof cpg.y === 'number')) {
+    const g: { x?: number; y?: number } = {};
+    if (typeof cpg.x === 'number' && Number.isFinite(cpg.x)) g.x = cpg.x;
+    if (typeof cpg.y === 'number' && Number.isFinite(cpg.y)) g.y = cpg.y;
+    if (Object.keys(g).length) clean.centrePictureMirrorGroupOffsetPct = g;
+  }
   const cpo = draft.centrePictureOffsetPct;
   if (cpo && (typeof cpo.x === 'number' || typeof cpo.y === 'number')) {
     const nextOff: { x?: number; y?: number } = {};
@@ -1080,6 +1087,70 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             ))}
                           </select>
                         </label>
+                        <div className="mt-2 flex flex-wrap gap-3">
+                          <label className="text-[11px] text-slate-400">
+                            Dual group X % (blank = Defaults)
+                            <input
+                              type="number"
+                              step={0.25}
+                              value={
+                                draft?.centrePictureMirrorGroupOffsetPct?.x !== undefined &&
+                                draft?.centrePictureMirrorGroupOffsetPct?.x !== null
+                                  ? draft.centrePictureMirrorGroupOffsetPct.x
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                setDraft((prev) => {
+                                  const base = { ...(prev ?? {}) };
+                                  const cur = { ...base.centrePictureMirrorGroupOffsetPct };
+                                  if (!raw.length) {
+                                    delete cur.x;
+                                    if (Object.keys(cur).length === 0) delete base.centrePictureMirrorGroupOffsetPct;
+                                    else base.centrePictureMirrorGroupOffsetPct = cur;
+                                  } else {
+                                    cur.x = Number(raw) || 0;
+                                    base.centrePictureMirrorGroupOffsetPct = cur;
+                                  }
+                                  return Object.keys(base).length ? base : null;
+                                });
+                              }}
+                              placeholder="defaults"
+                              className="mt-1 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                            />
+                          </label>
+                          <label className="text-[11px] text-slate-400">
+                            Dual group Y %
+                            <input
+                              type="number"
+                              step={0.25}
+                              value={
+                                draft?.centrePictureMirrorGroupOffsetPct?.y !== undefined &&
+                                draft?.centrePictureMirrorGroupOffsetPct?.y !== null
+                                  ? draft.centrePictureMirrorGroupOffsetPct.y
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                setDraft((prev) => {
+                                  const base = { ...(prev ?? {}) };
+                                  const cur = { ...base.centrePictureMirrorGroupOffsetPct };
+                                  if (!raw.length) {
+                                    delete cur.y;
+                                    if (Object.keys(cur).length === 0) delete base.centrePictureMirrorGroupOffsetPct;
+                                    else base.centrePictureMirrorGroupOffsetPct = cur;
+                                  } else {
+                                    cur.y = Number(raw) || 0;
+                                    base.centrePictureMirrorGroupOffsetPct = cur;
+                                  }
+                                  return Object.keys(base).length ? base : null;
+                                });
+                              }}
+                              placeholder="defaults"
+                              className="mt-1 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                            />
+                          </label>
+                        </div>
                           <div className="mt-3 flex flex-wrap gap-3">
                             <label className="text-[11px] text-slate-400">
                               Image position X % (blank line uses Defaults)
@@ -2036,6 +2107,44 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             ))}
                           </select>
                         </label>
+                        <div className="mt-2 flex flex-wrap gap-3">
+                          <label className="text-[11px] text-slate-400">
+                            Dual group X %
+                            <input
+                              type="number"
+                              step={0.25}
+                              value={draftDefaults.centrePictureMirrorGroupOffsetPct?.x ?? 0}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  centrePictureMirrorGroupOffsetPct: {
+                                    ...prev.centrePictureMirrorGroupOffsetPct,
+                                    x: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                          <label className="text-[11px] text-slate-400">
+                            Dual group Y %
+                            <input
+                              type="number"
+                              step={0.25}
+                              value={draftDefaults.centrePictureMirrorGroupOffsetPct?.y ?? 0}
+                              onChange={(e) =>
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  centrePictureMirrorGroupOffsetPct: {
+                                    ...prev.centrePictureMirrorGroupOffsetPct,
+                                    y: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="ml-2 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                          </label>
+                        </div>
                       </div>
 
                       <div>

@@ -84,6 +84,8 @@ export type CardArtOverride = {
   centrePictureMirrorX?: boolean;
   /** Add a second mirrored copy across the card centre (horizontal + vertical mirror). */
   centrePictureMirrorDual?: boolean;
+  /** Shift both dual-mirror copies together (% of card), preserving their mirrored relation. */
+  centrePictureMirrorGroupOffsetPct?: { x?: number; y?: number };
   /** CSS mix-blend-mode for centre court image raster. */
   centrePictureBlendMode?: CentrePictureBlendMode;
   /** Pip centres + optional flip per pip */
@@ -141,6 +143,8 @@ export type CardArtGlobalDefaults = {
   centrePictureMirrorX?: boolean;
   /** Default dual mirrored centre image copy. */
   centrePictureMirrorDual?: boolean;
+  /** Default collective shift for dual mirrored centre image pair. */
+  centrePictureMirrorGroupOffsetPct?: { x?: number; y?: number };
   /** Default CSS mix-blend-mode for centre court image raster. */
   centrePictureBlendMode?: CentrePictureBlendMode;
   /** Default caption for any background-only face unless the card override replaces it. */

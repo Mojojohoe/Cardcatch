@@ -44,6 +44,18 @@ function resolveCentrePictureBlendMode(
 ): CentrePictureBlendMode {
   return override?.centrePictureBlendMode ?? defaults?.centrePictureBlendMode ?? 'normal';
 }
+
+function mergeCentrePictureMirrorGroupOffsetPct(
+  override?: CardArtOverride,
+  defaults?: CardArtGlobalDefaults,
+): { x: number; y: number } {
+  const x = override?.centrePictureMirrorGroupOffsetPct?.x ?? defaults?.centrePictureMirrorGroupOffsetPct?.x ?? 0;
+  const y = override?.centrePictureMirrorGroupOffsetPct?.y ?? defaults?.centrePictureMirrorGroupOffsetPct?.y ?? 0;
+  return {
+    x: typeof x === 'number' && Number.isFinite(x) ? x : 0,
+    y: typeof y === 'number' && Number.isFinite(y) ? y : 0,
+  };
+}
 import { pipGridCellToFraction } from './pipLayouts';
 import {
   mergedBackgroundCaption,
@@ -281,6 +293,8 @@ function RasterPictureOr({
   offsetYPct = 0,
   mirrorX = false,
   mirrorDual = false,
+  mirrorGroupOffsetXPct = 0,
+  mirrorGroupOffsetYPct = 0,
   blendMode = 'normal',
   fallback,
 }: {
@@ -296,6 +310,9 @@ function RasterPictureOr({
   mirrorX?: boolean;
   /** Duplicate centre raster mirrored across both axes around card centre. */
   mirrorDual?: boolean;
+  /** Collective shift applied to both dual-mirror copies together. */
+  mirrorGroupOffsetXPct?: number;
+  mirrorGroupOffsetYPct?: number;
   /** CSS blend mode for centre raster. */
   blendMode?: CentrePictureBlendMode;
   fallback: React.ReactNode;
@@ -304,9 +321,13 @@ function RasterPictureOr({
   const [attempt, setAttempt] = useState(0);
   const s = clampCentrePictureScale(pictureScale);
   const t =
-    offsetXPct !== 0 || offsetYPct !== 0 ? `translate(${offsetXPct}%, ${offsetYPct}%)` : undefined;
+    offsetXPct !== 0 || offsetYPct !== 0 || mirrorGroupOffsetXPct !== 0 || mirrorGroupOffsetYPct !== 0
+      ? `translate(${offsetXPct + mirrorGroupOffsetXPct}%, ${offsetYPct + mirrorGroupOffsetYPct}%)`
+      : undefined;
   const tMirror =
-    offsetXPct !== 0 || offsetYPct !== 0 ? `translate(${-offsetXPct}%, ${-offsetYPct}%)` : undefined;
+    offsetXPct !== 0 || offsetYPct !== 0 || mirrorGroupOffsetXPct !== 0 || mirrorGroupOffsetYPct !== 0
+      ? `translate(${-offsetXPct + mirrorGroupOffsetXPct}%, ${-offsetYPct + mirrorGroupOffsetYPct}%)`
+      : undefined;
 
   useEffect(() => {
     setAttempt(0);
@@ -321,7 +342,7 @@ function RasterPictureOr({
   return (
     <>
       <div
-        className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+        className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
         style={t ? { transform: t } : undefined}
       >
         <div
@@ -345,7 +366,7 @@ function RasterPictureOr({
       </div>
       {mirrorDual ? (
         <div
-          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
           style={tMirror ? { transform: tMirror } : undefined}
         >
           <div
@@ -466,6 +487,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   const centrePicMirrorX = resolveCentrePictureMirrorX(override, defaults);
   const centrePicMirrorDual = resolveCentrePictureMirrorDual(override, defaults);
   const centrePicBlendMode = resolveCentrePictureBlendMode(override, defaults);
+  const centrePicMirrorGroupOff = mergeCentrePictureMirrorGroupOffsetPct(override, defaults);
 
   return (
     <div
@@ -567,6 +589,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               offsetYPct={centrePicOff.y}
               mirrorX={centrePicMirrorX}
               mirrorDual={centrePicMirrorDual}
+              mirrorGroupOffsetXPct={centrePicMirrorGroupOff.x}
+              mirrorGroupOffsetYPct={centrePicMirrorGroupOff.y}
               blendMode={centrePicBlendMode}
               fallback={
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -590,6 +614,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               offsetYPct={centrePicOff.y}
               mirrorX={centrePicMirrorX}
               mirrorDual={centrePicMirrorDual}
+              mirrorGroupOffsetXPct={centrePicMirrorGroupOff.x}
+              mirrorGroupOffsetYPct={centrePicMirrorGroupOff.y}
               blendMode={centrePicBlendMode}
             />
           ) : (
@@ -606,6 +632,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               centrePictureOffsetYPct={centrePicOff.y}
               centrePictureMirrorX={centrePicMirrorX}
               centrePictureMirrorDual={centrePicMirrorDual}
+              centrePictureMirrorGroupOffsetXPct={centrePicMirrorGroupOff.x}
+              centrePictureMirrorGroupOffsetYPct={centrePicMirrorGroupOff.y}
               centrePictureBlendMode={centrePicBlendMode}
             />
           )}
@@ -637,6 +665,8 @@ function PictureInterior({
   offsetYPct = 0,
   mirrorX = false,
   mirrorDual = false,
+  mirrorGroupOffsetXPct = 0,
+  mirrorGroupOffsetYPct = 0,
   blendMode = 'normal',
 }: {
   suit: string;
@@ -651,13 +681,21 @@ function PictureInterior({
   offsetYPct?: number;
   mirrorX?: boolean;
   mirrorDual?: boolean;
+  mirrorGroupOffsetXPct?: number;
+  mirrorGroupOffsetYPct?: number;
   blendMode?: CentrePictureBlendMode;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, centrePictureStem), [cardId, centrePictureStem]);
   const [attempt, setAttempt] = useState(0);
   const s = clampCentrePictureScale(centrePictureScale);
   const t =
-    offsetXPct !== 0 || offsetYPct !== 0 ? `translate(${offsetXPct}%, ${offsetYPct}%)` : undefined;
+    offsetXPct !== 0 || offsetYPct !== 0 || mirrorGroupOffsetXPct !== 0 || mirrorGroupOffsetYPct !== 0
+      ? `translate(${offsetXPct + mirrorGroupOffsetXPct}%, ${offsetYPct + mirrorGroupOffsetYPct}%)`
+      : undefined;
+  const tMirror =
+    offsetXPct !== 0 || offsetYPct !== 0 || mirrorGroupOffsetXPct !== 0 || mirrorGroupOffsetYPct !== 0
+      ? `translate(${-offsetXPct + mirrorGroupOffsetXPct}%, ${-offsetYPct + mirrorGroupOffsetYPct}%)`
+      : undefined;
 
   useEffect(() => {
     setAttempt(0);
@@ -669,7 +707,7 @@ function PictureInterior({
     return (
       <>
         <div
-          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
           style={t ? { transform: t } : undefined}
         >
           <div
@@ -693,8 +731,8 @@ function PictureInterior({
         </div>
         {mirrorDual ? (
           <div
-            className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
-            style={t ? { transform: `translate(${-offsetXPct}%, ${-offsetYPct}%)` } : undefined}
+          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+          style={tMirror ? { transform: tMirror } : undefined}
           >
             <div
               className="flex max-h-[72%] max-w-full items-center justify-center"
@@ -797,6 +835,8 @@ function CenterFill({
   centrePictureOffsetYPct,
   centrePictureMirrorX,
   centrePictureMirrorDual,
+  centrePictureMirrorGroupOffsetXPct,
+  centrePictureMirrorGroupOffsetYPct,
   centrePictureBlendMode,
 }: {
   card: string;
@@ -811,6 +851,8 @@ function CenterFill({
   centrePictureOffsetYPct: number;
   centrePictureMirrorX: boolean;
   centrePictureMirrorDual: boolean;
+  centrePictureMirrorGroupOffsetXPct: number;
+  centrePictureMirrorGroupOffsetYPct: number;
   centrePictureBlendMode: CentrePictureBlendMode;
 }) {
   const slots = resolvePipSlots(value, override, defaults);
@@ -836,6 +878,8 @@ function CenterFill({
         offsetYPct={centrePictureOffsetYPct}
         mirrorX={centrePictureMirrorX}
         mirrorDual={centrePictureMirrorDual}
+        mirrorGroupOffsetXPct={centrePictureMirrorGroupOffsetXPct}
+        mirrorGroupOffsetYPct={centrePictureMirrorGroupOffsetYPct}
         blendMode={centrePictureBlendMode}
         fallback={
           <AceOrGodCentreFallback
@@ -859,6 +903,8 @@ function CenterFill({
       offsetYPct={centrePictureOffsetYPct}
       mirrorX={centrePictureMirrorX}
       mirrorDual={centrePictureMirrorDual}
+      mirrorGroupOffsetXPct={centrePictureMirrorGroupOffsetXPct}
+      mirrorGroupOffsetYPct={centrePictureMirrorGroupOffsetYPct}
       blendMode={centrePictureBlendMode}
       fallback={
         <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center opacity-[0.22]">
