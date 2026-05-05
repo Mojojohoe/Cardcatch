@@ -83,11 +83,11 @@ export function resolveFaceBackgroundCandidates(suit: string, defaults?: CardArt
 }
 
 export function normalizePipOrient(o: PipOrient | undefined): PipOrient {
-  if (o === 1 || o === 2 || o === 3) return o;
+  if (o === 1 || o === 2 || o === 3 || o === 4) return o;
   return 0;
 }
 
-/** Click cycle: empty → o0 → o1 → o2 → o3 → remove. */
+/** Click cycle: empty → o0 → o1 → o2 → o3 → cross(o4) → remove. */
 export function cyclePipAtCell(slots: PipSlot[], col: number, row: number): PipSlot[] {
   const next = [...slots];
   const i = next.findIndex((s) => s.col === col && s.row === row);
@@ -97,7 +97,7 @@ export function cyclePipAtCell(slots: PipSlot[], col: number, row: number): PipS
   }
   const cur = next[i];
   const o = normalizePipOrient(cur.o);
-  if (o >= 3) {
+  if (o >= 4) {
     next.splice(i, 1);
     return next;
   }

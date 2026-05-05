@@ -79,6 +79,9 @@ function buildCleanCardOverrideForPack(draft: CardArtOverride | null): CardArtOv
   if (typeof cps === 'number' && Number.isFinite(cps)) {
     clean.centrePictureScale = Math.min(3, Math.max(0.25, cps));
   }
+  if (draft.centrePictureMirrorX === true) {
+    clean.centrePictureMirrorX = true;
+  }
   const cpo = draft.centrePictureOffsetPct;
   if (cpo && (typeof cpo.x === 'number' || typeof cpo.y === 'number')) {
     const nextOff: { x?: number; y?: number } = {};
@@ -120,13 +123,15 @@ function PipGridEditor({
     if (o === 0) return 'bg-amber-500/75 ring-1 ring-amber-300/80';
     if (o === 1) return 'bg-sky-500/75 ring-1 ring-sky-300/80';
     if (o === 2) return 'bg-violet-500/75 ring-1 ring-violet-300/80';
-    return 'bg-rose-500/75 ring-1 ring-rose-300/80';
+    if (o === 3) return 'bg-rose-500/75 ring-1 ring-rose-300/80';
+    return 'bg-teal-500/80 ring-1 ring-teal-200/90';
   };
 
   return (
     <div>
       <p className="mb-2 text-[10px] text-slate-500">
-        Clicks: 1st adds · then flip H · flip V · both · remove. Legend: amber=normal, sky=H, violet=V, rose=HV.
+        Clicks: 1st adds · then flip H · flip V · both · cross(H over normal) · remove. Legend:
+        amber=normal, sky=H, violet=V, rose=HV, teal=cross.
       </p>
       <div
         className="inline-grid gap-px rounded border border-slate-700 bg-slate-800 p-1"
@@ -990,6 +995,22 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                               className="mt-1 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
                             />
                           </label>
+                        <label className="mt-2 flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(draft?.centrePictureMirrorX)}
+                            onChange={(e) =>
+                              setDraft((prev) => {
+                                const base = { ...(prev ?? {}) };
+                                if (e.target.checked) base.centrePictureMirrorX = true;
+                                else delete base.centrePictureMirrorX;
+                                return Object.keys(base).length ? base : null;
+                              })
+                            }
+                            className="mt-0.5"
+                          />
+                          <span>Mirror centre image horizontally (blank = use Defaults)</span>
+                        </label>
                           <div className="mt-3 flex flex-wrap gap-3">
                             <label className="text-[11px] text-slate-400">
                               Image position X % (blank line uses Defaults)
@@ -1886,6 +1907,26 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             placeholder="1"
                             className="ml-2 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
                           />
+                        </label>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold text-slate-300">Centre court image mirror</p>
+                        <label className="flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(draftDefaults.centrePictureMirrorX)}
+                            onChange={(e) =>
+                              setDraftDefaults((prev) => {
+                                const next = { ...prev };
+                                if (e.target.checked) next.centrePictureMirrorX = true;
+                                else delete next.centrePictureMirrorX;
+                                return next;
+                              })
+                            }
+                            className="mt-0.5"
+                          />
+                          <span>Mirror centre image horizontally for Ace / God / royalty / Joker rasters.</span>
                         </label>
                       </div>
 

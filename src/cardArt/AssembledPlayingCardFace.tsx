@@ -20,6 +20,11 @@ function mergeCentrePictureOffsetPct(
     y: typeof y === 'number' && Number.isFinite(y) ? y : 0,
   };
 }
+
+function resolveCentrePictureMirrorX(override?: CardArtOverride, defaults?: CardArtGlobalDefaults): boolean {
+  if (override?.centrePictureMirrorX !== undefined) return Boolean(override.centrePictureMirrorX);
+  return Boolean(defaults?.centrePictureMirrorX);
+}
 import { pipGridCellToFraction } from './pipLayouts';
 import {
   mergedBackgroundCaption,
@@ -254,6 +259,7 @@ function RasterPictureOr({
   pictureScale = 1,
   offsetXPct = 0,
   offsetYPct = 0,
+  mirrorX = false,
   fallback,
 }: {
   cardId: string;
@@ -264,6 +270,8 @@ function RasterPictureOr({
   /** Nudge centre image only (% of card); see {@link CardArtOverride.centrePictureOffsetPct}. */
   offsetXPct?: number;
   offsetYPct?: number;
+  /** Mirror centre raster horizontally. */
+  mirrorX?: boolean;
   fallback: React.ReactNode;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, pictureStem), [cardId, pictureStem]);
@@ -294,7 +302,12 @@ function RasterPictureOr({
     >
       <div
         className="flex max-h-[72%] max-w-full items-center justify-center"
-        style={{ transform: s !== 1 ? `scale(${s})` : undefined }}
+        style={{
+          transform:
+            s !== 1 || mirrorX
+              ? `scale(${mirrorX ? -s : s}, ${s})`
+              : undefined,
+        }}
       >
         <img
           src={candidates[attempt]}
@@ -405,6 +418,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
     override?.centrePictureScale ?? defaults?.centrePictureScale ?? 1,
   );
   const centrePicOff = mergeCentrePictureOffsetPct(override, defaults);
+  const centrePicMirrorX = resolveCentrePictureMirrorX(override, defaults);
 
   return (
     <div
@@ -504,6 +518,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               pictureScale={centrePictureScale}
               offsetXPct={centrePicOff.x}
               offsetYPct={centrePicOff.y}
+              mirrorX={centrePicMirrorX}
               fallback={
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className={`opacity-90 ${SUIT_COLORS['Joker'] ?? 'text-purple-500'}`}>
@@ -524,6 +539,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               centrePictureScale={centrePictureScale}
               offsetXPct={centrePicOff.x}
               offsetYPct={centrePicOff.y}
+              mirrorX={centrePicMirrorX}
             />
           ) : (
             <CenterFill
@@ -537,6 +553,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               textOpacity={faceTextOpacity}
               centrePictureOffsetXPct={centrePicOff.x}
               centrePictureOffsetYPct={centrePicOff.y}
+              centrePictureMirrorX={centrePicMirrorX}
             />
           )}
         </div>
@@ -565,6 +582,7 @@ function PictureInterior({
   centrePictureScale,
   offsetXPct = 0,
   offsetYPct = 0,
+  mirrorX = false,
 }: {
   suit: string;
   value: string;
@@ -576,6 +594,7 @@ function PictureInterior({
   centrePictureScale: number;
   offsetXPct?: number;
   offsetYPct?: number;
+  mirrorX?: boolean;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, centrePictureStem), [cardId, centrePictureStem]);
   const [attempt, setAttempt] = useState(0);
@@ -597,7 +616,12 @@ function PictureInterior({
       >
         <div
           className="flex max-h-[72%] max-w-full items-center justify-center"
-          style={{ transform: s !== 1 ? `scale(${s})` : undefined }}
+          style={{
+            transform:
+              s !== 1 || mirrorX
+                ? `scale(${mirrorX ? -s : s}, ${s})`
+                : undefined,
+          }}
         >
           <img
             src={candidates[attempt]}
@@ -687,6 +711,7 @@ function CenterFill({
   textOpacity,
   centrePictureOffsetXPct,
   centrePictureOffsetYPct,
+  centrePictureMirrorX,
 }: {
   card: string;
   suit: string;
@@ -698,6 +723,7 @@ function CenterFill({
   textOpacity: number;
   centrePictureOffsetXPct: number;
   centrePictureOffsetYPct: number;
+  centrePictureMirrorX: boolean;
 }) {
   const slots = resolvePipSlots(value, override, defaults);
   const aceOrGod = value === 'A' || value === 'G';
@@ -720,6 +746,7 @@ function CenterFill({
         pictureScale={centrePictureScale}
         offsetXPct={centrePictureOffsetXPct}
         offsetYPct={centrePictureOffsetYPct}
+        mirrorX={centrePictureMirrorX}
         fallback={
           <AceOrGodCentreFallback
             suit={suit}
@@ -740,6 +767,7 @@ function CenterFill({
       pictureScale={centrePictureScale}
       offsetXPct={centrePictureOffsetXPct}
       offsetYPct={centrePictureOffsetYPct}
+      mirrorX={centrePictureMirrorX}
       fallback={
         <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center opacity-[0.22]">
           <div className={`${SUIT_COLORS[suit] ?? 'text-red-500'}`}>
@@ -778,6 +806,15 @@ function PipInterior({
       {cells.map((cell, i) => {
         const { x, y } = pipGridCellToFraction(cell);
         const o = (cell.o ?? 0) as PipOrient;
+        if (o === 4) {
+          // Cross mode: render two suit rasters on the same tile (normal + horizontal mirror).
+          return (
+            <React.Fragment key={`${i}-${cell.col}-${cell.row}-cross`}>
+              <PipImage suit={suit} x={x} y={y} maxSideFrac={maxSide} orient={0} />
+              <PipImage suit={suit} x={x} y={y} maxSideFrac={maxSide} orient={1} />
+            </React.Fragment>
+          );
+        }
         return (
           <React.Fragment key={`${i}-${cell.col}-${cell.row}-${o}`}>
             <PipImage suit={suit} x={x} y={y} maxSideFrac={maxSide} orient={o} />

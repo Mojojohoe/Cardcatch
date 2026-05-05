@@ -2,8 +2,8 @@
 export const PIP_GRID_COLS = 11;
 export const PIP_GRID_ROWS = 17;
 
-/** 0=normal, 1=flip horizontal, 2=flip vertical, 3=flip both (click cycle; 4th → 5th click deletes). */
-export type PipOrient = 0 | 1 | 2 | 3;
+/** 0=normal, 1=flip H, 2=flip V, 3=flip HV, 4=cross (normal+H overlay on same tile). */
+export type PipOrient = 0 | 1 | 2 | 3 | 4;
 
 export type PipSlot = { col: number; row: number; o?: PipOrient };
 
@@ -62,6 +62,8 @@ export type CardArtOverride = {
    * Merged with {@link CardArtGlobalDefaults.centrePictureOffsetPct}; default 0,0.
    */
   centrePictureOffsetPct?: { x?: number; y?: number };
+  /** Mirror only the large centre court image horizontally (Ace / God / royalty / Joker raster). */
+  centrePictureMirrorX?: boolean;
   /** Pip centres + optional flip per pip */
   pipGrid?: PipSlot[];
   /** Opacity 0–1 for face typography (corner rank, captions, royalty rank line). Default 1. */
@@ -113,6 +115,8 @@ export type CardArtGlobalDefaults = {
    * See {@link CardArtOverride.centrePictureOffsetPct}.
    */
   centrePictureOffsetPct?: { x?: number; y?: number };
+  /** Default horizontal mirror for centre court image when card override does not set it. */
+  centrePictureMirrorX?: boolean;
   /** Default caption for any background-only face unless the card override replaces it. */
   backgroundCaptionDefaults?: BackgroundCaptionConfig;
   /**
