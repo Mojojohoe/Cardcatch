@@ -44,6 +44,20 @@ const CURSE_MANIFEST_KEYS = CURSE_IDS.map((id) => `curse-${id}` as const);
 /** Face-down majors in the opponent row (`staticBackdrop`) — maps to raster mode custom art */
 const BACK_POWER_MAJOR = 'back-power' as const;
 const BACK_ROLE_KEYS = ['back-prey', 'back-predator', 'back-preydator', 'back-deck'] as const;
+const APPLY_SUIT_OPTIONS = [
+  'Hearts',
+  'Diamonds',
+  'Clubs',
+  'Spades',
+  'Stars',
+  'Moons',
+  'Frogs',
+  'Coins',
+  'Bones',
+  'Crowns',
+  'Grovels',
+  'Swords',
+] as const;
 
 /** Ranks 2…A and God of Hearts (G) for shared layouts + scale ranges. */
 const SHARED_RANK_OPTIONS = [...VALUES, 'G'].filter((v) => !['J', 'Q', 'K'].includes(v));
@@ -259,6 +273,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [draftDefaults, setDraftDefaults] = useState<CardArtGlobalDefaults>(defaults);
 
   const [sharedRank, setSharedRank] = useState<string>('2');
+  const [applySuitChecks, setApplySuitChecks] = useState<Record<string, boolean>>({});
 
   /** Always read latest manifest without re-running the draft sync effect on every manifest bump (that wiped unsaved card edits). */
   const manifestRef = useRef(manifest);
@@ -281,6 +296,16 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   }, [defaults, defaultsVersion]);
 
   const draft = localOverride;
+
+  useEffect(() => {
+    if (!playingParts) {
+      setApplySuitChecks({});
+      return;
+    }
+    const next: Record<string, boolean> = {};
+    for (const s of APPLY_SUIT_OPTIONS) next[s] = s !== playingParts.suit;
+    setApplySuitChecks(next);
+  }, [selected, playingParts?.suit]);
 
   const handleExportCardArtPack = useCallback(() => {
     // Defaults tab edits live in `draftDefaults` until "Save defaults"; export must include that or the JSON is empty.
@@ -430,6 +455,34 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       text: `Applied centre layout to ${touched} other ${selectedType} card${touched === 1 ? '' : 's'}.`,
     });
   }, [localOverride, manifest, selected, updateOverride]);
+
+  const handleApplyCardToCheckedSuits = useCallback(() => {
+    if (!playingParts) {
+      setPackIoBanner({ type: 'err', text: 'Select a playing card first.' });
+      return;
+    }
+    const clean = buildCleanCardOverrideForPack(draft);
+    if (!clean) {
+      setPackIoBanner({ type: 'err', text: 'No card override values to copy from the current card.' });
+      return;
+    }
+    const targetSuits = APPLY_SUIT_OPTIONS.filter((s) => applySuitChecks[s]);
+    if (!targetSuits.length) {
+      setPackIoBanner({ type: 'err', text: 'Tick at least one target suit.' });
+      return;
+    }
+    let touched = 0;
+    for (const suit of targetSuits) {
+      const targetId = `${suit}-${playingParts.value}`;
+      if (targetId === selected) continue;
+      updateOverride(targetId, { ...clean });
+      touched += 1;
+    }
+    setPackIoBanner({
+      type: 'ok',
+      text: `Applied ${playingParts.value} override to ${touched} suit card${touched === 1 ? '' : 's'}.`,
+    });
+  }, [playingParts, draft, applySuitChecks, selected, updateOverride]);
 
   const handleSaveDefaults = () => {
     setDefaults(draftDefaults);
@@ -1305,6 +1358,38 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
 
               <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+                {playingParts && (
+                  <div className="w-full rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-3">
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-cyan-300">
+                      Apply this {playingParts.value} to other suits
+                    </p>
+                    <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1">
+                      {APPLY_SUIT_OPTIONS.map((s) => (
+                        <label key={s} className="flex items-center gap-1 text-[11px] text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(applySuitChecks[s])}
+                            disabled={s === playingParts.suit}
+                            onChange={(e) =>
+                              setApplySuitChecks((prev) => ({
+                                ...prev,
+                                [s]: e.target.checked,
+                              }))
+                            }
+                          />
+                          <span className={s === playingParts.suit ? 'text-slate-500' : ''}>{s}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleApplyCardToCheckedSuits}
+                      className="rounded border border-cyan-700 bg-cyan-900/25 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-200 hover:bg-cyan-900/40"
+                    >
+                      Apply to checked suits
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={handleSaveCard}

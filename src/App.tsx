@@ -3123,13 +3123,21 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   useEffect(() => {
     const el = handRowRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setHandRowW(el.clientWidth));
-    ro.observe(el);
-    setHandRowW(el.clientWidth);
-    const raf = requestAnimationFrame(() => setHandRowW(el.clientWidth));
+    const update = () => setHandRowW(el.clientWidth || Math.max(240, Math.floor(window.innerWidth * 0.82)));
+    update();
+    const raf = requestAnimationFrame(update);
+    let ro: ResizeObserver | null = null;
+    const hasRO = typeof ResizeObserver !== 'undefined';
+    if (hasRO) {
+      ro = new ResizeObserver(update);
+      ro.observe(el);
+    } else {
+      window.addEventListener('resize', update);
+    }
     return () => {
       cancelAnimationFrame(raf);
-      ro.disconnect();
+      if (ro) ro.disconnect();
+      else window.removeEventListener('resize', update);
     };
   }, [room.status, handLenForFan]);
 
