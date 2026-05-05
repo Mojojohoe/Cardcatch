@@ -671,7 +671,26 @@ type GameEvent =
   | { type: 'PLAY_POWER_CARD', uid: string, powerCardId: number | null }
   | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number; priestessSwapToCard?: string | null }
   | { type: 'SET_LOBBY_READY', uid: string, ready: boolean }
-  | { type: 'SEND_CHAT', uid: string, text: string };
+  | { type: 'SEND_CHAT', uid: string, text: string }
+  | { type: 'ROLL_DICE_TEST_REQUEST', uid: string }
+  | {
+      type: 'ROLL_DICE_TEST_BROADCAST',
+      uid: string,
+      rollId: string,
+      notation: string,
+      dice: number[],
+      total: number,
+      startedAt: number,
+    };
+
+export type DiceTestRollPayload = {
+  uid: string;
+  rollId: string;
+  notation: string;
+  dice: number[];
+  total: number;
+  startedAt: number;
+};
 
 const STORAGE_KEY = 'preydator_settings';
 
@@ -705,6 +724,7 @@ export class GameService {
   private isHost = false;
   private state: RoomData | null = null;
   private onStateChange: ((state: RoomData) => void) | null = null;
+  private onDiceTestRoll: ((payload: DiceTestRollPayload) => void) | null = null;
   private myUid: string = '';
   private powerResolutionTimer: ReturnType<typeof setTimeout> | null = null;
   private powerShowdownClearTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1036,11 +1056,24 @@ export class GameService {
         if (remoteUid && event.uid === remoteUid) {
           this.handleChatMessage(remoteUid, event.text);
         }
+      } else if (event.type === 'ROLL_DICE_TEST_REQUEST') {
+        if (remoteUid && event.uid === remoteUid) {
+          this.emitDiceTestRoll(remoteUid);
+        }
       }
     } else {
       if (event.type === 'STATE_UPDATE') {
         this.state = event.state;
         this.onStateChange?.(this.state);
+      } else if (event.type === 'ROLL_DICE_TEST_BROADCAST') {
+        this.onDiceTestRoll?.({
+          uid: event.uid,
+          rollId: event.rollId,
+          notation: event.notation,
+          dice: event.dice,
+          total: event.total,
+          startedAt: event.startedAt,
+        });
       }
     }
   }
@@ -1370,6 +1403,18 @@ export class GameService {
     if (!this.state || this.state.status !== 'waiting') return;
     if (this.isHost) return;
     this.sendEvent({ type: 'SET_LOBBY_READY', uid: this.myUid, ready });
+  }
+
+  onDiceTestRollEvent(handler: ((payload: DiceTestRollPayload) => void) | null) {
+    this.onDiceTestRoll = handler;
+  }
+
+  async requestDiceTestRoll() {
+    if (this.isHost) {
+      this.emitDiceTestRoll(this.myUid);
+    } else {
+      this.sendEvent({ type: 'ROLL_DICE_TEST_REQUEST', uid: this.myUid });
+    }
   }
 
   async proceedToNextRound() {
@@ -2058,6 +2103,29 @@ export class GameService {
     if (this.connection && this.connection.open) {
       this.connection.send(event);
     }
+  }
+
+  private emitDiceTestRoll(uid: string) {
+    const d1 = 1 + Math.floor(Math.random() * 6);
+    const d2 = 1 + Math.floor(Math.random() * 6);
+    const payload: DiceTestRollPayload = {
+      uid,
+      rollId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      notation: '2d6',
+      dice: [d1, d2],
+      total: d1 + d2,
+      startedAt: Date.now(),
+    };
+    this.onDiceTestRoll?.(payload);
+    this.sendEvent({
+      type: 'ROLL_DICE_TEST_BROADCAST',
+      uid: payload.uid,
+      rollId: payload.rollId,
+      notation: payload.notation,
+      dice: payload.dice,
+      total: payload.total,
+      startedAt: payload.startedAt,
+    });
   }
 
   private calculateOutcome(roomData: RoomData, players: Record<string, PlayerData>) {

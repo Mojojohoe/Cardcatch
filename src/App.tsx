@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import {
   GameService,
+  type DiceTestRollPayload,
   parseCard,
   desperationSpinAllowed,
   describeWrathMinionTitle,
@@ -83,6 +84,7 @@ import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerIntera
 import { DesperationWheel, TargetSuitWheel } from './components/GameWheels';
 import { RoomChat } from './components/RoomChat';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
+import { DiceBoxTestOverlay } from './components/DiceBoxTestOverlay';
 import { SuitGlyph } from './components/SuitGlyphs';
 import { SuitRasterOrGlyph } from './components/SuitRasterOrGlyph';
 import { DualTableTrumpCard, DualTrumpTableLabel } from './components/DualTableTrumpCard';
@@ -2549,6 +2551,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const cardSelectionTurnRef = useRef<number | null>(null);
   const myUid = serviceRef.current.getUid();
   const [famineBannerPhase, setFamineBannerPhase] = useState<FamineBannerPhase>('idle');
+  const [diceTestRoll, setDiceTestRoll] = useState<DiceTestRollPayload | null>(null);
   const famineActivePrev = useRef(false);
   const dualSnapRef = useRef({ instanceId, isDual, playerName, roomId, room });
   dualSnapRef.current = { instanceId, isDual, playerName, roomId, room };
@@ -2744,6 +2747,15 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     }
   }, [room?.status, room?.players[myUid]?.secretIntel, room?.currentTurn, lastResolvedTurn]);
 
+  useEffect(() => {
+    serviceRef.current.onDiceTestRollEvent((payload) => {
+      setDiceTestRoll(payload);
+    });
+    return () => {
+      serviceRef.current.onDiceTestRollEvent(null);
+    };
+  }, []);
+
   const cardArtCtx = useOptionalCardArt();
   const cardArtForUi = useMemo(() => {
     if (!cardArtCtx) return null;
@@ -2927,6 +2939,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTestDiceRoll = async () => {
+    try {
+      await serviceRef.current.requestDiceTestRoll();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to roll test dice');
     }
   };
 
@@ -3157,10 +3177,20 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
         </>
       )}
+      <div className="absolute left-1/2 top-3 z-[242] -translate-x-1/2">
+        <button
+          type="button"
+          onClick={handleTestDiceRoll}
+          className="rounded-full border border-cyan-300/50 bg-cyan-500/15 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.24)] transition hover:bg-cyan-500/30"
+        >
+          Roll 2d6 (test)
+        </button>
+      </div>
       <DesperationVignette
         tier={me.desperationTier}
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
+      <DiceBoxTestOverlay roll={diceTestRoll} />
 
       {!powerShowdown && room.status === 'powering' && myPendingDecision && myPendingDecision.selectedOption === null && (
         <PowerDecisionModal
