@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DiceTestRollPayload } from '../services/gameService';
+import { Box3, Vector3, type Object3D } from 'three';
 
 type DiceBoxInstance = {
   initialize: () => Promise<void>;
@@ -27,6 +28,9 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   const [fading, setFading] = useState(false);
   const [result, setResult] = useState<{ dice: number[]; total: number } | null>(null);
   const [diceReady, setDiceReady] = useState(false);
+  const boneTemplateRef = useRef<Object3D | null>(null);
+  const boneLoadPromiseRef = useRef<Promise<Object3D | null> | null>(null);
+  const patchedSpawnRef = useRef(false);
   const hideTimerRef = useRef<number | null>(null);
   const fadeTimerRef = useRef<number | null>(null);
 
@@ -38,6 +42,100 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   }, []);
 
   const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+  const loadBoneTemplate = async (): Promise<Object3D | null> => {
+    if (boneTemplateRef.current) return boneTemplateRef.current;
+    if (boneLoadPromiseRef.current) return boneLoadPromiseRef.current;
+    boneLoadPromiseRef.current = (async () => {
+      const [{ GLTFLoader }] = await Promise.all([import('three/examples/jsm/loaders/GLTFLoader.js')]);
+      const loader = new GLTFLoader();
+      const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/models/bone_die.glb`);
+      const root = gltf.scene.clone(true);
+      const box = new Box3().setFromObject(root);
+      const size = new Vector3();
+      const center = new Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+      root.position.sub(center);
+      const maxAxis = Math.max(size.x, size.y, size.z);
+      if (maxAxis > 0) {
+        const targetSize = 1.75;
+        const uniform = targetSize / maxAxis;
+        root.scale.setScalar(uniform);
+      }
+      root.traverse((obj: any) => {
+        obj.userData = { ...(obj.userData ?? {}), boneDieShell: true };
+        if (obj.material) {
+          obj.castShadow = true;
+          obj.receiveShadow = true;
+          if (Array.isArray(obj.material)) {
+            for (const m of obj.material) {
+              if (m?.transparent) m.opacity = Math.max(0.9, m.opacity ?? 1);
+            }
+          } else if (obj.material.transparent) {
+            obj.material.opacity = Math.max(0.9, obj.material.opacity ?? 1);
+          }
+        }
+      });
+      boneTemplateRef.current = root;
+      return root;
+    })();
+    try {
+      return await boneLoadPromiseRef.current;
+    } finally {
+      boneLoadPromiseRef.current = null;
+    }
+  };
+
+  const attachBoneShell = async (dieObj: any): Promise<void> => {
+    if (!dieObj || typeof dieObj.add !== 'function') return;
+    if (dieObj.getObjectByName?.('bone-die-shell-root')) return;
+    const template = await loadBoneTemplate();
+    if (!template) return;
+    const shell = template.clone(true);
+    shell.name = 'bone-die-shell-root';
+
+    const dieBox = new Box3().setFromObject(dieObj);
+    const dieSize = new Vector3();
+    dieBox.getSize(dieSize);
+    const shellBox = new Box3().setFromObject(shell);
+    const shellSize = new Vector3();
+    shellBox.getSize(shellSize);
+    const shellMax = Math.max(shellSize.x, shellSize.y, shellSize.z);
+    const dieMax = Math.max(dieSize.x, dieSize.y, dieSize.z);
+    if (shellMax > 0 && dieMax > 0) {
+      const k = (dieMax / shellMax) * 0.98;
+      shell.scale.multiplyScalar(k);
+    }
+    shell.position.set(0, 0, 0);
+    dieObj.add(shell);
+
+    const mats: any[] = Array.isArray(dieObj.material) ? dieObj.material : dieObj.material ? [dieObj.material] : [];
+    for (const m of mats) {
+      m.transparent = true;
+      m.opacity = 0.03;
+      m.depthWrite = false;
+    }
+  };
+
+  const patchSpawnForBoneShell = (dice: DiceBoxInstance): void => {
+    if (patchedSpawnRef.current) return;
+    const anyDice = dice as any;
+    if (typeof anyDice.spawnDice !== 'function') return;
+    const originalSpawn = anyDice.spawnDice.bind(anyDice);
+    anyDice.spawnDice = (...args: any[]) => {
+      const out = originalSpawn(...args);
+      if (out && typeof out.then === 'function') {
+        return out.then((dieObj: any) => {
+          void attachBoneShell(dieObj);
+          return dieObj;
+        });
+      }
+      void attachBoneShell(out);
+      return out;
+    };
+    patchedSpawnRef.current = true;
+  };
 
   const runDiceAnimation = async (dice: DiceBoxInstance, notation: string): Promise<boolean> => {
     const startedAt = performance.now();
@@ -80,6 +178,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         });
       }
       await diceRef.current.initialize();
+      patchSpawnForBoneShell(diceRef.current);
       if (mountRef.current) {
         const cv = mountRef.current.querySelector('canvas');
         if (!cv) {
