@@ -375,6 +375,11 @@ export interface CardVisualProps {
   resolutionMorph?: 'transform' | null;
   /** Resolution empower / Lust surge: incremented to replay a short wiggle without swapping to vector art. */
   resolutionWiggleTick?: number;
+  /**
+   * Motion `layout` on the face shell (FLIP). Off for dense hands / drag-reorder to avoid neighbour jostling.
+   * @default true
+   */
+  motionLayout?: boolean;
 }
 
 export const CardVisual: React.FC<CardVisualProps> = (props) => {
@@ -398,6 +403,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     envyCovetedGlow = false,
     resolutionMorph = null,
     resolutionWiggleTick = 0,
+    motionLayout = true,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -507,7 +513,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     if (backRasterUrl) {
       return (
         <motion.div
-          layout
+          {...(motionLayout ? { layout: true as const } : {})}
           {...entrance}
           transition={{ type: 'spring', stiffness: 720, damping: 38 }}
           whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
@@ -519,7 +525,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     }
     return (
       <motion.div
-        layout
+        {...(motionLayout ? { layout: true as const } : {})}
         {...entrance}
         transition={{ type: 'spring', stiffness: 720, damping: 38 }}
         whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
@@ -586,7 +592,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       tabIndex={detailTooltip ? 0 : undefined}
     >
       <motion.div
-        layout
+        {...(motionLayout ? { layout: true as const } : {})}
         {...entrance}
         style={{
           ...(assembledAlphaOutlineStyle ?? {}),

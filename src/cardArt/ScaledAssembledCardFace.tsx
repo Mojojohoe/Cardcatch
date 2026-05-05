@@ -35,12 +35,11 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
     measure();
     const ro = new ResizeObserver(() => measure());
     ro.observe(el);
-    const raf1 = requestAnimationFrame(measure);
-    const raf2 = requestAnimationFrame(() => measure());
+    /** One deferred measure is enough — double-rAF tended to amplify preview flicker in Card Creator. */
+    const raf = requestAnimationFrame(measure);
     return () => {
       ro.disconnect();
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
+      cancelAnimationFrame(raf);
     };
   }, []);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { displaySuitCardValue, parseCard } from '../services/gameService';
 import { SuitGlyph } from '../components/SuitGlyphs';
 import { resolveSuitFaceTextColor, SUIT_COLORS } from '../suitPresentation';
@@ -69,6 +69,60 @@ import {
 export const CARD_ART_WIDTH = 256;
 export const CARD_ART_HEIGHT = 374;
 
+/**
+ * Fade in after `src` is known-good to avoid empty decode frames when swapping rasters (Card Creator / JSON churn).
+ * Uses a layout-time probe so cache hits don’t flash hidden→shown hidden (ref/layout ordering issues with plain onLoad).
+ */
+function RasterImgDecodeFade({
+  src,
+  className,
+  style,
+  draggable = false,
+  onError,
+}: {
+  src: string;
+  className?: string;
+  style?: React.CSSProperties;
+  draggable?: boolean;
+  onError?: React.ReactEventHandler<HTMLImageElement>;
+}) {
+  const [shown, setShown] = useState(false);
+
+  useLayoutEffect(() => {
+    let cancelled = false;
+    setShown(false);
+    const probe = new Image();
+    const ok = () => {
+      if (!cancelled) setShown(true);
+    };
+    const bad = () => {
+      if (!cancelled) setShown(false);
+    };
+    probe.onload = ok;
+    probe.onerror = bad;
+    probe.src = src;
+    if (probe.complete && probe.naturalWidth > 0) ok();
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className={className}
+      style={{
+        ...style,
+        opacity: shown ? 1 : 0,
+        transition: 'opacity 72ms ease-out',
+      }}
+      draggable={draggable}
+      onError={onError}
+    />
+  );
+}
+
 const CORNER_TOP = '7%';
 const CORNER_SIDE = '6%';
 const PIP_FRAC = 0.072;
@@ -127,9 +181,8 @@ function PipImage({
   }
 
   return (
-    <img
+    <RasterImgDecodeFade
       src={candidates[attempt]}
-      alt=""
       draggable={false}
       onError={() => setAttempt((a) => a + 1)}
       className="pointer-events-none object-contain"
@@ -157,9 +210,8 @@ function CornerSuitRaster({ suit, sizePx }: { suit: string; sizePx: number }) {
   }
 
   return (
-    <img
+    <RasterImgDecodeFade
       src={candidates[attempt]}
-      alt=""
       draggable={false}
       onError={() => setAttempt((a) => a + 1)}
       className={`pointer-events-none object-contain opacity-95 ${wrap}`}
@@ -355,9 +407,8 @@ function RasterPictureOr({
                 : undefined,
           }}
         >
-          <img
+          <RasterImgDecodeFade
             src={candidates[attempt]}
-            alt=""
             className={imageClass}
             style={imageStyleBase}
             draggable={false}
@@ -379,7 +430,13 @@ function RasterPictureOr({
                   : 'scale(-1, -1)',
             }}
           >
-            <img src={candidates[attempt]} alt="" className={imageClass} style={imageStyleBase} draggable={false} />
+            <RasterImgDecodeFade
+              src={candidates[attempt]}
+              className={imageClass}
+              style={imageStyleBase}
+              draggable={false}
+              onError={() => setAttempt((a) => a + 1)}
+            />
           </div>
         </div>
       ) : null}
@@ -439,9 +496,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
         className="relative overflow-visible rounded-[inherit] bg-transparent"
         style={{ width: CARD_ART_WIDTH, height: CARD_ART_HEIGHT }}
       >
-        <img
+        <RasterImgDecodeFade
           src={customFullBleed}
-          alt=""
           className="h-full w-full object-cover"
           draggable={false}
           onError={() => setCustomBroken(true)}
@@ -502,9 +558,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
       <div className="pointer-events-none absolute inset-0 z-0" style={{ backgroundColor: underlay }} />
 
       {!bgKnownMissing && (
-        <img
+        <RasterImgDecodeFade
           src={bgCandidates[bgAttempt]}
-          alt=""
           className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover"
           draggable={false}
           onError={() => setBgAttempt((a) => a + 1)}
@@ -724,9 +779,8 @@ function PictureInterior({
                   : undefined,
             }}
           >
-            <img
+            <RasterImgDecodeFade
               src={candidates[attempt]}
-              alt=""
               className="max-h-full max-w-full object-contain drop-shadow"
               style={blendMode !== 'normal' ? { mixBlendMode: blendMode } : undefined}
               draggable={false}
@@ -748,12 +802,12 @@ function PictureInterior({
                     : 'scale(-1, -1)',
               }}
             >
-              <img
+              <RasterImgDecodeFade
                 src={candidates[attempt]}
-                alt=""
                 className="max-h-full max-w-full object-contain drop-shadow"
                 style={blendMode !== 'normal' ? { mixBlendMode: blendMode } : undefined}
                 draggable={false}
+                onError={() => setAttempt((a) => a + 1)}
               />
             </div>
           </div>

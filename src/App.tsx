@@ -61,6 +61,7 @@ import {
   isCardBlockedByPride,
   reorderHandSlots,
   handIndexAfterReorder,
+  handSlotOccurrenceRank,
   envyGreedySealSlots,
   ENVY_MONSTER_START_HP,
   playingCardUpgradeSteps,
@@ -4138,16 +4139,19 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         ? GROVEL_FEED_TOOLTIP
                         : undefined;
                 const combinedMuted = prideMuted || envyMuted;
+                /** Stable identity per multiset slot so reorder doesn’t remap React keys → no deal entrance replay. */
+                const occurrenceKey = handSlotOccurrenceRank(me.hand, i);
                 return (
                   <motion.div
-                    key={`${card}-${i}`}
+                    key={`${card}#${occurrenceKey}`}
                     style={{ transformOrigin: 'bottom center' }}
                     animate={
                       selected
                         ? { y: -26 + fan.y, scale: 1.04, rotate: fan.rotate, x: fan.x, zIndex: 55 }
                         : { y: fan.y, scale: 1, rotate: fan.rotate, x: fan.x, zIndex: fan.baseZ }
                     }
-                    transition={{ type: 'spring', stiffness: 310, damping: 24 }}
+                    transition={{ type: 'tween', duration: 0.22, ease: 'easeOut' }}
+                    layout={false}
                     className={`relative ${!me.confirmed ? 'cursor-grab active:cursor-grabbing' : ''}`}
                     draggable={!me.confirmed}
                     onDragStart={(e) => {
@@ -4199,7 +4203,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       lustHeartRulesActive={lustHeartUi}
                       onClick={() => !me.confirmed && !combinedMuted && setSelectedCardIndex(i)}
                       role={me.role}
-                      delay={i * 0.08}
+                      presentation="none"
+                      delay={0}
+                      motionLayout={false}
                     />
                   </motion.div>
                 );
