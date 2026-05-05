@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { parseCard } from '../services/gameService';
+import { displaySuitCardValue, parseCard } from '../services/gameService';
 import { SuitGlyph } from '../components/SuitGlyphs';
 import { resolveSuitFaceTextColor, SUIT_COLORS } from '../suitPresentation';
 import {
@@ -7,7 +7,14 @@ import {
   pictureCardUrlCandidates,
   suitRasterUrlCandidates,
 } from './paths';
-import type { BackgroundCaptionConfig, CardArtGlobalDefaults, CardArtOverride, PipOrient, PipSlot } from './types';
+import type {
+  BackgroundCaptionConfig,
+  CardArtGlobalDefaults,
+  CardArtOverride,
+  CentrePictureBlendMode,
+  PipOrient,
+  PipSlot,
+} from './types';
 
 function mergeCentrePictureOffsetPct(
   override?: CardArtOverride,
@@ -24,6 +31,18 @@ function mergeCentrePictureOffsetPct(
 function resolveCentrePictureMirrorX(override?: CardArtOverride, defaults?: CardArtGlobalDefaults): boolean {
   if (override?.centrePictureMirrorX !== undefined) return Boolean(override.centrePictureMirrorX);
   return Boolean(defaults?.centrePictureMirrorX);
+}
+
+function resolveCentrePictureMirrorDual(override?: CardArtOverride, defaults?: CardArtGlobalDefaults): boolean {
+  if (override?.centrePictureMirrorDual !== undefined) return Boolean(override.centrePictureMirrorDual);
+  return Boolean(defaults?.centrePictureMirrorDual);
+}
+
+function resolveCentrePictureBlendMode(
+  override?: CardArtOverride,
+  defaults?: CardArtGlobalDefaults,
+): CentrePictureBlendMode {
+  return override?.centrePictureBlendMode ?? defaults?.centrePictureBlendMode ?? 'normal';
 }
 import { pipGridCellToFraction } from './pipLayouts';
 import {
@@ -157,9 +176,10 @@ function displayRankToken(value: string): string {
 }
 
 function applyCaptionTokens(template: string, card: { suit: string; value: string; id: string }): string {
+  const vDisplay = card.suit === 'Crowns' ? displaySuitCardValue(card.suit, card.value) : card.value;
   return template
-    .replaceAll('{value}', card.value)
-    .replaceAll('{number}', card.value)
+    .replaceAll('{value}', vDisplay)
+    .replaceAll('{number}', vDisplay)
     .replaceAll('{rank}', displayRankToken(card.value))
     .replaceAll('{suit}', card.suit)
     .replaceAll('{card}', card.id);
@@ -260,6 +280,8 @@ function RasterPictureOr({
   offsetXPct = 0,
   offsetYPct = 0,
   mirrorX = false,
+  mirrorDual = false,
+  blendMode = 'normal',
   fallback,
 }: {
   cardId: string;
@@ -272,6 +294,10 @@ function RasterPictureOr({
   offsetYPct?: number;
   /** Mirror centre raster horizontally. */
   mirrorX?: boolean;
+  /** Duplicate centre raster mirrored across both axes around card centre. */
+  mirrorDual?: boolean;
+  /** CSS blend mode for centre raster. */
+  blendMode?: CentrePictureBlendMode;
   fallback: React.ReactNode;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, pictureStem), [cardId, pictureStem]);
@@ -279,45 +305,63 @@ function RasterPictureOr({
   const s = clampCentrePictureScale(pictureScale);
   const t =
     offsetXPct !== 0 || offsetYPct !== 0 ? `translate(${offsetXPct}%, ${offsetYPct}%)` : undefined;
+  const tMirror =
+    offsetXPct !== 0 || offsetYPct !== 0 ? `translate(${-offsetXPct}%, ${-offsetYPct}%)` : undefined;
 
   useEffect(() => {
     setAttempt(0);
   }, [cardId, pictureStem]);
 
   if (attempt >= candidates.length) {
-    return (
-      <div
-        className="pointer-events-none absolute inset-0 z-[2]"
-        style={t ? { transform: t } : undefined}
-      >
-        {fallback}
-      </div>
-    );
+    return <div className="pointer-events-none absolute inset-0 z-[2]" style={t ? { transform: t } : undefined}>{fallback}</div>;
   }
 
+  const imageClass = 'max-h-full max-w-full object-contain drop-shadow';
+  const imageStyleBase: React.CSSProperties = blendMode !== 'normal' ? { mixBlendMode: blendMode } : {};
   return (
-    <div
-      className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
-      style={t ? { transform: t } : undefined}
-    >
+    <>
       <div
-        className="flex max-h-[72%] max-w-full items-center justify-center"
-        style={{
-          transform:
-            s !== 1 || mirrorX
-              ? `scale(${mirrorX ? -s : s}, ${s})`
-              : undefined,
-        }}
+        className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+        style={t ? { transform: t } : undefined}
       >
-        <img
-          src={candidates[attempt]}
-          alt=""
-          className="max-h-full max-w-full object-contain drop-shadow"
-          draggable={false}
-          onError={() => setAttempt((a) => a + 1)}
-        />
+        <div
+          className="flex max-h-[72%] max-w-full items-center justify-center"
+          style={{
+            transform:
+              s !== 1 || mirrorX
+                ? `scale(${mirrorX ? -s : s}, ${s})`
+                : undefined,
+          }}
+        >
+          <img
+            src={candidates[attempt]}
+            alt=""
+            className={imageClass}
+            style={imageStyleBase}
+            draggable={false}
+            onError={() => setAttempt((a) => a + 1)}
+          />
+        </div>
       </div>
-    </div>
+      {mirrorDual ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+          style={tMirror ? { transform: tMirror } : undefined}
+        >
+          <div
+            className="flex max-h-[72%] max-w-full items-center justify-center"
+            style={{
+              transform:
+                s !== 1 || mirrorX
+                  ? `scale(${mirrorX ? s : -s}, ${-s})`
+                  : 'scale(-1, -1)',
+            }}
+          >
+            <img src={candidates[attempt]} alt="" className={imageClass} style={imageStyleBase} draggable={false} />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -330,6 +374,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   const cornerRankText = useMemo(() => {
     if (isJoker) return card.replace(/^Joker-/, '') || '?';
     if (p.suit === 'Grovels') return 'Grovel';
+    if (p.suit === 'Crowns') return displaySuitCardValue(p.suit, value);
     return value;
   }, [card, isJoker, p.suit, value]);
 
@@ -419,6 +464,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   );
   const centrePicOff = mergeCentrePictureOffsetPct(override, defaults);
   const centrePicMirrorX = resolveCentrePictureMirrorX(override, defaults);
+  const centrePicMirrorDual = resolveCentrePictureMirrorDual(override, defaults);
+  const centrePicBlendMode = resolveCentrePictureBlendMode(override, defaults);
 
   return (
     <div
@@ -519,6 +566,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               offsetXPct={centrePicOff.x}
               offsetYPct={centrePicOff.y}
               mirrorX={centrePicMirrorX}
+              mirrorDual={centrePicMirrorDual}
+              blendMode={centrePicBlendMode}
               fallback={
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className={`opacity-90 ${SUIT_COLORS['Joker'] ?? 'text-purple-500'}`}>
@@ -540,6 +589,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               offsetXPct={centrePicOff.x}
               offsetYPct={centrePicOff.y}
               mirrorX={centrePicMirrorX}
+              mirrorDual={centrePicMirrorDual}
+              blendMode={centrePicBlendMode}
             />
           ) : (
             <CenterFill
@@ -554,6 +605,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
               centrePictureOffsetXPct={centrePicOff.x}
               centrePictureOffsetYPct={centrePicOff.y}
               centrePictureMirrorX={centrePicMirrorX}
+              centrePictureMirrorDual={centrePicMirrorDual}
+              centrePictureBlendMode={centrePicBlendMode}
             />
           )}
         </div>
@@ -583,6 +636,8 @@ function PictureInterior({
   offsetXPct = 0,
   offsetYPct = 0,
   mirrorX = false,
+  mirrorDual = false,
+  blendMode = 'normal',
 }: {
   suit: string;
   value: string;
@@ -595,6 +650,8 @@ function PictureInterior({
   offsetXPct?: number;
   offsetYPct?: number;
   mirrorX?: boolean;
+  mirrorDual?: boolean;
+  blendMode?: CentrePictureBlendMode;
 }) {
   const candidates = useMemo(() => pictureCardUrlCandidates(cardId, centrePictureStem), [cardId, centrePictureStem]);
   const [attempt, setAttempt] = useState(0);
@@ -610,28 +667,55 @@ function PictureInterior({
 
   if (attempt < candidates.length) {
     return (
-      <div
-        className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
-        style={t ? { transform: t } : undefined}
-      >
+      <>
         <div
-          className="flex max-h-[72%] max-w-full items-center justify-center"
-          style={{
-            transform:
-              s !== 1 || mirrorX
-                ? `scale(${mirrorX ? -s : s}, ${s})`
-                : undefined,
-          }}
+          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+          style={t ? { transform: t } : undefined}
         >
-          <img
-            src={candidates[attempt]}
-            alt=""
-            className="max-h-full max-w-full object-contain drop-shadow"
-            draggable={false}
-            onError={() => setAttempt((a) => a + 1)}
-          />
+          <div
+            className="flex max-h-[72%] max-w-full items-center justify-center"
+            style={{
+              transform:
+                s !== 1 || mirrorX
+                  ? `scale(${mirrorX ? -s : s}, ${s})`
+                  : undefined,
+            }}
+          >
+            <img
+              src={candidates[attempt]}
+              alt=""
+              className="max-h-full max-w-full object-contain drop-shadow"
+              style={blendMode !== 'normal' ? { mixBlendMode: blendMode } : undefined}
+              draggable={false}
+              onError={() => setAttempt((a) => a + 1)}
+            />
+          </div>
         </div>
-      </div>
+        {mirrorDual ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
+            style={t ? { transform: `translate(${-offsetXPct}%, ${-offsetYPct}%)` } : undefined}
+          >
+            <div
+              className="flex max-h-[72%] max-w-full items-center justify-center"
+              style={{
+                transform:
+                  s !== 1 || mirrorX
+                    ? `scale(${mirrorX ? s : -s}, ${-s})`
+                    : 'scale(-1, -1)',
+              }}
+            >
+              <img
+                src={candidates[attempt]}
+                alt=""
+                className="max-h-full max-w-full object-contain drop-shadow"
+                style={blendMode !== 'normal' ? { mixBlendMode: blendMode } : undefined}
+                draggable={false}
+              />
+            </div>
+          </div>
+        ) : null}
+      </>
     );
   }
 
@@ -712,6 +796,8 @@ function CenterFill({
   centrePictureOffsetXPct,
   centrePictureOffsetYPct,
   centrePictureMirrorX,
+  centrePictureMirrorDual,
+  centrePictureBlendMode,
 }: {
   card: string;
   suit: string;
@@ -724,6 +810,8 @@ function CenterFill({
   centrePictureOffsetXPct: number;
   centrePictureOffsetYPct: number;
   centrePictureMirrorX: boolean;
+  centrePictureMirrorDual: boolean;
+  centrePictureBlendMode: CentrePictureBlendMode;
 }) {
   const slots = resolvePipSlots(value, override, defaults);
   const aceOrGod = value === 'A' || value === 'G';
@@ -747,6 +835,8 @@ function CenterFill({
         offsetXPct={centrePictureOffsetXPct}
         offsetYPct={centrePictureOffsetYPct}
         mirrorX={centrePictureMirrorX}
+        mirrorDual={centrePictureMirrorDual}
+        blendMode={centrePictureBlendMode}
         fallback={
           <AceOrGodCentreFallback
             suit={suit}
@@ -768,6 +858,8 @@ function CenterFill({
       offsetXPct={centrePictureOffsetXPct}
       offsetYPct={centrePictureOffsetYPct}
       mirrorX={centrePictureMirrorX}
+      mirrorDual={centrePictureMirrorDual}
+      blendMode={centrePictureBlendMode}
       fallback={
         <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center opacity-[0.22]">
           <div className={`${SUIT_COLORS[suit] ?? 'text-red-500'}`}>

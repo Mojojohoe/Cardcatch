@@ -64,6 +64,7 @@ import {
 } from '../curses';
 import {
   HEART_GOD_RANK,
+  displaySuitCardValue,
   getWrathMagnitude,
   parseCard,
   tooltipPrintedStrengthLabel,
@@ -107,9 +108,7 @@ function playingCardHoverCaption(cardStr: string): string | null {
   const bracket = tooltipPrintedStrengthLabel(cardStr);
   if (p.isJoker) return `${localizedLabel('joker', 'Joker')} — (${bracket})`;
   if (p.suit === 'Grovels') return null;
-  if (p.suit === 'Crowns' && p.value === 'E') {
-    return `${localizedLabel('emperor_of_crowns', 'Emperor of Crowns')} — (${bracket})`;
-  }
+  if (p.suit === 'Crowns') return `${displaySuitCardValue(p.suit, p.value)} ${localizedLabel('of', 'of')} Crowns — (${bracket})`;
   if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) {
     return `${localizedLabel('god_of_hearts', 'God of Hearts')} — (${bracket})`;
   }
@@ -449,6 +448,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const isCrownsSuit = suit === 'Crowns';
   const isGrovelsSuit = suit === 'Grovels';
   const isSwordsSuit = suit === 'Swords';
+  const faceValueText = isCrownsSuit ? displaySuitCardValue(suit, value) : value;
   const vectorSuitGlyphClass =
     isMoonSuit || isCrownsSuit || isGrovelsSuit || isSwordsSuit
       ? (SUIT_COLORS[suit] ?? 'text-red-400')
@@ -665,7 +665,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
             </span>
           ) : (
             <>
-              <span className={`${cornerText} font-black ${CARD_FACE_RANK_CLASS}`}>{value}</span>
+              <span className={`${cornerText} font-black ${CARD_FACE_RANK_CLASS}`}>{faceValueText}</span>
               {isJoker ? (
                 <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
               ) : (
@@ -701,7 +701,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
             </span>
           ) : (
             <>
-              <span className={`${cornerText} font-black ${CARD_FACE_RANK_CLASS}`}>{value}</span>
+              <span className={`${cornerText} font-black ${CARD_FACE_RANK_CLASS}`}>{faceValueText}</span>
               {isJoker ? (
                 <SuitGlyph suit="Joker" className={`${cornerGlyph} text-purple-500`} />
               ) : (

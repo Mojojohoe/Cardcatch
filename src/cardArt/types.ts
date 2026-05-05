@@ -7,6 +7,24 @@ export type PipOrient = 0 | 1 | 2 | 3 | 4;
 
 export type PipSlot = { col: number; row: number; o?: PipOrient };
 
+export type CentrePictureBlendMode =
+  | 'normal'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'darken'
+  | 'lighten'
+  | 'color-dodge'
+  | 'color-burn'
+  | 'hard-light'
+  | 'soft-light'
+  | 'difference'
+  | 'exclusion'
+  | 'hue'
+  | 'saturation'
+  | 'color'
+  | 'luminosity';
+
 /** @deprecated alias — use PipSlot */
 export type PipGridCell = PipSlot;
 
@@ -64,6 +82,10 @@ export type CardArtOverride = {
   centrePictureOffsetPct?: { x?: number; y?: number };
   /** Mirror only the large centre court image horizontally (Ace / God / royalty / Joker raster). */
   centrePictureMirrorX?: boolean;
+  /** Add a second mirrored copy across the card centre (horizontal + vertical mirror). */
+  centrePictureMirrorDual?: boolean;
+  /** CSS mix-blend-mode for centre court image raster. */
+  centrePictureBlendMode?: CentrePictureBlendMode;
   /** Pip centres + optional flip per pip */
   pipGrid?: PipSlot[];
   /** Opacity 0–1 for face typography (corner rank, captions, royalty rank line). Default 1. */
@@ -117,6 +139,10 @@ export type CardArtGlobalDefaults = {
   centrePictureOffsetPct?: { x?: number; y?: number };
   /** Default horizontal mirror for centre court image when card override does not set it. */
   centrePictureMirrorX?: boolean;
+  /** Default dual mirrored centre image copy. */
+  centrePictureMirrorDual?: boolean;
+  /** Default CSS mix-blend-mode for centre court image raster. */
+  centrePictureBlendMode?: CentrePictureBlendMode;
   /** Default caption for any background-only face unless the card override replaces it. */
   backgroundCaptionDefaults?: BackgroundCaptionConfig;
   /**

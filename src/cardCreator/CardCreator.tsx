@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X, Image as ImageIcon, Grid3x3, Trash2, Save, Layers, SlidersHorizontal, Download, Upload } from 'lucide-react';
 import { SUITS, VALUES } from '../types';
 import { useCardArt } from '../cardArt/cardArtContext';
-import type { BackgroundCaptionConfig, CardArtGlobalDefaults, CardArtOverride, PipSlot } from '../cardArt/types';
+import type {
+  BackgroundCaptionConfig,
+  CardArtGlobalDefaults,
+  CardArtOverride,
+  CentrePictureBlendMode,
+  PipSlot,
+} from '../cardArt/types';
 import { PIP_GRID_COLS, PIP_GRID_ROWS } from '../cardArt/types';
 import { defaultPipCellsForRank } from '../cardArt/pipLayouts';
 import { cyclePipAtCell } from '../cardArt/resolveCardArt';
@@ -43,6 +49,24 @@ const BACK_ROLE_KEYS = ['back-prey', 'back-predator', 'back-preydator', 'back-de
 const SHARED_RANK_OPTIONS = [...VALUES, 'G'].filter((v) => !['J', 'Q', 'K'].includes(v));
 
 const RANK_RANGE_OPTIONS = [...VALUES, 'G'];
+const CENTRE_BLEND_MODES = [
+  'normal',
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'color-burn',
+  'hard-light',
+  'soft-light',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+] as const;
 
 function pruneBackgroundCaption(bc?: BackgroundCaptionConfig): BackgroundCaptionConfig | undefined {
   if (!bc) return undefined;
@@ -81,6 +105,12 @@ function buildCleanCardOverrideForPack(draft: CardArtOverride | null): CardArtOv
   }
   if (draft.centrePictureMirrorX === true) {
     clean.centrePictureMirrorX = true;
+  }
+  if (draft.centrePictureMirrorDual === true) {
+    clean.centrePictureMirrorDual = true;
+  }
+  if (draft.centrePictureBlendMode) {
+    clean.centrePictureBlendMode = draft.centrePictureBlendMode;
   }
   const cpo = draft.centrePictureOffsetPct;
   if (cpo && (typeof cpo.x === 'number' || typeof cpo.y === 'number')) {
@@ -1011,6 +1041,45 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           />
                           <span>Mirror centre image horizontally (blank = use Defaults)</span>
                         </label>
+                        <label className="mt-2 flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(draft?.centrePictureMirrorDual)}
+                            onChange={(e) =>
+                              setDraft((prev) => {
+                                const base = { ...(prev ?? {}) };
+                                if (e.target.checked) base.centrePictureMirrorDual = true;
+                                else delete base.centrePictureMirrorDual;
+                                return Object.keys(base).length ? base : null;
+                              })
+                            }
+                            className="mt-0.5"
+                          />
+                          <span>Dual mirror copy (second image mirrored horizontally + vertically across center)</span>
+                        </label>
+                        <label className="mt-2 block text-[11px] text-slate-400">
+                          Centre image blend mode (blank = use Defaults)
+                          <select
+                            value={draft?.centrePictureBlendMode ?? ''}
+                            onChange={(e) =>
+                              setDraft((prev) => {
+                                const base = { ...(prev ?? {}) };
+                                const v = e.target.value.trim();
+                                if (!v.length) delete base.centrePictureBlendMode;
+                                else base.centrePictureBlendMode = v as CentrePictureBlendMode;
+                                return Object.keys(base).length ? base : null;
+                              })
+                            }
+                            className="mt-1 w-48 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                          >
+                            <option value="">defaults</option>
+                            {CENTRE_BLEND_MODES.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                           <div className="mt-3 flex flex-wrap gap-3">
                             <label className="text-[11px] text-slate-400">
                               Image position X % (blank line uses Defaults)
@@ -1927,6 +1996,45 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             className="mt-0.5"
                           />
                           <span>Mirror centre image horizontally for Ace / God / royalty / Joker rasters.</span>
+                        </label>
+                        <label className="mt-2 flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(draftDefaults.centrePictureMirrorDual)}
+                            onChange={(e) =>
+                              setDraftDefaults((prev) => {
+                                const next = { ...prev };
+                                if (e.target.checked) next.centrePictureMirrorDual = true;
+                                else delete next.centrePictureMirrorDual;
+                                return next;
+                              })
+                            }
+                            className="mt-0.5"
+                          />
+                          <span>Dual mirror copy (second image mirrored horizontally + vertically across center).</span>
+                        </label>
+                        <label className="mt-2 block text-[11px] text-slate-400">
+                          Blend mode
+                          <select
+                            value={draftDefaults.centrePictureBlendMode ?? ''}
+                            onChange={(e) =>
+                              setDraftDefaults((prev) => {
+                                const next = { ...prev };
+                                const v = e.target.value.trim();
+                                if (!v.length) delete next.centrePictureBlendMode;
+                                else next.centrePictureBlendMode = v as CentrePictureBlendMode;
+                                return next;
+                              })
+                            }
+                            className="mt-1 w-48 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                          >
+                            <option value="">normal</option>
+                            {CENTRE_BLEND_MODES.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </select>
                         </label>
                       </div>
 

@@ -159,6 +159,15 @@ export const getCardValue = (cardStr: string, lustHeartRules = false, greedTax =
   return standardPlayingCardRankValue(effSuit, effVal, greedTax);
 };
 
+/** Display rank text for suit cards. Crowns are always numeric with 3-digit zero padding (e.g. 017). */
+export function displaySuitCardValue(suit: string, value: string): string {
+  if (suit === 'Crowns') {
+    const n = value === 'E' ? 17 : standardPlayingCardRankValue(suit, value, false);
+    return String(Math.max(0, Math.trunc(n))).padStart(3, '0');
+  }
+  return value;
+}
+
 /** Special playable card while Pride is active — clash rank 1; ends Pride when played. */
 export const GROVEL_CARD_ID = 'Grovels-1';
 
@@ -192,7 +201,7 @@ export function tooltipPrintedStrengthLabel(cardStr: string): string {
   if (p.isJoker) return 'N/A';
   if (p.suit === 'Grovels') return '0';
   if (p.suit === 'Swords') return 'N/A';
-  if (p.suit === 'Crowns' && p.value === 'E') return '17';
+  if (p.suit === 'Crowns') return displaySuitCardValue(p.suit, p.value);
   return String(standardPlayingCardRankValue(p.suit, p.value, false));
 }
 
@@ -202,7 +211,7 @@ export function plainCardLabelForLustEmpower(cardStr: string): string {
   if (p.isJoker) return 'Joker';
   if (p.suit === 'Grovels') return 'Grovel';
   if (p.suit === 'Swords') return describeWrathMinionTitle(cardStr);
-  if (p.suit === 'Crowns' && p.value === 'E') return 'Emperor of Crowns';
+  if (p.suit === 'Crowns') return `${displaySuitCardValue(p.suit, p.value)} of Crowns`;
   return `${p.value} of ${p.suit}`;
 }
 
@@ -420,7 +429,7 @@ export const describeCardPlain = (cardStr: string): string => {
   if (p.isJoker) return 'a Joker';
   if (p.suit === 'Swords') return `the ${describeWrathMinionTitle(cardStr)}`;
   if (p.suit === 'Grovels') return 'Grovel';
-  if (p.suit === 'Crowns' && p.value === 'E') return 'the Emperor of Crowns';
+  if (p.suit === 'Crowns') return `the ${displaySuitCardValue(p.suit, p.value)} of Crowns`;
   if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) return 'God of Hearts';
   const rk = RANK_WORDS[p.value] ?? p.value;
   return `the ${rk} of ${p.suit}`;
@@ -436,7 +445,7 @@ export function compactCardLabel(cardStr: string): string {
   const p = parseCard(cardStr);
   if (p.isJoker) return 'Joker';
   if (p.suit === 'Grovels') return 'Grovel';
-  if (p.suit === 'Crowns' && p.value === 'E') return 'Emperor of Crowns';
+  if (p.suit === 'Crowns') return `${displaySuitCardValue(p.suit, p.value)} of Crowns`;
   if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) return 'God of Hearts';
   if (p.suit === 'Swords') return describeWrathMinionTitle(cardStr);
   const rk = RANK_WORDS[p.value] ?? p.value;

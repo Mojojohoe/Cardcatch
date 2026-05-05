@@ -55,6 +55,7 @@ import {
   parseCard,
   desperationSpinAllowed,
   describeWrathMinionTitle,
+  displaySuitCardValue,
   GROVEL_CARD_ID,
   isCardBlockedByPride,
   envyGreedySealSlots,
@@ -326,7 +327,10 @@ const CurseZonePanel: React.FC<{
               <div className={`flex items-center gap-1 ${SUIT_COLORS[parseCard(prideCeilingCard).suit] ?? 'text-violet-200'}`}>
                 <SuitGlyph suit={parseCard(prideCeilingCard).suit} className="h-6 w-6 sm:h-7 sm:w-7" />
                 <span className="font-card-rank text-[11px] font-black tabular-nums">
-                  {parseCard(prideCeilingCard).value}
+                  {(() => {
+                    const pc = parseCard(prideCeilingCard);
+                    return pc.suit === 'Crowns' ? displaySuitCardValue(pc.suit, pc.value) : pc.value;
+                  })()}
                 </span>
               </div>
             </div>
@@ -1873,7 +1877,11 @@ const ResolutionSequence: React.FC<{
                   )}
                   {entry.id === CURSE_PRIDE && room.prideCeilingCard && (
                     <span className="break-words text-center text-[8px] font-bold uppercase leading-snug text-violet-200/85">
-                      Ceiling beats {parseCard(room.prideCeilingCard).value} ({parseCard(room.prideCeilingCard).suit}).
+                      {(() => {
+                        const pc = parseCard(room.prideCeilingCard);
+                        const v = pc.suit === 'Crowns' ? displaySuitCardValue(pc.suit, pc.value) : pc.value;
+                        return `Ceiling beats ${v} (${pc.suit}).`;
+                      })()}
                     </span>
                   )}
                   {entry.id === CURSE_SLOTH && outcome.slothDreamFx && (
@@ -2857,7 +2865,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       const unicode =
         CARD_UNICODE[cardId] ||
         (isJoker ? '🃏' : `[${CLIPBOARD_SUIT_TAG[suit] || suit}]`);
-      const fullName = isJoker ? 'The Joker' : `${value} of ${suit}`;
+      const fullName = isJoker ? 'The Joker' : `${suit === 'Crowns' ? displaySuitCardValue(suit, value) : value} of ${suit}`;
       return `[color=${color}]${unicode}[/color][sub](${fullName})[/sub]`;
     };
 
