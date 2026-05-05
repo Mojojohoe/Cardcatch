@@ -2811,6 +2811,11 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     warmCardArtImages(cardArtForUi.manifest);
   }, [cardArtForUi?.mode, cardArtForUi?.manifestVersion]);
 
+  useEffect(() => {
+    if (!room || room.status === 'waiting') return;
+    void import('@3d-dice/dice-box');
+  }, [room?.status]);
+
   const handleCreateRoom = async () => {
     if (!playerName) { setError('Please enter your name'); return; }
     setLoading(true);
@@ -3144,6 +3149,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const fanSqueeze = computeHandFanSqueeze(me.hand.length, handRowW, handFanLayout);
   const fanWidthPx = estimateHandFanWidthPx(me.hand.length, fanSqueeze, handFanLayout);
   const fanOverflowPx = Math.max(0, Math.round((fanWidthPx - handRowW) / 2));
+  const powerCardWidth = handFanLayout === 'wide' ? 115.2 : 57.6;
+  const powerOverlap = handFanLayout === 'wide' ? 24 : 16;
+  const powerCount = me.powerCards.length;
+  const powerBlockWidth =
+    powerCount > 0 ? powerCount * powerCardWidth - Math.max(0, powerCount - 1) * powerOverlap : 0;
+  const handPowerGapPx = (handFanLayout === 'wide' ? 40 : 16) + Math.min(220, fanOverflowPx);
+  const handCenterShiftPx =
+    powerCount > 0 && handFanLayout === 'wide' ? -Math.round((powerBlockWidth + handPowerGapPx) / 2) : 0;
 
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
@@ -4033,7 +4046,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             (room.status === 'playing' || room.status === 'powering') && me.powerCards.length ? '' : ''
           }`}
         >
-          <div className="mx-auto flex w-full max-w-[min(100%,56rem)] flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible sm:flex-row sm:items-end sm:justify-center sm:gap-10 lg:gap-14 xl:gap-16">
+          <div
+            className="mx-auto flex w-full max-w-[min(100%,56rem)] flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible sm:flex-row sm:items-end sm:justify-center"
+            style={{
+              columnGap: `${handPowerGapPx}px`,
+              transform: handCenterShiftPx !== 0 ? `translateX(${handCenterShiftPx}px)` : undefined,
+            }}
+          >
           {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
             <div
               className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-10 pb-4 sm:w-auto sm:max-w-none sm:shrink-0 sm:items-end sm:pb-2 sm:pt-8"

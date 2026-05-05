@@ -436,7 +436,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   if (customFullBleed && !customBroken) {
     return (
       <div
-        className="relative overflow-hidden rounded-[inherit] bg-zinc-100"
+        className="relative overflow-visible rounded-[inherit] bg-transparent"
         style={{ width: CARD_ART_WIDTH, height: CARD_ART_HEIGHT }}
       >
         <img
@@ -475,7 +475,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   const notifierStackPx = Math.round(cornerFontPx * 0.92);
 
   const bgOnly = bgOnlyEarly;
-  const underlay = defaults?.faceUnderlayColor ?? '#000000';
+  const underlay = defaults?.faceUnderlayColor ?? 'transparent';
 
   const royalPicture = value === 'J' || value === 'Q' || value === 'K';
 
@@ -492,7 +492,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
 
   return (
     <div
-      className="relative overflow-hidden rounded-[inherit]"
+      className="relative overflow-visible rounded-[inherit]"
       style={{
         width: CARD_ART_WIDTH,
         height: CARD_ART_HEIGHT,

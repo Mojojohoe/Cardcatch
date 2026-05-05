@@ -33,8 +33,8 @@ export function playerHandFanMotion(
   const spreadPx = (8 + Math.max(0, 8 - count) * 0.75) * squeezeForSpread;
   const x = d * spreadPx;
   const edge = mid > 0 ? Math.abs(d) / mid : 0;
-  /** Arc lift: center card rises, outer cards sit lower for a stronger fan curve. */
-  const y = -(1 - edge * edge) * (3.25 + Math.min(8.5, count * 0.42));
+  /** Outer cards drop lower so top edge reads as a smooth curve. */
+  const y = edge * edge * (5.5 + Math.min(10.5, count * 0.55));
   const baseZ = Math.round(14 + mid - Math.abs(index - mid));
   return { rotate, x, y, baseZ };
 }

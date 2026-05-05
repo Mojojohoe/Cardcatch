@@ -506,7 +506,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
         className={`${backSizing} relative overflow-visible rounded-lg shadow-xl flex items-center justify-center border-0 transition-colors`}
         >
-          <img src={backRasterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-contain" />
+          <img src={backRasterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
         </motion.div>
       );
     }
@@ -942,9 +942,9 @@ export const PowerCardVisual: React.FC<{
     selected
       ? rasterFullBleed
         ? matchHandCard
-          ? 'ring-2 ring-yellow-400'
+          ? 'outline outline-2 outline-yellow-400 outline-offset-[-2px]'
           : 'ring-4 ring-yellow-400/90 ring-offset-0'
-        : `${matchHandCard ? 'ring-2 ring-yellow-400' : 'ring-4 ring-yellow-400'} border-yellow-500`
+        : `${matchHandCard ? 'outline outline-2 outline-yellow-400 outline-offset-[-2px]' : 'ring-4 ring-yellow-400'} border-yellow-500`
       : ''
   } ${curseRackPeek ? 'cursor-help' : disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`;
 
