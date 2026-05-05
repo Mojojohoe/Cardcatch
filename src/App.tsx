@@ -2769,6 +2769,28 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     return () => mq.removeEventListener('change', apply);
   }, []);
 
+  const handLenForFan = room?.players?.[myUid]?.hand?.length ?? 0;
+  useEffect(() => {
+    const el = handRowRef.current;
+    if (!el) return;
+    const update = () => setHandRowW(el.clientWidth || Math.max(240, Math.floor(window.innerWidth * 0.82)));
+    update();
+    const raf = requestAnimationFrame(update);
+    let ro: ResizeObserver | null = null;
+    const hasRO = typeof ResizeObserver !== 'undefined';
+    if (hasRO) {
+      ro = new ResizeObserver(update);
+      ro.observe(el);
+    } else {
+      window.addEventListener('resize', update);
+    }
+    return () => {
+      cancelAnimationFrame(raf);
+      if (ro) ro.disconnect();
+      else window.removeEventListener('resize', update);
+    };
+  }, [room?.status, handLenForFan, handFanLayout]);
+
   const cardArtCtx = useOptionalCardArt();
   const cardArtForUi = useMemo(() => {
     if (!cardArtCtx) return null;
@@ -3118,35 +3140,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   }
 
   const me = room.players[myUid];
-  const handLenForFan = me?.hand.length ?? 0;
-
-  useEffect(() => {
-    const el = handRowRef.current;
-    if (!el) return;
-    const update = () => setHandRowW(el.clientWidth || Math.max(240, Math.floor(window.innerWidth * 0.82)));
-    update();
-    const raf = requestAnimationFrame(update);
-    let ro: ResizeObserver | null = null;
-    const hasRO = typeof ResizeObserver !== 'undefined';
-    if (hasRO) {
-      ro = new ResizeObserver(update);
-      ro.observe(el);
-    } else {
-      window.addEventListener('resize', update);
-    }
-    return () => {
-      cancelAnimationFrame(raf);
-      if (ro) ro.disconnect();
-      else window.removeEventListener('resize', update);
-    };
-  }, [room.status, handLenForFan]);
-
-  const fanSqueeze = useMemo(
-    () => computeHandFanSqueeze(handLenForFan, handRowW, handFanLayout),
-    [handLenForFan, handRowW, handFanLayout],
-  );
-
   if (!me) return <div className="h-full flex items-center justify-center text-[10px] uppercase">DESYNCED</div>;
+  const fanSqueeze = computeHandFanSqueeze(me.hand.length, handRowW, handFanLayout);
 
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;

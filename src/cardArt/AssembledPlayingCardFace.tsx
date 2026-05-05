@@ -343,7 +343,7 @@ function RasterPictureOr({
   return (
     <div className="pointer-events-none absolute inset-0 z-[2]" style={blendWrapStyle}>
       <div
-        className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
         style={t ? { transform: t } : undefined}
       >
         <div
@@ -367,7 +367,7 @@ function RasterPictureOr({
       </div>
       {mirrorDual ? (
         <div
-          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
           style={tMirror ? { transform: tMirror } : undefined}
         >
           <div
@@ -709,7 +709,7 @@ function PictureInterior({
     return (
       <div className="pointer-events-none absolute inset-0 z-[2]" style={blendWrapStyle}>
         <div
-          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
           style={t ? { transform: t } : undefined}
         >
           <div
@@ -733,7 +733,7 @@ function PictureInterior({
         </div>
         {mirrorDual ? (
           <div
-          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%]"
           style={tMirror ? { transform: tMirror } : undefined}
           >
             <div
