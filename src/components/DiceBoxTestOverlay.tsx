@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DiceTestRollPayload } from '../services/gameService';
-import { Box3, Vector3, type Object3D } from 'three';
+import { Box3, FrontSide, Vector3, type Object3D } from 'three';
 
 type DiceBoxInstance = {
   initialize: () => Promise<void>;
@@ -70,10 +70,30 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
           obj.receiveShadow = true;
           if (Array.isArray(obj.material)) {
             for (const m of obj.material) {
-              if (m?.transparent) m.opacity = Math.max(0.9, m.opacity ?? 1);
+              if (!m) continue;
+              m.transparent = false;
+              m.opacity = 1;
+              m.depthWrite = true;
+              m.depthTest = true;
+              m.side = FrontSide;
+              m.alphaTest = 0.38;
+              if (m.color?.multiplyScalar) m.color.multiplyScalar(1.28);
+              if ('toneMapped' in m) m.toneMapped = false;
+              if ('emissive' in m && m.emissive?.setRGB) m.emissive.setRGB(0.16, 0.12, 0.08);
+              if ('emissiveIntensity' in m) m.emissiveIntensity = 0.65;
             }
-          } else if (obj.material.transparent) {
-            obj.material.opacity = Math.max(0.9, obj.material.opacity ?? 1);
+          } else {
+            const m = obj.material;
+            m.transparent = false;
+            m.opacity = 1;
+            m.depthWrite = true;
+            m.depthTest = true;
+            m.side = FrontSide;
+            m.alphaTest = 0.38;
+            if (m.color?.multiplyScalar) m.color.multiplyScalar(1.28);
+            if ('toneMapped' in m) m.toneMapped = false;
+            if ('emissive' in m && m.emissive?.setRGB) m.emissive.setRGB(0.16, 0.12, 0.08);
+            if ('emissiveIntensity' in m) m.emissiveIntensity = 0.65;
           }
         }
       });
@@ -113,8 +133,9 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     const mats: any[] = Array.isArray(dieObj.material) ? dieObj.material : dieObj.material ? [dieObj.material] : [];
     for (const m of mats) {
       m.transparent = true;
-      m.opacity = 0.03;
+      m.opacity = 0;
       m.depthWrite = false;
+      m.colorWrite = false;
     }
   };
 
