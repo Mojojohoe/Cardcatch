@@ -4206,6 +4206,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       presentation="none"
                       delay={0}
                       motionLayout={false}
+                      noPointerScaleGestures
                     />
                   </motion.div>
                 );

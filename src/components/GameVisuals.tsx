@@ -380,6 +380,12 @@ export interface CardVisualProps {
    * @default true
    */
   motionLayout?: boolean;
+  /**
+   * Skip hover/tap micro-scaling on the face (DnD + whileTap scale can stick after HTML5 drag).
+   * Use on the playing-hand fan where the wrapper already carries scale/-offset.
+   * @default false
+   */
+  noPointerScaleGestures?: boolean;
 }
 
 export const CardVisual: React.FC<CardVisualProps> = (props) => {
@@ -404,6 +410,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     resolutionMorph = null,
     resolutionWiggleTick = 0,
     motionLayout = true,
+    noPointerScaleGestures = false,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -603,15 +610,23 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         }}
         transition={{ type: 'spring', stiffness: 720, damping: 38 }}
         whileHover={
-          allowHoverMotion
-            ? {
-                y: -9,
-                zIndex: 50,
-                scale: muted && !detailTooltip && !holdCaption ? 1 : 1.05,
-              }
-            : {}
+          !allowHoverMotion
+            ? {}
+            : noPointerScaleGestures
+              ? { y: -9, zIndex: 50 }
+              : {
+                  y: -9,
+                  zIndex: 50,
+                  scale: muted && !detailTooltip && !holdCaption ? 1 : 1.05,
+                }
         }
-        whileTap={!disabled && !muted ? { scale: 0.95 } : {}}
+        whileTap={
+          noPointerScaleGestures || disabled || muted
+            ? {}
+            : {
+                scale: 0.95,
+              }
+        }
         onClick={muted ? undefined : onClick}
         className={`
           ${faceWrap} ${useAssembledFace ? '' : 'shadow-xl'} flex flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-lg
