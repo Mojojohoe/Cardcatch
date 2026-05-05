@@ -477,7 +477,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   const bgOnly = bgOnlyEarly;
   const underlay = defaults?.faceUnderlayColor ?? 'transparent';
 
-  const royalPicture = value === 'J' || value === 'Q' || value === 'K';
+  const royalPicture = value === 'J' || value === 'Q' || value === 'K' || value === 'E' || value === 'S';
 
   const courtOX = defaults?.courtCentreOffsetPct?.x ?? 0;
   const courtOY = defaults?.courtCentreOffsetPct?.y ?? 0;
@@ -579,7 +579,10 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
       {!bgOnly && (
         <div
           className="pointer-events-none absolute inset-0 z-[2]"
-          style={{ transform: `translate(${courtOX}%, ${courtOY}%)` }}
+          style={{
+            transform: `translate(${courtOX}%, ${courtOY}%)`,
+            ...(centrePicBlendMode !== 'normal' ? { mixBlendMode: centrePicBlendMode } : {}),
+          }}
         >
           {isJoker ? (
             <RasterPictureOr

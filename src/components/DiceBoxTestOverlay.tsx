@@ -26,6 +26,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   const [overlayOpaque, setOverlayOpaque] = useState(false);
   const [fading, setFading] = useState(false);
   const [result, setResult] = useState<{ dice: number[]; total: number } | null>(null);
+  const [diceReady, setDiceReady] = useState(false);
   const hideTimerRef = useRef<number | null>(null);
   const fadeTimerRef = useRef<number | null>(null);
 
@@ -62,12 +63,24 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         diceRef.current = new DiceBox(selector, {
           assetPath: diceAssetPath(),
           sounds: false,
+          // Keep this path resilient even if packaged textures are unavailable.
+          theme_texture: 'none',
+          theme_material: 'plastic',
           shadows: true,
           theme_surface: 'green-felt',
+          baseScale: 85,
+          strength: 1.05,
         });
       }
       await diceRef.current.init();
+      if (mountRef.current) {
+        const cv = mountRef.current.querySelector('canvas');
+        if (!cv) {
+          throw new Error('DiceBox init completed but no canvas was mounted.');
+        }
+      }
       readyRef.current = true;
+      setDiceReady(true);
     })();
     try {
       await initPromiseRef.current;
@@ -83,13 +96,12 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       if (!mountRef.current || readyRef.current) return;
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
       if (cancelled || !mountRef.current) return;
-      try {
-        await ensureReady(selector);
-      } catch {
-        /* warmup best-effort */
-      }
+      await ensureReady(selector);
     };
-    void warmup();
+    void warmup().catch((err) => {
+      console.error('DiceBox warmup failed', err);
+      setDiceReady(false);
+    });
     return () => {
       cancelled = true;
     };
@@ -167,6 +179,11 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         ref={mountRef}
         className="dice-box-test-mount absolute inset-0 h-full min-h-[100dvh] w-full"
       />
+      {overlayOpaque && !diceReady && (
+        <div className="absolute left-4 top-16 rounded-xl border border-rose-300/40 bg-black/45 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-rose-200 backdrop-blur-sm">
+          Dice render init failed (see console)
+        </div>
+      )}
       {result && overlayOpaque && (
         <div className="absolute right-4 top-16 rounded-xl border border-white/30 bg-black/35 px-3 py-2 text-white backdrop-blur-sm">
           <div className="text-[10px] font-black uppercase tracking-widest text-emerald-300">2d6</div>

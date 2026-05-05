@@ -163,7 +163,7 @@ function centreLayoutTypeKey(cardId: string): string | null {
   if (!p) return null;
   if (p.value === 'A') return 'ace';
   if (p.value === 'G') return 'god';
-  if (p.value === 'J' || p.value === 'Q' || p.value === 'K') return 'face';
+  if (p.value === 'J' || p.value === 'Q' || p.value === 'K' || p.value === 'E' || p.value === 'S') return 'face';
   return `rank:${p.value}`;
 }
 
@@ -289,7 +289,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const playingParts = useMemo(() => trySplitPlaying(selected), [selected]);
   const showCentrePictureField = Boolean(
     selected.startsWith('Joker') ||
-      (playingParts && ['A', 'J', 'Q', 'K', 'G'].includes(playingParts.value)),
+      (playingParts && ['A', 'J', 'Q', 'K', 'E', 'S', 'G'].includes(playingParts.value)),
   );
 
   useEffect(() => {
