@@ -18,21 +18,25 @@ export function playerHandFanMotion(
   index: number,
   count: number,
   squeeze = 1,
-): { rotate: number; x: number; baseZ: number } {
+): { rotate: number; x: number; y: number; baseZ: number } {
   if (count <= 1) {
-    return { rotate: 0, x: 0, baseZ: 16 };
+    return { rotate: 0, x: 0, y: 0, baseZ: 16 };
   }
   const mid = (count - 1) / 2;
   const d = index - mid;
   const denom = count - 1;
+  const squeezeForSpread = Math.max(0.12, squeeze * squeeze);
   /** Total arc across the hand (degrees), capped so large hands stay subtle. */
-  const maxArcDeg = Math.min(50, 16 + denom * 4.25) * squeeze;
+  const maxArcDeg = Math.min(58, 24 + denom * 3.15) * (0.65 + 0.35 * squeeze);
   const rotate = denom > 0 ? (d / denom) * maxArcDeg : 0;
-  /** Horizontal spread (px) per step from center — wider when fewer cards. */
-  const spreadPx = (11 + Math.max(0, 10 - count) * 1.15) * squeeze;
+  /** Horizontal spread (px) per step from center — aggressively compressed as hand grows. */
+  const spreadPx = (8 + Math.max(0, 8 - count) * 0.75) * squeezeForSpread;
   const x = d * spreadPx;
+  const edge = mid > 0 ? Math.abs(d) / mid : 0;
+  /** Arc lift: center card rises, outer cards sit lower for a stronger fan curve. */
+  const y = -(1 - edge * edge) * (3.25 + Math.min(8.5, count * 0.42));
   const baseZ = Math.round(14 + mid - Math.abs(index - mid));
-  return { rotate, x, baseZ };
+  return { rotate, x, y, baseZ };
 }
 
 /** Bounding width (px) of the fanned hand for the given squeeze and breakpoint. */
@@ -46,8 +50,9 @@ export function estimateHandFanWidthPx(count: number, squeeze: number, layout: H
 
   const mid = (count - 1) / 2;
   const denom = count - 1;
-  const maxArcDeg = Math.min(50, 16 + denom * 4.25) * squeeze;
-  const spreadPx = (11 + Math.max(0, 10 - count) * 1.15) * squeeze;
+  const squeezeForSpread = Math.max(0.12, squeeze * squeeze);
+  const maxArcDeg = Math.min(58, 24 + denom * 3.15) * (0.65 + 0.35 * squeeze);
+  const spreadPx = (8 + Math.max(0, 8 - count) * 0.75) * squeezeForSpread;
 
   let minX = Infinity;
   let maxX = -Infinity;

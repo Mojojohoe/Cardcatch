@@ -504,9 +504,9 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           {...entrance}
           transition={{ type: 'spring', stiffness: 720, damping: 38 }}
           whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
-          className={`${backSizing} relative overflow-hidden rounded-lg shadow-xl flex items-center justify-center border-0 transition-colors`}
+        className={`${backSizing} relative overflow-visible rounded-lg shadow-xl flex items-center justify-center border-0 transition-colors`}
         >
-          <img src={backRasterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+          <img src={backRasterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-contain" />
         </motion.div>
       );
     }
@@ -600,7 +600,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         whileTap={!disabled && !muted ? { scale: 0.95 } : {}}
         onClick={muted ? undefined : onClick}
         className={`
-          ${faceWrap} ${useAssembledFace ? '' : 'shadow-xl'} flex flex-col justify-between overflow-hidden rounded-lg
+          ${faceWrap} ${useAssembledFace ? '' : 'shadow-xl'} flex flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-lg
           transition-[box-shadow] outline-none will-change-transform
           ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
           ${useAssembledFace ? 'bg-transparent' : isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
@@ -621,7 +621,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       )}
       <motion.div
         key={`${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}-${resolutionWiggleTick}`}
-        className={`relative z-[1] flex flex-1 flex-col justify-between overflow-hidden rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : PC_FACE_MINH}`}
+        className={`relative z-[1] flex flex-1 flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : PC_FACE_MINH}`}
         style={{ transformStyle: 'preserve-3d' }}
         animate={
           resolutionMorph === 'transform'
@@ -648,7 +648,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         }
       >
         {useAssembledFace ? (
-          <div className="relative z-[1] h-full w-full min-h-0 overflow-hidden rounded-[inherit]">
+          <div className="relative z-[1] h-full w-full min-h-0 overflow-visible rounded-[inherit]">
             <ScaledAssembledCardFace card={card} override={cardArtOverride} />
           </div>
         ) : (

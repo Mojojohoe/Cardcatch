@@ -110,7 +110,7 @@ import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
-import { computeHandFanSqueeze, playerHandFanMotion, type HandFanBreakpoint } from './playerHandFan';
+import { computeHandFanSqueeze, estimateHandFanWidthPx, playerHandFanMotion, type HandFanBreakpoint } from './playerHandFan';
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
 import { mergeCardArtWithRoom, useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
@@ -3142,6 +3142,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const me = room.players[myUid];
   if (!me) return <div className="h-full flex items-center justify-center text-[10px] uppercase">DESYNCED</div>;
   const fanSqueeze = computeHandFanSqueeze(me.hand.length, handRowW, handFanLayout);
+  const fanWidthPx = estimateHandFanWidthPx(me.hand.length, fanSqueeze, handFanLayout);
+  const fanOverflowPx = Math.max(0, Math.round((fanWidthPx - handRowW) / 2));
 
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
@@ -4033,7 +4035,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         >
           <div className="mx-auto flex w-full max-w-[min(100%,56rem)] flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible sm:flex-row sm:items-end sm:justify-center sm:gap-10 lg:gap-14 xl:gap-16">
           {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
-            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-10 pb-4 sm:w-auto sm:max-w-none sm:shrink-0 sm:items-end sm:pb-2 sm:pt-8">
+            <div
+              className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-10 pb-4 sm:w-auto sm:max-w-none sm:shrink-0 sm:items-end sm:pb-2 sm:pt-8"
+              style={fanOverflowPx > 0 ? { marginRight: `${Math.min(220, fanOverflowPx)}px` } : undefined}
+            >
               <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
                 Your powers
               </span>
@@ -4093,8 +4098,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     style={{ transformOrigin: 'bottom center' }}
                     animate={
                       selected
-                        ? { y: -26, scale: 1.04, rotate: fan.rotate, x: fan.x, zIndex: 55 }
-                        : { y: 0, scale: 1, rotate: fan.rotate, x: fan.x, zIndex: fan.baseZ }
+                        ? { y: -26 + fan.y, scale: 1.04, rotate: fan.rotate, x: fan.x, zIndex: 55 }
+                        : { y: fan.y, scale: 1, rotate: fan.rotate, x: fan.x, zIndex: fan.baseZ }
                     }
                     transition={{ type: 'spring', stiffness: 310, damping: 24 }}
                     className="relative"

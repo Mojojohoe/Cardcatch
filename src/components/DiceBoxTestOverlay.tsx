@@ -4,7 +4,7 @@ import '@3d-dice/dice-box/dist/style.css';
 
 type DiceBoxInstance = {
   init: () => Promise<void>;
-  roll: (notation: string) => Promise<unknown>;
+  roll: (notation: string | Array<Record<string, unknown>>) => Promise<unknown>;
   clear?: () => void;
 };
 
@@ -37,6 +37,35 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const selector = `#${mountId}`;
+    const warmup = async () => {
+      if (!mountRef.current || readyRef.current) return;
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      if (cancelled || !mountRef.current) return;
+      try {
+        if (!diceRef.current) {
+          const mod = await import('@3d-dice/dice-box');
+          const DiceBox = (mod.default ?? mod) as DiceBoxCtor;
+          diceRef.current = new DiceBox(selector, {
+            assetPath: diceAssetPath(),
+            transparent: true,
+            theme: 'default',
+          });
+        }
+        await diceRef.current.init();
+        readyRef.current = true;
+      } catch {
+        /* warmup best-effort */
+      }
+    };
+    void warmup();
+    return () => {
+      cancelled = true;
+    };
+  }, [mountId]);
+
+  useEffect(() => {
     if (!roll) return;
     let cancelled = false;
     const selector = `#${mountId}`;
@@ -67,9 +96,21 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         }
         if (cancelled) return;
         diceRef.current?.clear?.();
-        await diceRef.current.roll('2d6');
+        // Try to force authoritative values into the physics payload shape.
+        const forcedNotation = roll.dice.map((v) => ({
+          sides: 6,
+          qty: 1,
+          value: v,
+          modifier: 0,
+        }));
+        await diceRef.current.roll(forcedNotation);
       } catch {
-        /* fall through to show synced result */
+        // Fall back to generic notation if custom object form is rejected.
+        try {
+          await diceRef.current?.roll('2d6');
+        } catch {
+          /* fall through to synced result only */
+        }
       }
 
       if (cancelled) return;
