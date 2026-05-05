@@ -35,7 +35,14 @@ for (const s of ['Stars', 'Moons', 'Frogs', 'Coins', 'Bones'] as const) {
   }
 }
 
-const SPECIAL_PLAYING = ['Hearts-G', 'Crowns-E', 'Grovels-1', ...WRATH_MINION_BY_ROUND.map((r) => r.id)];
+const SUIT_COURT_VALUE_CARDS: string[] = [];
+for (const s of ['Hearts', 'Diamonds', 'Clubs', 'Spades', 'Stars', 'Moons', 'Frogs', 'Coins', 'Bones'] as const) {
+  for (const v of ['E', 'S', 'G'] as const) {
+    SUIT_COURT_VALUE_CARDS.push(`${s}-${v}`);
+  }
+}
+
+const SPECIAL_PLAYING = ['Crowns-E', 'Grovels-1', ...WRATH_MINION_BY_ROUND.map((r) => r.id)];
 
 const JOKER_CARDS = ['Joker-1', 'Joker-2'] as const;
 
@@ -440,7 +447,9 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       setPackIoBanner({ type: 'warn', text: 'This card is not a playing/joker card type with centre layout groups.' });
       return;
     }
-    const allCardIds = Array.from(new Set([...ALL_SUIT_CARDS, ...EXTENDED_SUIT_CARDS, ...SPECIAL_PLAYING, ...JOKER_CARDS]));
+    const allCardIds = Array.from(
+      new Set([...ALL_SUIT_CARDS, ...EXTENDED_SUIT_CARDS, ...SUIT_COURT_VALUE_CARDS, ...SPECIAL_PLAYING, ...JOKER_CARDS]),
+    );
     let touched = 0;
     for (const id of allCardIds) {
       if (id === selected) continue;
@@ -627,6 +636,22 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Stars · Moons · Frogs · Coins · Bones</p>
           <div className="mb-3 flex max-h-36 flex-col gap-0.5 overflow-y-auto">
             {EXTENDED_SUIT_CARDS.map((rowId) => (
+              <button
+                key={rowId}
+                type="button"
+                onClick={() => setSelected(rowId)}
+                className={`rounded px-2 py-1.5 text-left text-[10px] font-mono ${
+                  selected === rowId ? 'bg-amber-500/20 text-amber-200' : 'text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                {rowId}
+                {manifest[rowId] ? ' *' : ''}
+              </button>
+            ))}
+          </div>
+          <p className="mb-2 text-[9px] font-black uppercase text-slate-500">Emperor · Seraph · God</p>
+          <div className="mb-3 flex max-h-36 flex-col gap-0.5 overflow-y-auto">
+            {SUIT_COURT_VALUE_CARDS.map((rowId) => (
               <button
                 key={rowId}
                 type="button"

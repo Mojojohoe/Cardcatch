@@ -36,6 +36,22 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     };
   }, []);
 
+  const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+  const runDiceAnimation = async (dice: DiceBoxInstance, notation: string): Promise<boolean> => {
+    const startedAt = performance.now();
+    const out = await dice.roll(notation);
+    const elapsed = performance.now() - startedAt;
+    // When this lib cannot build throw vectors / parse notation it can resolve immediately with no animation.
+    const hasStructuredResult = Boolean(
+      out &&
+        typeof out === 'object' &&
+        'sets' in (out as Record<string, unknown>) &&
+        Array.isArray((out as { sets?: unknown[] }).sets),
+    );
+    return hasStructuredResult || elapsed > 260;
+  };
+
   const ensureReady = async (selector: string): Promise<void> => {
     if (readyRef.current) return;
     if (initPromiseRef.current) return initPromiseRef.current;
@@ -100,11 +116,24 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         diceRef.current?.clear?.();
         const [d1, d2] = roll.dice;
         const notation = `2d6@${d1},${d2}`;
+        let animated = false;
         try {
-          await diceRef.current.roll(notation);
+          animated = await runDiceAnimation(diceRef.current, notation);
+          if (!animated) {
+            // Deterministic notation parsed but produced no throw; retry plain notation.
+            animated = await runDiceAnimation(diceRef.current, '2d6');
+          }
         } catch {
-          // Fallback animation path if predetermined notation fails in runtime/browser.
-          await diceRef.current.roll('2d6');
+          // Fallback animation path if predetermined notation throws in runtime/browser.
+          try {
+            animated = await runDiceAnimation(diceRef.current, '2d6');
+          } catch {
+            animated = false;
+          }
+        }
+        if (!animated) {
+          // Avoid instant result pop when physics path failed.
+          await sleep(700);
         }
       } catch (err) {
         console.warn('DiceBoxTestOverlay roll failed', err);

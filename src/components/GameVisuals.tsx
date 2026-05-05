@@ -473,6 +473,13 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const cornerText = small ? 'text-xs sm:text-base' : 'text-sm sm:text-xl';
   const cornerGlyph = small ? 'w-5 h-5 sm:w-7 sm:h-7' : 'w-6 h-6 sm:w-9 sm:h-9';
   const centerGlyph = small ? 'w-14 h-14 sm:w-[4.25rem] sm:h-[4.25rem]' : 'w-[4.25rem] h-[4.25rem] sm:w-[7.25rem] sm:h-[7.25rem]';
+  const assembledAlphaOutlineStyle: React.CSSProperties | undefined =
+    useAssembledFace && selected
+      ? {
+          filter:
+            'drop-shadow(0 0 0.8px rgba(250, 204, 21, 0.98)) drop-shadow(0 0 5px rgba(250, 204, 21, 0.9)) drop-shadow(0 0 12px rgba(250, 204, 21, 0.55))',
+        }
+      : undefined;
 
   if (!revealed) {
     const isPredator = role === 'Predator';
@@ -582,6 +589,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         layout
         {...entrance}
         style={{
+          ...(assembledAlphaOutlineStyle ?? {}),
           transformPerspective:
             presentation === 'deckPull' || resolutionMorph === 'transform'
               ? 900
@@ -604,7 +612,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           transition-[box-shadow] outline-none will-change-transform
           ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
           ${useAssembledFace ? 'bg-transparent' : isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
-          ${useAssembledFace ? (selected ? 'ring-4 ring-yellow-400/90 ring-offset-0 shadow-lg' : '') : selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
+          ${useAssembledFace ? (selected ? 'shadow-lg' : '') : selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
           ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
           ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
           ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}
@@ -937,13 +945,20 @@ export const PowerCardVisual: React.FC<{
   const gloss = curseChrome ? curseChrome.gloss : 'from-white/20 to-slate-900/5';
 
   const canLiftOnHover = !curseRackPeek && !disabled;
+  const rasterAlphaOutlineStyle: React.CSSProperties | undefined =
+    rasterFullBleed && selected
+      ? {
+          filter:
+            'drop-shadow(0 0 0.8px rgba(250, 204, 21, 0.98)) drop-shadow(0 0 4px rgba(250, 204, 21, 0.88)) drop-shadow(0 0 10px rgba(250, 204, 21, 0.5))',
+        }
+      : undefined;
 
   const powerShellClass = `${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between overflow-visible ${faceShell} ${
     selected
       ? rasterFullBleed
         ? matchHandCard
-          ? 'outline outline-2 outline-yellow-400 outline-offset-[-2px]'
-          : 'ring-4 ring-yellow-400/90 ring-offset-0'
+          ? ''
+          : ''
         : `${matchHandCard ? 'outline outline-2 outline-yellow-400 outline-offset-[-2px]' : 'ring-4 ring-yellow-400'} border-yellow-500`
       : ''
   } ${curseRackPeek ? 'cursor-help' : disabled ? 'opacity-80 saturate-[0.72] brightness-95 cursor-not-allowed' : 'cursor-pointer'} ${destroyed ? 'opacity-[0.48] grayscale border-orange-950 ring-2 ring-orange-600/35 shadow-[inset_0_0_24px_rgba(0,0,0,0.45)]' : ''} transition-shadow ${matchHandCard ? 'origin-bottom' : 'origin-center'}`;
@@ -974,6 +989,7 @@ export const PowerCardVisual: React.FC<{
         onBlur={() => setTipOpen(false)}
         onClick={curseRackPeek ? undefined : onClick}
         className={powerShellClass}
+        style={rasterAlphaOutlineStyle}
       >
         <img
           src={effectivePowerFaceUrl}
@@ -1055,6 +1071,7 @@ export const PowerCardVisual: React.FC<{
       onBlur={() => setTipOpen(false)}
       onClick={curseRackPeek ? undefined : onClick}
       className={powerShellClass}
+      style={rasterAlphaOutlineStyle}
     >
       <div
         className={`absolute top-0 left-0 w-full h-full bg-linear-to-b ${gloss} pointer-events-none ${matchHandCard ? 'rounded-md' : 'rounded-[13px]'} ${matchHandCard ? 'overflow-visible' : 'overflow-hidden'}`}
