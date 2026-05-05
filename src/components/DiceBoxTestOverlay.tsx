@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DiceTestRollPayload } from '../services/gameService';
-import { Box3, FrontSide, Vector3, type Object3D } from 'three';
+import { Box3, FrontSide, Quaternion, Vector3, type Object3D } from 'three';
 
 type DiceBoxInstance = {
   initialize: () => Promise<void>;
@@ -139,6 +139,39 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     }
   };
 
+  const valueNormal = (value: number): Vector3 => {
+    // Canonical d6 local normals (used by many dice systems); can be calibrated if your GLB uses a different layout.
+    switch (value) {
+      case 1:
+        return new Vector3(0, 0, 1);
+      case 2:
+        return new Vector3(0, 1, 0);
+      case 3:
+        return new Vector3(1, 0, 0);
+      case 4:
+        return new Vector3(-1, 0, 0);
+      case 5:
+        return new Vector3(0, -1, 0);
+      case 6:
+        return new Vector3(0, 0, -1);
+      default:
+        return new Vector3(0, 0, 1);
+    }
+  };
+
+  const applyForcedFaceSwapToShell = (dieObj: any, fromValueRaw: unknown, toValueRaw: unknown): void => {
+    if (!dieObj) return;
+    const shell = dieObj.getObjectByName?.('bone-die-shell-root');
+    if (!shell) return;
+    const fromValue = Number(fromValueRaw);
+    const toValue = Number(toValueRaw);
+    if (!Number.isFinite(fromValue) || !Number.isFinite(toValue) || fromValue === toValue) return;
+    const targetWas = valueNormal(Math.round(fromValue));
+    const desiredNow = valueNormal(Math.round(toValue));
+    const q = new Quaternion().setFromUnitVectors(desiredNow, targetWas);
+    shell.quaternion.premultiply(q);
+  };
+
   const patchSpawnForBoneShell = (dice: DiceBoxInstance): void => {
     if (patchedSpawnRef.current) return;
     const anyDice = dice as any;
@@ -160,6 +193,15 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       }
       return out;
     };
+    if (typeof anyDice.swapDiceFace === 'function') {
+      const originalSwapDiceFace = anyDice.swapDiceFace.bind(anyDice);
+      anyDice.swapDiceFace = (dieObj: any, forcedValue: unknown) => {
+        const landedValue = dieObj?.getLastValue?.()?.value;
+        const out = originalSwapDiceFace(dieObj, forcedValue);
+        applyForcedFaceSwapToShell(dieObj, landedValue, forcedValue);
+        return out;
+      };
+    }
     patchedSpawnRef.current = true;
   };
 
