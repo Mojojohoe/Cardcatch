@@ -1,10 +1,9 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DiceTestRollPayload } from '../services/gameService';
-import '@3d-dice/dice-box/dist/style.css';
 
 type DiceBoxInstance = {
   init: () => Promise<void>;
-  roll: (notation: string | Array<Record<string, unknown>>) => Promise<unknown>;
+  roll: (notation: string) => Promise<unknown>;
   clear?: () => void;
 };
 
@@ -14,7 +13,7 @@ function diceAssetPath(): string {
   let base = import.meta.env.BASE_URL ?? '/';
   if (base === '.' || base === './') base = '/';
   if (!base.endsWith('/')) base = `${base}/`;
-  return `${base}assets/dice-box/`;
+  return `${base}assets/dice-box-threejs/`;
 }
 
 export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> = ({ roll }) => {
@@ -22,6 +21,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   const mountId = `dice-box-test-${reactId}`;
   const mountRef = useRef<HTMLDivElement>(null);
   const diceRef = useRef<DiceBoxInstance | null>(null);
+  const initPromiseRef = useRef<Promise<void> | null>(null);
   const readyRef = useRef(false);
   const [overlayOpaque, setOverlayOpaque] = useState(false);
   const [fading, setFading] = useState(false);
@@ -36,6 +36,30 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     };
   }, []);
 
+  const ensureReady = async (selector: string): Promise<void> => {
+    if (readyRef.current) return;
+    if (initPromiseRef.current) return initPromiseRef.current;
+    initPromiseRef.current = (async () => {
+      if (!diceRef.current) {
+        const mod = await import('@3d-dice/dice-box-threejs');
+        const DiceBox = (mod.default ?? mod) as DiceBoxCtor;
+        diceRef.current = new DiceBox(selector, {
+          assetPath: diceAssetPath(),
+          sounds: false,
+          shadows: true,
+          theme_surface: 'green-felt',
+        });
+      }
+      await diceRef.current.init();
+      readyRef.current = true;
+    })();
+    try {
+      await initPromiseRef.current;
+    } finally {
+      initPromiseRef.current = null;
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     const selector = `#${mountId}`;
@@ -44,17 +68,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
       if (cancelled || !mountRef.current) return;
       try {
-        if (!diceRef.current) {
-          const mod = await import('@3d-dice/dice-box');
-          const DiceBox = (mod.default ?? mod) as DiceBoxCtor;
-          diceRef.current = new DiceBox(selector, {
-            assetPath: diceAssetPath(),
-            transparent: true,
-            theme: 'default',
-          });
-        }
-        await diceRef.current.init();
-        readyRef.current = true;
+        await ensureReady(selector);
       } catch {
         /* warmup best-effort */
       }
@@ -81,22 +95,12 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       if (cancelled || !mountRef.current) return;
 
       try {
-        if (!diceRef.current) {
-          const mod = await import('@3d-dice/dice-box');
-          const DiceBox = (mod.default ?? mod) as DiceBoxCtor;
-          diceRef.current = new DiceBox(selector, {
-            assetPath: diceAssetPath(),
-            transparent: true,
-            theme: 'default',
-          });
-        }
-        if (!readyRef.current && diceRef.current) {
-          await diceRef.current.init();
-          readyRef.current = true;
-        }
+        await ensureReady(selector);
         if (cancelled) return;
         diceRef.current?.clear?.();
-        await diceRef.current.roll('2d6');
+        const [d1, d2] = roll.dice;
+        const notation = `2d6@${d1},${d2}`;
+        await diceRef.current.roll(notation);
       } catch {
         /* fall through to synced result only */
       }

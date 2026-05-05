@@ -2813,7 +2813,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
   useEffect(() => {
     if (!room || room.status === 'waiting') return;
-    void import('@3d-dice/dice-box');
+    void import('@3d-dice/dice-box-threejs');
   }, [room?.status]);
 
   const handleCreateRoom = async () => {
@@ -3246,7 +3246,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         tier={me.desperationTier}
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
-      {diceTestRoll ? <DiceBoxTestOverlay roll={diceTestRoll} /> : null}
+      <DiceBoxTestOverlay roll={diceTestRoll} />
 
       {!powerShowdown && room.status === 'powering' && myPendingDecision && myPendingDecision.selectedOption === null && (
         <PowerDecisionModal

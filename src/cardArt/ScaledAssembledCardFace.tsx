@@ -47,14 +47,17 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
   return (
     <div
       ref={wrapRef}
-      className={`relative min-w-0 w-full overflow-hidden rounded-[inherit] ${className ?? ''}`}
+      className={`relative min-w-0 w-full overflow-visible rounded-[inherit] ${className ?? ''}`}
       style={{ aspectRatio: `${CARD_ART_WIDTH} / ${CARD_ART_HEIGHT}` }}
     >
       <div
         className="absolute left-0 top-0"
         style={{
-          width: CARD_ART_WIDTH,
-          height: CARD_ART_HEIGHT,
+          // Tiny bleed prevents browser raster clipping on transformed edges.
+          width: CARD_ART_WIDTH + 2,
+          height: CARD_ART_HEIGHT + 2,
+          left: -1,
+          top: -1,
           transform: `scale(${scale})`,
           transformOrigin: 'top left',
         }}
