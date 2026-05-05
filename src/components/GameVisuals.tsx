@@ -928,7 +928,9 @@ export const PowerCardVisual: React.FC<{
   const rasterFullBleed = Boolean(cardArtPower?.mode === 'raster' && effectivePowerFaceUrl);
   const faceBorder = rasterFullBleed ? 'border-0' : matchHandCard ? 'border-2' : 'border-4';
   const faceShell = rasterFullBleed
-    ? 'bg-transparent overflow-hidden shadow-xl'
+    ? matchHandCard
+      ? 'bg-transparent overflow-visible shadow-xl'
+      : 'bg-transparent overflow-hidden shadow-xl'
     : curseChrome
       ? `bg-zinc-950 ${faceBorder} ${curseChrome.shell} ${matchHandCard ? 'shadow-lg' : ''}`
       : `bg-slate-50 ${faceBorder} border-slate-800 text-slate-800`;
@@ -936,7 +938,7 @@ export const PowerCardVisual: React.FC<{
 
   const canLiftOnHover = !curseRackPeek && !disabled;
 
-  const powerShellClass = `${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between ${matchHandCard ? 'overflow-hidden' : 'overflow-visible'} ${faceShell} ${
+  const powerShellClass = `${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between overflow-visible ${faceShell} ${
     selected
       ? rasterFullBleed
         ? matchHandCard
@@ -956,7 +958,7 @@ export const PowerCardVisual: React.FC<{
         whileHover={
           canLiftOnHover
             ? matchHandCard
-              ? { y: -6, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
+              ? { y: -22, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
               : { scale: panel ? 1.05 : small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } }
             : {}
         }
@@ -1037,7 +1039,7 @@ export const PowerCardVisual: React.FC<{
       whileHover={
         canLiftOnHover
           ? matchHandCard
-            ? { y: -6, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
+            ? { y: -22, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
             : { scale: panel ? 1.05 : small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } }
           : {}
       }
@@ -1055,7 +1057,7 @@ export const PowerCardVisual: React.FC<{
       className={powerShellClass}
     >
       <div
-        className={`absolute top-0 left-0 w-full h-full bg-linear-to-b ${gloss} pointer-events-none ${matchHandCard ? 'rounded-md' : 'rounded-[13px]'} overflow-hidden`}
+        className={`absolute top-0 left-0 w-full h-full bg-linear-to-b ${gloss} pointer-events-none ${matchHandCard ? 'rounded-md' : 'rounded-[13px]'} ${matchHandCard ? 'overflow-visible' : 'overflow-hidden'}`}
       />
 
       <div className={`flex flex-col items-center gap-0.5 z-10 w-full min-w-0 ${panel ? 'mb-0' : matchHandCard ? 'mb-0' : 'mb-1'}`}>

@@ -1,17 +1,29 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DiceTestRollPayload } from '../services/gameService';
+import '@3d-dice/dice-box/dist/style.css';
 
-type DiceBoxCtor = new (selector: string, config: Record<string, unknown>) => {
+type DiceBoxInstance = {
   init: () => Promise<void>;
-  roll: (notation: string) => Promise<unknown> | unknown;
+  roll: (notation: string) => Promise<unknown>;
   clear?: () => void;
 };
 
+type DiceBoxCtor = new (selector: string, config: Record<string, unknown>) => DiceBoxInstance;
+
+function diceAssetPath(): string {
+  let base = import.meta.env.BASE_URL ?? '/';
+  if (base === '.' || base === './') base = '/';
+  if (!base.endsWith('/')) base = `${base}/`;
+  return `${base}assets/dice-box/`;
+}
+
 export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> = ({ roll }) => {
+  const reactId = useId().replace(/:/g, '');
+  const mountId = `dice-box-test-${reactId}`;
   const mountRef = useRef<HTMLDivElement>(null);
-  const diceRef = useRef<InstanceType<DiceBoxCtor> | null>(null);
+  const diceRef = useRef<DiceBoxInstance | null>(null);
   const readyRef = useRef(false);
-  const [visible, setVisible] = useState(false);
+  const [overlayOpaque, setOverlayOpaque] = useState(false);
   const [fading, setFading] = useState(false);
   const [result, setResult] = useState<{ dice: number[]; total: number } | null>(null);
   const hideTimerRef = useRef<number | null>(null);
@@ -27,23 +39,24 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   useEffect(() => {
     if (!roll) return;
     let cancelled = false;
+    const selector = `#${mountId}`;
 
     const run = async () => {
-      setVisible(true);
+      setOverlayOpaque(true);
       setFading(false);
       setResult(null);
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
       if (fadeTimerRef.current) window.clearTimeout(fadeTimerRef.current);
 
-      const hostEl = mountRef.current;
-      if (!hostEl) return;
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      if (cancelled || !mountRef.current) return;
+
       try {
         if (!diceRef.current) {
           const mod = await import('@3d-dice/dice-box');
           const DiceBox = (mod.default ?? mod) as DiceBoxCtor;
-          const selector = '#dice-box-test-overlay';
           diceRef.current = new DiceBox(selector, {
-            assetPath: '/assets/dice-box',
+            assetPath: diceAssetPath(),
             transparent: true,
             theme: 'default',
           });
@@ -54,16 +67,16 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         }
         if (cancelled) return;
         diceRef.current?.clear?.();
-        await Promise.resolve(diceRef.current?.roll('2d6'));
+        await diceRef.current.roll('2d6');
       } catch {
-        // keep fallback result display even if 3D init fails (missing assets/browser limits)
+        /* fall through to show synced result */
       }
 
       if (cancelled) return;
       setResult({ dice: roll.dice, total: roll.total });
       fadeTimerRef.current = window.setTimeout(() => setFading(true), 4000);
       hideTimerRef.current = window.setTimeout(() => {
-        setVisible(false);
+        setOverlayOpaque(false);
         setResult(null);
         setFading(false);
       }, 4700);
@@ -73,17 +86,21 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     return () => {
       cancelled = true;
     };
-  }, [roll?.rollId]);
+  }, [roll?.rollId, mountId]);
 
-  if (!visible) return null;
   return (
     <div
       className={`pointer-events-none fixed inset-0 z-[420] transition-opacity duration-700 ${
-        fading ? 'opacity-0' : 'opacity-100'
+        overlayOpaque && !fading ? 'opacity-100' : 'opacity-0'
       }`}
+      aria-hidden={!overlayOpaque}
     >
-      <div id="dice-box-test-overlay" ref={mountRef} className="absolute inset-0" />
-      {result && (
+      <div
+        id={mountId}
+        ref={mountRef}
+        className="dice-box-test-mount absolute inset-0 h-full min-h-[100dvh] w-full"
+      />
+      {result && overlayOpaque && (
         <div className="absolute right-4 top-16 rounded-xl border border-white/30 bg-black/35 px-3 py-2 text-white backdrop-blur-sm">
           <div className="text-[10px] font-black uppercase tracking-widest text-emerald-300">2d6</div>
           <div className="text-xs font-bold">[{result.dice.join(', ')}] = {result.total}</div>
@@ -92,4 +109,3 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     </div>
   );
 };
-

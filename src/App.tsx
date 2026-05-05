@@ -110,7 +110,7 @@ import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
-import { playerHandFanMotion } from './playerHandFan';
+import { computeHandFanSqueeze, playerHandFanMotion, type HandFanBreakpoint } from './playerHandFan';
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
 import { mergeCardArtWithRoom, useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
@@ -2552,6 +2552,9 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const myUid = serviceRef.current.getUid();
   const [famineBannerPhase, setFamineBannerPhase] = useState<FamineBannerPhase>('idle');
   const [diceTestRoll, setDiceTestRoll] = useState<DiceTestRollPayload | null>(null);
+  const handRowRef = useRef<HTMLDivElement>(null);
+  const [handRowW, setHandRowW] = useState(400);
+  const [handFanLayout, setHandFanLayout] = useState<HandFanBreakpoint>('compact');
   const famineActivePrev = useRef(false);
   const dualSnapRef = useRef({ instanceId, isDual, playerName, roomId, room });
   dualSnapRef.current = { instanceId, isDual, playerName, roomId, room };
@@ -2754,6 +2757,15 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     return () => {
       serviceRef.current.onDiceTestRollEvent(null);
     };
+  }, []);
+
+  useEffect(() => {
+    const mq = typeof window !== 'undefined' ? window.matchMedia('(min-width: 640px)') : null;
+    if (!mq) return;
+    const apply = () => setHandFanLayout(mq.matches ? 'wide' : 'compact');
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
   }, []);
 
   const cardArtCtx = useOptionalCardArt();
@@ -3100,8 +3112,28 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   }
 
   const me = room.players[myUid];
+  const handLenForFan = me?.hand.length ?? 0;
+
+  useEffect(() => {
+    const el = handRowRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHandRowW(el.clientWidth));
+    ro.observe(el);
+    setHandRowW(el.clientWidth);
+    const raf = requestAnimationFrame(() => setHandRowW(el.clientWidth));
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [room.status, handLenForFan]);
+
+  const fanSqueeze = useMemo(
+    () => computeHandFanSqueeze(handLenForFan, handRowW, handFanLayout),
+    [handLenForFan, handRowW, handFanLayout],
+  );
+
   if (!me) return <div className="h-full flex items-center justify-center text-[10px] uppercase">DESYNCED</div>;
-  
+
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
   const myPendingDecision = room.pendingPowerDecisions?.[myUid] || null;
@@ -3936,7 +3968,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {/* Bottom strip: hand & powers · desperation capsule last (napkin div9 under cards) */}
-      <div className="mt-auto shrink-0 px-4 pb-4">
+      <div className="mt-auto shrink-0 overflow-x-visible overflow-y-visible px-4 pb-4">
         <div className="mb-2 flex items-end justify-between">
            <div className="flex flex-col">
               <span className="text-[10px] font-bold opacity-50 uppercase tracking-tighter">Cards: {me.hand.length}</span>
@@ -3986,17 +4018,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
            </div>
         </div>
         <div
-          className={`flex w-full flex-col items-stretch gap-4 px-1 sm:items-end sm:justify-center ${
+          className={`flex w-full flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible px-1 sm:items-end sm:justify-center ${
             (room.status === 'playing' || room.status === 'powering') && me.powerCards.length ? '' : ''
           }`}
         >
-          <div className="mx-auto flex w-full max-w-[min(100%,56rem)] flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-center sm:gap-10 lg:gap-14 xl:gap-16">
+          <div className="mx-auto flex w-full max-w-[min(100%,56rem)] flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible sm:flex-row sm:items-end sm:justify-center sm:gap-10 lg:gap-14 xl:gap-16">
           {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
-            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-7 pb-3 sm:w-auto sm:max-w-none sm:shrink-0 sm:items-end sm:pb-1 sm:pt-5">
+            <div className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-10 pb-4 sm:w-auto sm:max-w-none sm:shrink-0 sm:items-end sm:pb-2 sm:pt-8">
               <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
                 Your powers
               </span>
-              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-x-auto overflow-y-visible pb-2 pt-1 -space-x-4 pl-1 [scrollbar-width:thin] sm:w-max sm:justify-end sm:-space-x-6 sm:pl-0">
+              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-visible px-1 pb-2 pt-1 -space-x-4 pl-1 sm:w-max sm:justify-end sm:-space-x-6 sm:pl-0">
                 {me.powerCards.map((pId, i) => (
                   <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
                     <PowerCardVisual
@@ -4012,20 +4044,21 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           )}
           <div
-            className={`relative z-[12] flex min-h-[13rem] min-w-0 flex-1 flex-col justify-end sm:min-h-[12rem] ${
+            className={`relative z-[12] flex min-h-[13rem] min-w-0 flex-1 flex-col justify-end overflow-visible sm:min-h-[12rem] ${
               (room.status === 'playing' || room.status === 'powering') && me.powerCards.length
                 ? 'sm:min-w-0 sm:flex-1 sm:max-w-none'
                 : 'w-full'
             }`}
           >
             <div
-              className={`flex min-h-[12rem] w-full items-end justify-center -space-x-6 flex-nowrap px-1 transition-[filter,opacity] duration-300 sm:min-h-[11.5rem] sm:-space-x-9 ${
+              ref={handRowRef}
+              className={`flex min-h-[12rem] w-full items-end justify-center overflow-visible -space-x-6 flex-nowrap px-1 transition-[filter,opacity] duration-300 sm:min-h-[11.5rem] sm:-space-x-9 ${
                 me.confirmed ? 'saturate-[0.68] brightness-95 opacity-[0.92]' : ''
               }`}
             >
               {me.hand.map((card, i) => {
                 const selected = selectedCardIndex === i;
-                const fan = playerHandFanMotion(i, me.hand.length);
+                const fan = playerHandFanMotion(i, me.hand.length, fanSqueeze);
                 const prideMuted = prideBlocksCard(room, myUid, card);
                 const envyMuted = envySealBlocksHandIndex(room, myUid, me.hand, i);
                 const envyCovetedHere = Boolean(

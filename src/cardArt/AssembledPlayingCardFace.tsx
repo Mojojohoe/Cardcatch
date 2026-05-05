@@ -339,10 +339,11 @@ function RasterPictureOr({
 
   const imageClass = 'max-h-full max-w-full object-contain drop-shadow';
   const imageStyleBase: React.CSSProperties = blendMode !== 'normal' ? { mixBlendMode: blendMode } : {};
+  const blendWrapStyle: React.CSSProperties = blendMode !== 'normal' ? { mixBlendMode: blendMode } : {};
   return (
-    <>
+    <div className="pointer-events-none absolute inset-0 z-[2]" style={blendWrapStyle}>
       <div
-        className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
         style={t ? { transform: t } : undefined}
       >
         <div
@@ -366,7 +367,7 @@ function RasterPictureOr({
       </div>
       {mirrorDual ? (
         <div
-          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
           style={tMirror ? { transform: tMirror } : undefined}
         >
           <div
@@ -382,7 +383,7 @@ function RasterPictureOr({
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -704,10 +705,11 @@ function PictureInterior({
   const rankFill = resolveSuitFaceTextColor(suit, defaults?.suitFaceTextColor);
 
   if (attempt < candidates.length) {
+    const blendWrapStyle: React.CSSProperties = blendMode !== 'normal' ? { mixBlendMode: blendMode } : {};
     return (
-      <>
+      <div className="pointer-events-none absolute inset-0 z-[2]" style={blendWrapStyle}>
         <div
-          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
           style={t ? { transform: t } : undefined}
         >
           <div
@@ -731,7 +733,7 @@ function PictureInterior({
         </div>
         {mirrorDual ? (
           <div
-          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center px-[14%] pb-[12%] pt-[16%] isolate"
           style={tMirror ? { transform: tMirror } : undefined}
           >
             <div
@@ -753,7 +755,7 @@ function PictureInterior({
             </div>
           </div>
         ) : null}
-      </>
+      </div>
     );
   }
 

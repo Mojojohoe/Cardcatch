@@ -136,6 +136,40 @@ function trySplitPlaying(id: string): { suit: string; value: string } | null {
   return { suit: id.slice(0, i), value: id.slice(i + 1) };
 }
 
+function centreLayoutTypeKey(cardId: string): string | null {
+  if (cardId.startsWith('Joker-')) return 'joker';
+  const p = trySplitPlaying(cardId);
+  if (!p) return null;
+  if (p.value === 'A') return 'ace';
+  if (p.value === 'G') return 'god';
+  if (p.value === 'J' || p.value === 'Q' || p.value === 'K') return 'face';
+  return `rank:${p.value}`;
+}
+
+function pickCentreLayoutPatch(src: CardArtOverride | null): Partial<CardArtOverride> {
+  if (!src) return {};
+  const out: Partial<CardArtOverride> = {};
+  if (typeof src.centrePictureScale === 'number' && Number.isFinite(src.centrePictureScale)) {
+    out.centrePictureScale = Math.min(3, Math.max(0.25, src.centrePictureScale));
+  }
+  if (src.centrePictureMirrorX === true) out.centrePictureMirrorX = true;
+  if (src.centrePictureMirrorDual === true) out.centrePictureMirrorDual = true;
+  if (src.centrePictureBlendMode) out.centrePictureBlendMode = src.centrePictureBlendMode;
+  const off = src.centrePictureOffsetPct;
+  if (off && (typeof off.x === 'number' || typeof off.y === 'number')) {
+    out.centrePictureOffsetPct = {};
+    if (typeof off.x === 'number' && Number.isFinite(off.x)) out.centrePictureOffsetPct.x = off.x;
+    if (typeof off.y === 'number' && Number.isFinite(off.y)) out.centrePictureOffsetPct.y = off.y;
+  }
+  const grp = src.centrePictureMirrorGroupOffsetPct;
+  if (grp && (typeof grp.x === 'number' || typeof grp.y === 'number')) {
+    out.centrePictureMirrorGroupOffsetPct = {};
+    if (typeof grp.x === 'number' && Number.isFinite(grp.x)) out.centrePictureMirrorGroupOffsetPct.x = grp.x;
+    if (typeof grp.y === 'number' && Number.isFinite(grp.y)) out.centrePictureMirrorGroupOffsetPct.y = grp.y;
+  }
+  return out;
+}
+
 type Scope = 'card' | 'defaults';
 type CardTab = 'info' | 'upload' | 'file' | 'pips';
 type DefaultsTab = 'backgrounds' | 'pipScale' | 'sharedPips';
@@ -368,6 +402,34 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     setFileName('');
     updateOverride(selected, null);
   };
+
+  const handleApplyCentreLayoutToSameType = useCallback(() => {
+    const source = localOverride ?? manifest[selected] ?? null;
+    const patch = pickCentreLayoutPatch(source);
+    if (!Object.keys(patch).length) {
+      setPackIoBanner({ type: 'warn', text: 'No centre layout values found on this card to copy.' });
+      return;
+    }
+    const selectedType = centreLayoutTypeKey(selected);
+    if (!selectedType) {
+      setPackIoBanner({ type: 'warn', text: 'This card is not a playing/joker card type with centre layout groups.' });
+      return;
+    }
+    const allCardIds = Array.from(new Set([...ALL_SUIT_CARDS, ...EXTENDED_SUIT_CARDS, ...SPECIAL_PLAYING, ...JOKER_CARDS]));
+    let touched = 0;
+    for (const id of allCardIds) {
+      if (id === selected) continue;
+      if (!isAssembledRasterCardId(id)) continue;
+      if (centreLayoutTypeKey(id) !== selectedType) continue;
+      const merged: CardArtOverride = { ...(manifest[id] ?? {}), ...patch };
+      updateOverride(id, merged);
+      touched += 1;
+    }
+    setPackIoBanner({
+      type: 'ok',
+      text: `Applied centre layout to ${touched} other ${selectedType} card${touched === 1 ? '' : 's'}.`,
+    });
+  }, [localOverride, manifest, selected, updateOverride]);
 
   const handleSaveDefaults = () => {
     setDefaults(draftDefaults);
@@ -1152,6 +1214,13 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           </label>
                         </div>
                           <div className="mt-3 flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            onClick={handleApplyCentreLayoutToSameType}
+                            className="rounded border border-cyan-700 bg-cyan-900/25 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-200 hover:bg-cyan-900/40"
+                          >
+                            Apply layout to same type
+                          </button>
                             <label className="text-[11px] text-slate-400">
                               Image position X % (blank line uses Defaults)
                               <input

@@ -29,3 +29,10 @@
     background: rgba(255, 255, 255, 0.2);
   }
 }
+
+/* Dice Box mounts the canvas as a direct child; size it to the overlay mount node. */
+.dice-box-test-mount > canvas.dice-box-canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
