@@ -114,6 +114,7 @@ import { computeHandFanSqueeze, playerHandFanMotion, type HandFanBreakpoint } fr
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
 import { mergeCardArtWithRoom, useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
+import { warmCardArtImages } from './cardArt/preload';
 import { shippedPlayingCardBackRasterUrl } from './cardArt/shippedRasterFallbacks';
 import { CardCreator } from './cardCreator/CardCreator';
 import {
@@ -2782,6 +2783,11 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       m?.customDataUrl ?? (m?.customImageFile?.trim() ? cardArtAssetUrl(m.customImageFile.trim()) : null);
     return fromManifest ?? shippedPlayingCardBackRasterUrl('back-deck');
   }, [cardArtForUi?.mode, cardArtForUi?.manifest, cardArtForUi?.manifestVersion]);
+
+  useEffect(() => {
+    if (!cardArtForUi || cardArtForUi.mode !== 'raster') return;
+    warmCardArtImages(cardArtForUi.manifest);
+  }, [cardArtForUi?.mode, cardArtForUi?.manifestVersion]);
 
   const handleCreateRoom = async () => {
     if (!playerName) { setError('Please enter your name'); return; }
