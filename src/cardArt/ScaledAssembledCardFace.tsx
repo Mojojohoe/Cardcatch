@@ -15,7 +15,7 @@ type Props = {
 };
 
 /**
- * Scales the 256×374 art to the width of the parent while locking aspect ratio.
+ * Scales 256×374 art to fit inside the parent box (uniform scale, centered) so hand rows match vector footprints.
  */
 export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, className, previewDefaults }) => {
   const ctx = useOptionalCardArt();
@@ -30,7 +30,12 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
     const measure = () => {
       const rect = el.getBoundingClientRect();
       const w = rect.width > 0.5 ? rect.width : el.clientWidth;
-      if (w > 0.5) setScale(w / CARD_ART_WIDTH);
+      const h = rect.height > 0.5 ? rect.height : el.clientHeight;
+      if (w > 0.5 && h > 0.5) {
+        setScale(Math.min(w / CARD_ART_WIDTH, h / CARD_ART_HEIGHT));
+      } else if (w > 0.5) {
+        setScale(w / CARD_ART_WIDTH);
+      }
     };
     measure();
     const ro = new ResizeObserver(() => measure());
@@ -46,22 +51,22 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
   return (
     <div
       ref={wrapRef}
-      className={`relative min-w-0 w-full overflow-visible rounded-[inherit] ${className ?? ''}`}
-      style={{ aspectRatio: `${CARD_ART_WIDTH} / ${CARD_ART_HEIGHT}` }}
+      className={`relative h-full w-full min-h-0 overflow-hidden rounded-[inherit] ${className ?? ''}`}
     >
       <div
-        className="absolute left-0 top-0"
+        className="absolute left-1/2 top-1/2"
         style={{
-          // Tiny bleed prevents browser raster clipping on transformed edges.
           width: CARD_ART_WIDTH + 2,
           height: CARD_ART_HEIGHT + 2,
-          left: -1,
-          top: -1,
+          marginLeft: -(CARD_ART_WIDTH + 2) / 2,
+          marginTop: -(CARD_ART_HEIGHT + 2) / 2,
           transform: `scale(${scale})`,
-          transformOrigin: 'top left',
+          transformOrigin: 'center center',
         }}
       >
-        <AssembledPlayingCardFace card={card} override={override} defaults={defaults} />
+        <div style={{ position: 'relative', left: -1, top: -1 }}>
+          <AssembledPlayingCardFace card={card} override={override} defaults={defaults} />
+        </div>
       </div>
     </div>
   );

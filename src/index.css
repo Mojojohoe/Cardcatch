@@ -14,6 +14,11 @@
   font-family: 'Ye Olde Towne D', 'Times New Roman', Times, serif;
 }
 
+/* Player setting: clearer rank/caption typography on card faces */
+body.simple-card-fonts .font-card-rank {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;

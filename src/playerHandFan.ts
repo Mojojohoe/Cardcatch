@@ -4,13 +4,14 @@
  * Horizontal span can be squeezed toward 1 via {@link computeHandFanSqueeze} when the row is narrow.
  */
 
-/** Matches {@link PC_ASM_MD} (`w-[3.6rem] sm:w-[7.2rem]`) at 16px root. */
+/** Matches {@link PC_HAND} width (`w-[3.6rem] sm:w-[7.2rem]`) at 16px root. */
 export const HAND_FAN_CARD_WIDTH_PX = { compact: 57.6, wide: 115.2 } as const;
 
 /** Matches `-space-x-6` / `sm:-space-x-9` (1.5rem / 2.25rem). */
 export const HAND_FAN_OVERLAP_PX = { compact: 24, wide: 36 } as const;
 
-const CARD_ASPECT_H_OVER_W = 37 / 24;
+/** Portrait footprint `h/w` for {@link PC_HAND} (`10.8/7.2`). */
+const CARD_ASPECT_H_OVER_W = 1.5;
 
 export type HandFanBreakpoint = 'compact' | 'wide';
 

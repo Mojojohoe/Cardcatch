@@ -32,7 +32,8 @@ export const CardArtSessionBridge: React.FC<Props> = ({ room, myUid, serviceRef,
     if (!isHost) return;
     const t = window.setTimeout(() => {
       if (!serviceRef.current.getIsHost() || !serviceRef.current.getState()) return;
-      const payload = buildCardArtSessionPayload(parent.mode, parent.manifest, parent.defaults);
+      /** Guests ignore session `mode`; always advertise raster assets for sync compatibility. */
+      const payload = buildCardArtSessionPayload('raster', parent.manifest, parent.defaults);
       const sig = JSON.stringify({
         mode: payload.mode,
         manifest: payload.manifest,
@@ -43,7 +44,7 @@ export const CardArtSessionBridge: React.FC<Props> = ({ room, myUid, serviceRef,
       serviceRef.current.publishCardArtSession(payload);
     }, 150);
     return () => window.clearTimeout(t);
-  }, [isHost, parent.mode, parent.manifestVersion, parent.defaultsVersion, serviceRef]);
+  }, [isHost, parent.manifestVersion, parent.defaultsVersion, serviceRef]);
 
   return <CardArtContext.Provider value={merged}>{children}</CardArtContext.Provider>;
 };

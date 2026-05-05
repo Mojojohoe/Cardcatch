@@ -31,7 +31,8 @@ export type CardArtCtx = {
 
 /**
  * When {@link CARD_ART_TOOLS_ENABLED}: merge host `cardArtSession` so a guest browser picks up Card Creator
- * without the host’s localStorage. Otherwise returns `parent` (shipped pack / no P2P art sync).
+ * manifest/defaults without the host’s localStorage. Session does not override display `mode` (per-player).
+ * Otherwise returns `parent` (shipped pack / no P2P art sync).
  */
 export function mergeCardArtWithRoom(parent: CardArtCtx, room: RoomData, isHost: boolean): CardArtCtx {
   if (!CARD_ART_TOOLS_ENABLED) return parent;
@@ -41,12 +42,11 @@ export function mergeCardArtWithRoom(parent: CardArtCtx, room: RoomData, isHost:
     const sessionHasManifest =
       s.manifest && typeof s.manifest === 'object' && Object.keys(s.manifest).length > 0;
     const nextManifest = sessionHasManifest ? s.manifest : parent.manifest;
-    const nextMode = s.mode ?? parent.mode;
     const nextDefaults =
       s.defaults && typeof s.defaults === 'object' ? { ...parent.defaults, ...s.defaults } : parent.defaults;
     return {
       ...parent,
-      mode: nextMode,
+      /** Display mode is per-player (local); session only syncs manifest/defaults for Card Creator. */
       manifest: nextManifest,
       defaults: nextDefaults,
       manifestVersion: s.seq,
@@ -239,3 +239,20 @@ export function useCardArt(): CardArtCtx {
 export function useOptionalCardArt(): CardArtCtx | null {
   return useContext(CardArtContext);
 }
+
+/**
+ * Per-player “High Visibility Mode”: forces vector/simple faces while keeping merged manifest from the session.
+ * Must render under {@link CardArtSessionBridge} when tools are enabled (inner merged context).
+ */
+export const DisplayCardArtModeOverride: React.FC<{
+  highVisibilityMode: boolean;
+  children: React.ReactNode;
+}> = ({ highVisibilityMode, children }) => {
+  const base = useCardArt();
+  const value = useMemo(
+    (): CardArtCtx =>
+      highVisibilityMode ? { ...base, mode: 'vector' } : base,
+    [base, highVisibilityMode],
+  );
+  return <CardArtContext.Provider value={value}>{children}</CardArtContext.Provider>;
+};

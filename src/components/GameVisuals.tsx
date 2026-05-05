@@ -71,8 +71,6 @@ import {
 } from '../services/gameService';
 import { MAJOR_ARCANA, PlayerRole } from '../types';
 import {
-  PC_ASM_MD,
-  PC_ASM_SM,
   PC_BACK_MD,
   PC_BACK_SM,
   PC_FACE_MINH,
@@ -478,8 +476,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   /** Assembled faces use full-bleed art — outer border/white frame clips edges; selection uses ring only. */
   const faceWrap = useAssembledFace
     ? small
-      ? `${PC_ASM_SM} border-0 rounded-lg p-0 shadow-lg`
-      : `${PC_ASM_MD} border-0 rounded-lg p-0 shadow-lg`
+      ? `${PC_HAND_VEC_SM} border-0 rounded-lg p-0 shadow-lg`
+      : `${PC_HAND} border-0 rounded-lg p-0 shadow-lg`
     : small
       ? `${PC_HAND_VEC_SM} border-2 rounded-lg p-1.5`
       : `${PC_HAND} border-2 rounded-lg p-2`;

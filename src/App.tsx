@@ -45,7 +45,6 @@ import {
   Gavel,
   Globe,
   Coins,
-  Settings,
   X,
   Play,
   Plus,
@@ -115,11 +114,13 @@ import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
 import { computeHandFanSqueeze, estimateHandFanWidthPx, playerHandFanMotion, type HandFanBreakpoint } from './playerHandFan';
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
-import { mergeCardArtWithRoom, useCardArt, useOptionalCardArt } from './cardArt/cardArtContext';
+import { DisplayCardArtModeOverride, mergeCardArtWithRoom, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
 import { warmCardArtImages } from './cardArt/preload';
 import { shippedPlayingCardBackRasterUrl } from './cardArt/shippedRasterFallbacks';
 import { CardCreator } from './cardCreator/CardCreator';
+import { PlayerSettingsMenu } from './components/PlayerSettingsMenu';
+import { usePlayerDisplayPreferences } from './playerDisplayPreferences';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -2563,6 +2564,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const dualSnapRef = useRef({ instanceId, isDual, playerName, roomId, room });
   dualSnapRef.current = { instanceId, isDual, playerName, roomId, room };
   const dualResumeStartedRef = useRef(false);
+  const { highVisibilityMode } = usePlayerDisplayPreferences();
 
   useEffect(() => {
     return () => {
@@ -2801,18 +2803,23 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     const isHostAtTable = room.hostUid === myUid || serviceRef.current.getIsHost();
     return mergeCardArtWithRoom(cardArtCtx, room, isHostAtTable);
   }, [cardArtCtx, room, room?.cardArtSession, room?.updatedAt, myUid]);
+  const displayCardArt = useMemo(() => {
+    if (!cardArtForUi) return null;
+    if (highVisibilityMode) return { ...cardArtForUi, mode: 'vector' as const };
+    return cardArtForUi;
+  }, [cardArtForUi, highVisibilityMode]);
   const deckBackRasterUrl = useMemo(() => {
-    if (cardArtForUi?.mode !== 'raster') return null;
-    const m = cardArtForUi?.manifest?.['back-deck'];
+    if (displayCardArt?.mode !== 'raster') return null;
+    const m = displayCardArt?.manifest?.['back-deck'];
     const fromManifest =
       m?.customDataUrl ?? (m?.customImageFile?.trim() ? cardArtAssetUrl(m.customImageFile.trim()) : null);
     return fromManifest ?? shippedPlayingCardBackRasterUrl('back-deck');
-  }, [cardArtForUi?.mode, cardArtForUi?.manifest, cardArtForUi?.manifestVersion]);
+  }, [displayCardArt?.mode, displayCardArt?.manifest, displayCardArt?.manifestVersion]);
 
   useEffect(() => {
-    if (!cardArtForUi || cardArtForUi.mode !== 'raster') return;
-    warmCardArtImages(cardArtForUi.manifest);
-  }, [cardArtForUi?.mode, cardArtForUi?.manifestVersion]);
+    if (!displayCardArt || displayCardArt.mode !== 'raster') return;
+    warmCardArtImages(displayCardArt.manifest);
+  }, [displayCardArt?.mode, displayCardArt?.manifestVersion]);
 
   useEffect(() => {
     if (!room || room.status === 'waiting') return;
@@ -3021,7 +3028,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
   if (!roomId) {
     return (
-      <div className="h-full flex items-center justify-center p-4">
+      <div className="relative h-full flex items-center justify-center p-4">
+        <div className="absolute right-4 top-4 z-10">
+          <PlayerSettingsMenu />
+        </div>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-xs w-full bg-emerald-900/50 border border-emerald-800 rounded-2xl p-6 space-y-4">
           <div className="text-center">
             <h2 className="text-xl font-black text-white uppercase tracking-tight">{isDual ? 'Guest Player' : 'Table Menu'}</h2>
@@ -3068,7 +3078,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   }
 
   if (!room) return (
-    <div className="h-full flex items-center justify-center text-emerald-400 text-[10px] font-mono animate-pulse">
+    <div className="relative h-full flex items-center justify-center text-emerald-400 text-[10px] font-mono animate-pulse">
+      <div className="absolute right-3 top-3 z-10">
+        <PlayerSettingsMenu />
+      </div>
       Connecting…
     </div>
   );
@@ -3104,7 +3117,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       return (
       <div className="flex h-full flex-col space-y-6 overflow-y-auto p-6">
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <CardArtToolbar />
+          <PlayerSettingsMenu />
                   </div>
         {isHost ? (
           <HostLobbyPanel
@@ -3219,10 +3232,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         : 'Resolving power cards…'
       : null;
 
-  const artworkFelt = cardArtForUi?.mode === 'raster';
+  const artworkFelt = displayCardArt?.mode === 'raster';
 
   return (
     <CardArtSessionBridge room={room} myUid={myUid} serviceRef={serviceRef}>
+    <DisplayCardArtModeOverride highVisibilityMode={highVisibilityMode}>
     <div
       className={`relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 p-4 ${
         artworkFelt ? 'bg-emerald-950/25' : 'bg-emerald-950/40'
@@ -3380,7 +3394,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 justify-self-end sm:gap-4">
-          <CardArtToolbar />
+          <PlayerSettingsMenu />
           <button 
             type="button"
             onClick={() => setIsDevMenuOpen(true)}
@@ -3748,7 +3762,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            {joint ? (
                              <DualTableTrumpCard suits={joint} />
                            ) : ts ? (
-                             cardArtForUi?.mode === 'raster' ? (
+                             displayCardArt?.mode === 'raster' ? (
                                <div
                                  className={`
                          relative flex h-[9.75rem] w-[6.75rem] flex-col items-center justify-center overflow-hidden rounded-2xl border-4 border-amber-700/85 shadow-[0_0_40px_rgba(251,191,36,0.22)]
@@ -3804,13 +3818,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                <DualTrumpTableLabel
                                  suits={joint}
                                  className="uppercase tracking-[0.12em]"
-                                 dividerClassName={cardArtForUi?.mode === 'raster' ? 'text-slate-300' : 'text-slate-400'}
-                                 suitNamesOnGreenFelt={cardArtForUi?.mode === 'raster'}
+                                 dividerClassName={displayCardArt?.mode === 'raster' ? 'text-slate-300' : 'text-slate-400'}
+                                 suitNamesOnGreenFelt={displayCardArt?.mode === 'raster'}
                                />
                              ) : ts ? (
                                <span
                                  className={
-                                   cardArtForUi?.mode === 'raster' ? tableTrumpSuitNameClass(ts) : SUIT_COLORS[ts] ?? ''
+                                   displayCardArt?.mode === 'raster' ? tableTrumpSuitNameClass(ts) : SUIT_COLORS[ts] ?? ''
                                  }
                                >
                                  {ts}
@@ -4301,51 +4315,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         {showRules && <RulesSheet key="rules-modal" settings={room.settings} onClose={() => setShowRules(false)} />}
       </AnimatePresence>
               </div>
+    </DisplayCardArtModeOverride>
     </CardArtSessionBridge>
   );
 };
-
-/** In-game header controls (not viewport-fixed) so they stay visible beside Dev / Rules in dual-pane and normal play. */
-function CardArtToolbar() {
-  const { mode, setMode } = useCardArt();
-  return (
-    <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1 rounded-lg border border-emerald-800 bg-emerald-950/95 px-2 py-1.5 text-[9px] font-black uppercase shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-      <span className="text-slate-500">Art</span>
-      <button
-        type="button"
-        onClick={() => setMode('vector')}
-        className={`rounded border px-2 py-0.5 transition-colors ${
-          mode === 'vector'
-            ? 'border-amber-400 bg-amber-400/25 text-amber-100'
-            : 'border-transparent text-slate-400 hover:text-slate-200'
-        }`}
-      >
-        Vector
-      </button>
-      <button
-        type="button"
-        onClick={() => setMode('raster')}
-        className={`rounded border px-2 py-0.5 transition-colors ${
-          mode === 'raster'
-            ? 'border-amber-400 bg-amber-400/25 text-amber-100'
-            : 'border-transparent text-slate-400 hover:text-slate-200'
-        }`}
-      >
-        Artwork
-      </button>
-      <span className="mx-0.5 hidden h-4 w-px bg-emerald-800 sm:mx-1 sm:block" aria-hidden />
-      <button
-        type="button"
-        onClick={() => {
-          window.location.hash = '#card-creator';
-        }}
-        className="rounded border border-emerald-700 px-2 py-0.5 text-emerald-300 hover:bg-emerald-900/80"
-      >
-        Card Creator
-      </button>
-              </div>
-  );
-}
 
 function CardCreatorHashOverlay() {
   const [creatorOpen, setCreatorOpen] = useState(false);
