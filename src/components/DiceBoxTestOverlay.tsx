@@ -124,14 +124,19 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     if (typeof anyDice.spawnDice !== 'function') return;
     const originalSpawn = anyDice.spawnDice.bind(anyDice);
     anyDice.spawnDice = (...args: any[]) => {
+      const beforeLen = Array.isArray(anyDice.diceList) ? anyDice.diceList.length : 0;
       const out = originalSpawn(...args);
-      if (out && typeof out.then === 'function') {
-        return out.then((dieObj: any) => {
-          void attachBoneShell(dieObj);
-          return dieObj;
-        });
+      const reusedDie = args.length > 1 ? args[1] : null;
+      if (reusedDie && typeof reusedDie.add === 'function') {
+        void attachBoneShell(reusedDie);
+      } else if (Array.isArray(anyDice.diceList)) {
+        // spawnDice() returns void in this library; pick the newly appended die object.
+        const afterLen = anyDice.diceList.length;
+        if (afterLen > beforeLen) {
+          const spawnedDie = anyDice.diceList[afterLen - 1];
+          void attachBoneShell(spawnedDie);
+        }
       }
-      void attachBoneShell(out);
       return out;
     };
     patchedSpawnRef.current = true;

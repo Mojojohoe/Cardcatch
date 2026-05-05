@@ -289,7 +289,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const playingParts = useMemo(() => trySplitPlaying(selected), [selected]);
   const showCentrePictureField = Boolean(
     selected.startsWith('Joker') ||
-      (playingParts && ['A', 'J', 'Q', 'K', 'E', 'S', 'G'].includes(playingParts.value)),
+      (playingParts && (playingParts.suit === 'Swords' || ['A', 'J', 'Q', 'K', 'E', 'S', 'G'].includes(playingParts.value))),
   );
 
   useEffect(() => {
