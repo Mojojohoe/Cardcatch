@@ -3231,7 +3231,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         tier={me.desperationTier}
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
-      <DiceBoxTestOverlay roll={diceTestRoll} />
+      {diceTestRoll ? <DiceBoxTestOverlay roll={diceTestRoll} /> : null}
 
       {!powerShowdown && room.status === 'powering' && myPendingDecision && myPendingDecision.selectedOption === null && (
         <PowerDecisionModal
