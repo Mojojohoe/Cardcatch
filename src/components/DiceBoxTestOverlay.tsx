@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DiceTestRollPayload } from '../services/gameService';
 
 type DiceBoxInstance = {
-  init: () => Promise<void>;
+  initialize: () => Promise<void>;
   roll: (notation: string) => Promise<unknown>;
   clear?: () => void;
 };
@@ -72,7 +72,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
           strength: 1.05,
         });
       }
-      await diceRef.current.init();
+      await diceRef.current.initialize();
       if (mountRef.current) {
         const cv = mountRef.current.querySelector('canvas');
         if (!cv) {
