@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePowerTooltipPosition } from './hooks/usePowerTooltipPosition';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -59,6 +59,8 @@ import {
   displaySuitCardValue,
   GROVEL_CARD_ID,
   isCardBlockedByPride,
+  reorderHandSlots,
+  handIndexAfterReorder,
   envyGreedySealSlots,
   ENVY_MONSTER_START_HP,
   playingCardUpgradeSteps,
@@ -2871,6 +2873,27 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     }
   };
 
+  const reorderMyHandSlots = useCallback(
+    async (from: number, to: number) => {
+      if (!room?.players[myUid] || loading) return;
+      const player = room.players[myUid];
+      if (player.confirmed) return;
+      if (from === to || from < 0 || to < 0 || from >= player.hand.length || to >= player.hand.length) return;
+
+      const oldHand = player.hand;
+      const newOrder = reorderHandSlots(oldHand, from, to);
+      setSelectedCardIndex((prev) =>
+        prev === null || prev < 0 ? prev : handIndexAfterReorder(oldHand, newOrder, prev),
+      );
+      try {
+        await serviceRef.current.reorderHand(newOrder);
+      } catch (err: any) {
+        setError(err?.message ?? String(err ?? 'Failed to reorder hand'));
+      }
+    },
+    [room, myUid, loading],
+  );
+
   const handleDraftSelect = async (powerId: number) => {
     setLoading(true);
     try {
@@ -4088,7 +4111,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           >
             <div
               ref={handRowRef}
-              className={`flex min-h-[12rem] w-full items-end justify-center overflow-visible -space-x-6 flex-nowrap px-1 transition-[filter,opacity] duration-300 sm:min-h-[11.5rem] sm:-space-x-9 ${
+              className={`select-none flex min-h-[12rem] w-full items-end justify-center overflow-visible -space-x-6 flex-nowrap px-1 transition-[filter,opacity] duration-300 sm:min-h-[11.5rem] sm:-space-x-9 ${
                 me.confirmed ? 'saturate-[0.68] brightness-95 opacity-[0.92]' : ''
               }`}
               style={{ transform: 'translateY(-8px)' }}
@@ -4125,7 +4148,25 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         : { y: fan.y, scale: 1, rotate: fan.rotate, x: fan.x, zIndex: fan.baseZ }
                     }
                     transition={{ type: 'spring', stiffness: 310, damping: 24 }}
-                    className="relative"
+                    className={`relative ${!me.confirmed ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                    draggable={!me.confirmed}
+                    onDragStart={(e) => {
+                      if (me.confirmed) return;
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', String(i));
+                    }}
+                    onDragOver={(e) => {
+                      if (me.confirmed) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (me.confirmed) return;
+                      const from = Number(e.dataTransfer.getData('text/plain'));
+                      if (!Number.isFinite(from)) return;
+                      void reorderMyHandSlots(from, i);
+                    }}
                   >
                     {envyCovetedHere && (
                       <motion.div

@@ -574,7 +574,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     <div
       ref={rootRef}
       style={{ isolation: 'isolate' }}
-      className={`relative shrink-0 outline-none ${muted || disabled ? 'cursor-not-allowed' : holdCaption || detailTooltip || onClick ? 'cursor-pointer' : ''}`}
+      className={`relative shrink-0 select-none outline-none ${muted || disabled ? 'cursor-not-allowed' : holdCaption || detailTooltip || onClick ? 'cursor-pointer' : ''}`}
       onMouseEnter={syncHoldTip}
       onMouseLeave={clearHoldTip}
       onFocus={() => {
@@ -953,7 +953,7 @@ export const PowerCardVisual: React.FC<{
         }
       : undefined;
 
-  const powerShellClass = `${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between overflow-visible ${faceShell} ${
+  const powerShellClass = `select-none ${dimClass} group relative ${matchHandCard ? 'rounded-lg' : 'rounded-2xl'} ${matchHandCard ? 'shadow-xl' : 'shadow-2xl'} flex flex-col items-center text-center justify-between overflow-visible ${faceShell} ${
     selected
       ? rasterFullBleed
         ? matchHandCard

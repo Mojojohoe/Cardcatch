@@ -309,6 +309,59 @@ export function envyGreedySealSlots(hand: readonly string[], sealedIds: readonly
   return out;
 }
 
+function samePlayingHandMultiset(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const tallies = new Map<string, number>();
+  for (const c of a) tallies.set(c, (tallies.get(c) ?? 0) + 1);
+  for (const c of b) {
+    const n = (tallies.get(c) ?? 0) - 1;
+    if (n < 0) return false;
+    tallies.set(c, n);
+  }
+  return true;
+}
+
+/** Which occurrence (0-based) of `hand[idx]` that index is among equal card ids. */
+export function handSlotOccurrenceRank(hand: readonly string[], idx: number): number {
+  const id = hand[idx];
+  let k = 0;
+  for (let i = 0; i <= idx; i++) {
+    if (hand[i] === id) {
+      if (i === idx) break;
+      k++;
+    }
+  }
+  return k;
+}
+
+/** New hand order after moving one slot from `from` to `to` (insert-before semantics). */
+export function reorderHandSlots(hand: readonly string[], from: number, to: number): string[] {
+  if (from === to || from < 0 || to < 0 || from >= hand.length || to >= hand.length) return [...hand];
+  const next = [...hand];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+/** Map a hand index through a pure permutation (same multiset); stable for duplicate card ids. */
+export function handIndexAfterReorder(
+  handBefore: readonly string[],
+  handAfter: readonly string[],
+  indexBefore: number,
+): number {
+  if (indexBefore < 0 || indexBefore >= handBefore.length) return indexBefore;
+  const id = handBefore[indexBefore];
+  const rank = handSlotOccurrenceRank(handBefore, indexBefore);
+  let seen = 0;
+  for (let i = 0; i < handAfter.length; i++) {
+    if (handAfter[i] === id) {
+      if (seen === rank) return i;
+      seen++;
+    }
+  }
+  return Math.min(Math.max(indexBefore, 0), Math.max(handAfter.length - 1, 0));
+}
+
 export function mergeEnvySealDeltas(
   prev: Record<string, string[]> | undefined,
   delta: Record<string, string[]> | undefined,
@@ -658,6 +711,7 @@ type GameEvent =
   | { type: 'STATE_UPDATE', state: RoomData }
   | { type: 'PLAYER_JOIN', name: string, uid: string }
   | { type: 'PLAY_CARD', uid: string, cardId: string }
+  | { type: 'REORDER_HAND', uid: string, hand: string[] }
   | { type: 'PROCEED_NEXT', uid: string }
   | { type: 'UPDATE_SETTINGS', settings: GameSettings }
   | { type: 'SPIN_DESPERATION', uid: string, offset: number }
@@ -1001,6 +1055,10 @@ export class GameService {
       } else if (event.type === 'PLAY_CARD') {
         if (remoteUid) {
           this.processMove(remoteUid, event.cardId);
+        }
+      } else if (event.type === 'REORDER_HAND') {
+        if (remoteUid && event.uid === remoteUid) {
+          this.processReorderHand(remoteUid, event.hand);
         }
       } else if (event.type === 'PROCEED_NEXT') {
         if (remoteUid) {
@@ -1358,6 +1416,39 @@ export class GameService {
     this.broadcastState();
   }
 
+  private processReorderHand(uid: string, newHandOrder: string[]) {
+    if (!this.state || !this.state.players[uid]) return;
+
+    const player = this.state.players[uid];
+    if (player.confirmed) return;
+    if (!samePlayingHandMultiset(player.hand, newHandOrder)) return;
+
+    let nextEnvyCovet = this.state.envyCovet;
+    const ec = nextEnvyCovet;
+    if (ec && ec.uid === uid && player.hand.length) {
+      const nextIdx = handIndexAfterReorder(player.hand, newHandOrder, ec.handIndex);
+      if (nextIdx >= 0 && nextIdx < newHandOrder.length && nextIdx !== ec.handIndex) {
+        nextEnvyCovet = { ...ec, handIndex: nextIdx };
+      }
+    }
+
+    const updatedPlayers = {
+      ...this.state.players,
+      [uid]: {
+        ...player,
+        hand: [...newHandOrder],
+      },
+    };
+
+    this.state = {
+      ...this.state,
+      players: updatedPlayers,
+      ...(nextEnvyCovet !== this.state.envyCovet ? { envyCovet: nextEnvyCovet } : {}),
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
   private handleProceedNext(uid: string) {
     if (!this.state || !this.state.players[uid]) return;
 
@@ -1391,6 +1482,14 @@ export class GameService {
       this.processMove(this.myUid, cardId);
     } else {
       this.sendEvent({ type: 'PLAY_CARD', uid: this.myUid, cardId });
+    }
+  }
+
+  async reorderHand(newHandOrder: string[]) {
+    if (this.isHost) {
+      this.processReorderHand(this.myUid, newHandOrder);
+    } else {
+      this.sendEvent({ type: 'REORDER_HAND', uid: this.myUid, hand: newHandOrder });
     }
   }
 
