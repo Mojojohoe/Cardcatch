@@ -96,21 +96,9 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         }
         if (cancelled) return;
         diceRef.current?.clear?.();
-        // Try to force authoritative values into the physics payload shape.
-        const forcedNotation = roll.dice.map((v) => ({
-          sides: 6,
-          qty: 1,
-          value: v,
-          modifier: 0,
-        }));
-        await diceRef.current.roll(forcedNotation);
+        await diceRef.current.roll('2d6');
       } catch {
-        // Fall back to generic notation if custom object form is rejected.
-        try {
-          await diceRef.current?.roll('2d6');
-        } catch {
-          /* fall through to synced result only */
-        }
+        /* fall through to synced result only */
       }
 
       if (cancelled) return;
