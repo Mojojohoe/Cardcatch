@@ -2821,6 +2821,20 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     warmCardArtImages(displayCardArt.manifest);
   }, [displayCardArt?.mode, displayCardArt?.manifestVersion]);
 
+  /** Warm raster assets in lobby so artwork is ready when the round starts (skipped for High Visibility / vector). */
+  useEffect(() => {
+    if (!room || room.status !== 'waiting') return;
+    if (highVisibilityMode || !cardArtForUi || cardArtForUi.mode !== 'raster') return;
+    warmCardArtImages(cardArtForUi.manifest);
+  }, [
+    room?.status,
+    room?.cardArtSession?.seq,
+    room?.updatedAt,
+    highVisibilityMode,
+    cardArtForUi?.mode,
+    cardArtForUi?.manifestVersion,
+  ]);
+
   useEffect(() => {
     if (!room || room.status === 'waiting') return;
     void import('@3d-dice/dice-box-threejs');
@@ -4161,8 +4175,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     style={{ transformOrigin: 'bottom center' }}
                     animate={
                       selected
-                        ? { y: -26 + fan.y, scale: 1.04, rotate: fan.rotate, x: fan.x, zIndex: 55 }
-                        : { y: fan.y, scale: 1, rotate: fan.rotate, x: fan.x, zIndex: fan.baseZ }
+                        ? { y: -30 + fan.y, rotate: fan.rotate, x: fan.x, zIndex: 55 }
+                        : { y: fan.y, rotate: fan.rotate, x: fan.x, zIndex: fan.baseZ }
                     }
                     transition={{ type: 'tween', duration: 0.22, ease: 'easeOut' }}
                     layout={false}
@@ -4220,7 +4234,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       presentation="none"
                       delay={0}
                       motionLayout={false}
-                      noPointerScaleGestures
                     />
                   </motion.div>
                 );

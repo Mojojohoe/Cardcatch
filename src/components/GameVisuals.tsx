@@ -378,12 +378,6 @@ export interface CardVisualProps {
    * @default true
    */
   motionLayout?: boolean;
-  /**
-   * Skip hover/tap micro-scaling on the face (DnD + whileTap scale can stick after HTML5 drag).
-   * Use on the playing-hand fan where the wrapper already carries scale/-offset.
-   * @default false
-   */
-  noPointerScaleGestures?: boolean;
 }
 
 export const CardVisual: React.FC<CardVisualProps> = (props) => {
@@ -408,7 +402,6 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     resolutionMorph = null,
     resolutionWiggleTick = 0,
     motionLayout = true,
-    noPointerScaleGestures = false,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -607,24 +600,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
               : undefined,
         }}
         transition={{ type: 'spring', stiffness: 720, damping: 38 }}
-        whileHover={
-          !allowHoverMotion
-            ? {}
-            : noPointerScaleGestures
-              ? { y: -9, zIndex: 50 }
-              : {
-                  y: -9,
-                  zIndex: 50,
-                  scale: muted && !detailTooltip && !holdCaption ? 1 : 1.05,
-                }
-        }
-        whileTap={
-          noPointerScaleGestures || disabled || muted
-            ? {}
-            : {
-                scale: 0.95,
-              }
-        }
+        whileHover={!allowHoverMotion ? {} : { y: -9, zIndex: 50 }}
+        whileTap={{}}
         onClick={muted ? undefined : onClick}
         className={`
           ${faceWrap} ${useAssembledFace ? '' : 'shadow-xl'} flex flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-lg
@@ -663,7 +640,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
                 ],
               }
             : playEmpowerWiggle
-              ? { rotate: [0, -9, 8, -7, 5, 0], x: [0, -5, 4, -3, 2, 0], scale: [1, 1.025, 0.98, 1.02, 0.995, 1] }
+              ? { rotate: [0, -9, 8, -7, 5, 0], x: [0, -5, 4, -3, 2, 0] }
               : {}
         }
         transition={
@@ -906,7 +883,7 @@ export const PowerCardVisual: React.FC<{
       }
       return (
         <motion.div
-          whileHover={!disabled ? { scale: 1.1, rotateY: 10 } : {}}
+          whileHover={!disabled ? { y: -6, rotateY: 10 } : {}}
           onClick={onClick}
           className={`${anonShell} perspective-1000 flex items-center justify-center`}
         >
@@ -943,7 +920,7 @@ export const PowerCardVisual: React.FC<{
     }
     return (
       <motion.div
-        whileHover={!disabled ? { scale: 1.1, rotateY: 10 } : {}}
+        whileHover={!disabled ? { y: -6, rotateY: 10 } : {}}
         onClick={onClick}
         className={`${shellClass} perspective-1000`}
       >
@@ -986,14 +963,18 @@ export const PowerCardVisual: React.FC<{
     return (
       <motion.div
         ref={rootRef}
-        layout
+        layout={!matchHandCard}
         title={tip}
         tabIndex={curseRackPeek ? 0 : undefined}
         whileHover={
           canLiftOnHover
             ? matchHandCard
-              ? { y: -22, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
-              : { scale: panel ? 1.05 : small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } }
+              ? { y: -22, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
+              : {
+                  y: panel ? -12 : small ? -16 : -14,
+                  zIndex: 200,
+                  transition: { type: 'spring', stiffness: 380, damping: 28 },
+                }
             : {}
         }
         onMouseEnter={() => {
@@ -1068,14 +1049,18 @@ export const PowerCardVisual: React.FC<{
   return (
     <motion.div
       ref={rootRef}
-      layout
+      layout={!matchHandCard}
       title={tip}
       tabIndex={curseRackPeek ? 0 : undefined}
       whileHover={
         canLiftOnHover
           ? matchHandCard
-            ? { y: -22, scale: 1.04, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
-            : { scale: panel ? 1.05 : small ? 1.14 : 1.06, zIndex: 200, transition: { type: 'spring', stiffness: 380, damping: 28 } }
+            ? { y: -22, zIndex: 55, transition: { type: 'spring', stiffness: 720, damping: 38 } }
+            : {
+                y: panel ? -12 : small ? -16 : -14,
+                zIndex: 200,
+                transition: { type: 'spring', stiffness: 380, damping: 28 },
+              }
           : {}
       }
       onMouseEnter={() => {
@@ -1122,7 +1107,7 @@ export const PowerCardVisual: React.FC<{
       </div>
 
       <div
-        className={`z-10 shrink-0 rounded-full border-2 shadow-xl ${curseRackPeek || matchHandCard ? '' : 'group-hover:scale-105'} transition-transform ${panel ? 'p-2 my-1' : matchHandCard ? 'p-0.5 my-0.5' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : matchHandCard ? '' : 'my-2'} ${curseChrome ? `${curseChrome.iconRing}` : 'bg-slate-900 border-slate-800'}`}
+        className={`z-10 shrink-0 rounded-full border-2 shadow-xl ${curseRackPeek || matchHandCard ? '' : 'group-hover:-translate-y-px'} transition-transform ${panel ? 'p-2 my-1' : matchHandCard ? 'p-0.5 my-0.5' : small ? 'p-1.5' : 'p-4 sm:p-6'} ${panel ? '' : matchHandCard ? '' : 'my-2'} ${curseChrome ? `${curseChrome.iconRing}` : 'bg-slate-900 border-slate-800'}`}
       >
         {curseDef ? (
           <CursePowerIcon

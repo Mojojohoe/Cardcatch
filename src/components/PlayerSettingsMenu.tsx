@@ -70,11 +70,11 @@ export function PlayerSettingsMenu({ className }: { className?: string }) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="flex shrink-0 items-center justify-center rounded-lg border border-emerald-700 bg-emerald-950/90 p-1.5 text-emerald-200 shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition hover:border-amber-400/50 hover:bg-emerald-900/90 hover:text-amber-100 sm:p-2"
+        className="z-[260] flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-amber-400/50 bg-emerald-950/95 px-2 py-1.5 text-amber-100 shadow-[0_4px_20px_rgba(0,0,0,0.5)] transition hover:border-amber-300 hover:bg-emerald-900/95 sm:gap-2 sm:px-3 sm:py-2"
         title="Player settings"
       >
-        <Cog className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-        <span className="sr-only">Player settings</span>
+        <Cog className="h-4 w-4 shrink-0 sm:h-[18px] sm:w-[18px]" aria-hidden />
+        <span className="text-[9px] font-black uppercase tracking-widest sm:text-[10px]">Settings</span>
       </button>
       {open && (
         <div

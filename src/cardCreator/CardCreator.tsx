@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Image as ImageIcon, Grid3x3, Trash2, Save, Layers, SlidersHorizontal, Download, Upload } from 'lucide-react';
 import { SUITS, VALUES } from '../types';
-import { useCardArt } from '../cardArt/cardArtContext';
+import { CardArtContext, useCardArt } from '../cardArt/cardArtContext';
 import type {
   BackgroundCaptionConfig,
   CardArtGlobalDefaults,
@@ -26,6 +26,12 @@ for (const s of SUITS) {
   for (const v of VALUES) {
     ALL_SUIT_CARDS.push(`${s}-${v}`);
   }
+}
+
+/** Card Creator previews always use raster layout; table display mode is a per-player setting in-game. */
+function RasterCardArtPreview({ children }: { children: React.ReactNode }) {
+  const ctx = useCardArt();
+  return <CardArtContext.Provider value={{ ...ctx, mode: 'raster' }}>{children}</CardArtContext.Provider>;
 }
 
 const EXTENDED_SUIT_CARDS: string[] = [];
@@ -256,16 +262,7 @@ function PipGridEditor({
 }
 
 export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const {
-    manifest,
-    setManifest,
-    updateOverride,
-    setMode,
-    mode: displayMode,
-    defaults,
-    setDefaults,
-    defaultsVersion,
-  } = useCardArt();
+  const { manifest, setManifest, updateOverride, defaults, setDefaults, defaultsVersion } = useCardArt();
 
   const packImportInputRef = useRef<HTMLInputElement>(null);
   const [packIoBanner, setPackIoBanner] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -320,7 +317,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const cleanCard = buildCleanCardOverrideForPack(localOverride);
     if (cleanCard) mergedManifest[selected] = cleanCard;
 
-    const pack = buildCardArtPackExport(displayMode, mergedManifest, draftDefaults);
+    const pack = buildCardArtPackExport('raster', mergedManifest, draftDefaults);
     setDefaults(draftDefaults);
     if (cleanCard) {
       updateOverride(selected, cleanCard);
@@ -339,7 +336,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       type: 'ok',
       text: `Downloaded ${PUBLIC_CARD_ART_PACK_FILENAME} (includes current Defaults tab + this card if edited). Put it in public/ and reload.`,
     });
-  }, [displayMode, manifest, draftDefaults, selected, localOverride, setDefaults, updateOverride]);
+  }, [manifest, draftDefaults, selected, localOverride, setDefaults, updateOverride]);
 
   const handleImportCardArtPackFile = useCallback(
     (file: File) => {
@@ -359,7 +356,6 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           ) {
             return;
           }
-          setMode(parsed.pack.mode);
           setManifest(parsed.pack.manifest);
           setDefaults(parsed.pack.defaults);
           const imp = parsed.pack.manifest[selected];
@@ -379,7 +375,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       reader.onerror = () => setPackIoBanner({ type: 'err', text: 'Could not read file.' });
       reader.readAsText(file, 'utf-8');
     },
-    [setMode, setManifest, setDefaults],
+    [setManifest, setDefaults],
   );
 
   const setDraft = useCallback(
@@ -546,23 +542,6 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             >
               <Upload className="h-3.5 w-3.5" /> Import…
             </button>
-            <div className="mr-1 flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500">
-              <span>Table art</span>
-              <button
-                type="button"
-                onClick={() => setMode('vector')}
-                className={`rounded border px-2 py-1 ${displayMode === 'vector' ? 'border-amber-400 bg-amber-400/20 text-amber-200' : 'border-slate-700'}`}
-              >
-                Vector
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('raster')}
-                className={`rounded border px-2 py-1 ${displayMode === 'raster' ? 'border-amber-400 bg-amber-400/20 text-amber-200' : 'border-slate-700'}`}
-              >
-                Artwork
-              </button>
-            </div>
             <button
               type="button"
               onClick={onClose}
@@ -812,35 +791,37 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div className="w-[200px] shrink-0">
                   <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Preview</p>
                   <div className="overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
-                    {Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
-                      <PowerCardVisual cardId={previewPowerId} small matchHandCard revealed curseRackPeek />
-                    ) : Number.isFinite(previewCurseId) && selected.startsWith('curse-') ? (
-                      <PowerCardVisual cardId={previewCurseId} small matchHandCard revealed curseRackPeek />
-                    ) : previewIsBack ? (
-                      <div
-                        className="flex w-full items-center justify-center bg-zinc-900 text-[10px] text-slate-500"
-                        style={{ aspectRatio: '24 / 37' }}
-                      >
-                        {draft?.customDataUrl ? (
-                          <img src={draft.customDataUrl} alt="" className="h-full w-full object-cover" draggable={false} />
-                        ) : draft?.customImageFile?.trim() ? (
-                          <img
-                            src={cardArtAssetUrl(draft.customImageFile.trim())}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            draggable={false}
-                          />
-                        ) : (
-                          <span className="p-4 text-center">Upload or file path — keys like back-prey</span>
-                        )}
-                      </div>
-                    ) : (
-                      <ScaledAssembledCardFace
-                        card={selected}
-                        override={draft ?? undefined}
-                        previewDefaults={draftDefaults}
-                      />
-                    )}
+                    <RasterCardArtPreview>
+                      {Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
+                        <PowerCardVisual cardId={previewPowerId} small matchHandCard revealed curseRackPeek />
+                      ) : Number.isFinite(previewCurseId) && selected.startsWith('curse-') ? (
+                        <PowerCardVisual cardId={previewCurseId} small matchHandCard revealed curseRackPeek />
+                      ) : previewIsBack ? (
+                        <div
+                          className="flex w-full items-center justify-center bg-zinc-900 text-[10px] text-slate-500"
+                          style={{ aspectRatio: '24 / 37' }}
+                        >
+                          {draft?.customDataUrl ? (
+                            <img src={draft.customDataUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+                          ) : draft?.customImageFile?.trim() ? (
+                            <img
+                              src={cardArtAssetUrl(draft.customImageFile.trim())}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              draggable={false}
+                            />
+                          ) : (
+                            <span className="p-4 text-center">Upload or file path — keys like back-prey</span>
+                          )}
+                        </div>
+                      ) : (
+                        <ScaledAssembledCardFace
+                          card={selected}
+                          override={draft ?? undefined}
+                          previewDefaults={draftDefaults}
+                        />
+                      )}
+                    </RasterCardArtPreview>
                   </div>
                 </div>
 
@@ -1475,28 +1456,30 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div className="w-[200px] shrink-0">
                   <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Preview ({selected})</p>
                   <div className="overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
-                    {isAssembledRasterCardId(selected) ? (
-                      <ScaledAssembledCardFace
-                        card={selected}
-                        override={manifest[selected]}
-                        previewDefaults={draftDefaults}
-                      />
-                    ) : Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
-                      <PowerCardVisual cardId={previewPowerId} small matchHandCard revealed curseRackPeek />
-                    ) : Number.isFinite(previewCurseId) && selected.startsWith('curse-') ? (
-                      <PowerCardVisual cardId={previewCurseId} small matchHandCard revealed curseRackPeek />
-                    ) : previewIsBack ? (
-                      <div
-                        className="flex w-full items-center justify-center bg-zinc-900 text-[9px] text-slate-500"
-                        style={{ aspectRatio: '24 / 37' }}
-                      >
-                        Deck / role back art
-                      </div>
-                    ) : (
-                      <div className="flex aspect-[24/37] items-center justify-center p-2 text-center text-[10px] text-slate-500">
-                        Select a playing card, joker, or power id for preview.
-                      </div>
-                    )}
+                    <RasterCardArtPreview>
+                      {isAssembledRasterCardId(selected) ? (
+                        <ScaledAssembledCardFace
+                          card={selected}
+                          override={manifest[selected]}
+                          previewDefaults={draftDefaults}
+                        />
+                      ) : Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
+                        <PowerCardVisual cardId={previewPowerId} small matchHandCard revealed curseRackPeek />
+                      ) : Number.isFinite(previewCurseId) && selected.startsWith('curse-') ? (
+                        <PowerCardVisual cardId={previewCurseId} small matchHandCard revealed curseRackPeek />
+                      ) : previewIsBack ? (
+                        <div
+                          className="flex w-full items-center justify-center bg-zinc-900 text-[9px] text-slate-500"
+                          style={{ aspectRatio: '24 / 37' }}
+                        >
+                          Deck / role back art
+                        </div>
+                      ) : (
+                        <div className="flex aspect-[24/37] items-center justify-center p-2 text-center text-[10px] text-slate-500">
+                          Select a playing card, joker, or power id for preview.
+                        </div>
+                      )}
+                    </RasterCardArtPreview>
                   </div>
                 </div>
 
