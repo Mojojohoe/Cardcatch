@@ -2205,7 +2205,7 @@ export class GameService {
   }
 
   private emitDiceTestRoll(uid: string) {
-    /** Single d6 while we calibrate visual shell ↔ physics face mapping (`DiceBoxTestOverlay`). */
+    /** Single d6 dice test overlay (library mesh + swapDiceFace; no custom overlay mesh). */
     const d1 = 1 + Math.floor(Math.random() * 6);
     const payload: DiceTestRollPayload = {
       uid,
