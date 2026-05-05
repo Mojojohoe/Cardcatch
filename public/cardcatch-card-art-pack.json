@@ -1,7 +1,7 @@
 {
   "kind": "cardcatch-card-art-pack",
   "version": 1,
-  "exportedAt": "2026-05-05T19:40:24.591Z",
+  "exportedAt": "2026-05-05T22:00:36.044Z",
   "mode": "raster",
   "manifest": {
     "Joker-1": {
@@ -141,7 +141,7 @@
       "centrePictureFile": "Face-Jack",
       "centrePictureScale": 0.9,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "saturation",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureMirrorGroupOffsetPct": {
         "y": -1.75
       },
@@ -179,7 +179,7 @@
       "centrePictureFile": "Face-Jack",
       "centrePictureScale": 0.9,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureMirrorGroupOffsetPct": {
         "y": -1.75
       },
@@ -192,7 +192,7 @@
       "centrePictureFile": "Face-Jack",
       "centrePictureScale": 0.9,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureMirrorGroupOffsetPct": {
         "y": -1.75
       },
@@ -271,7 +271,7 @@
       "centrePictureFile": "Face-Queen",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureMirrorGroupOffsetPct": {
         "x": 0,
         "y": 0
@@ -285,7 +285,7 @@
       "centrePictureFile": "Face-Queen",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureMirrorGroupOffsetPct": {
         "x": 0,
         "y": 0
@@ -357,34 +357,37 @@
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureMirrorGroupOffsetPct": {
-        "x": 0.25
+        "y": 0
       },
       "centrePictureOffsetPct": {
-        "y": -14
+        "x": 0.75,
+        "y": -14.25
       }
     },
     "Clubs-K": {
       "centrePictureFile": "Face-King",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureMirrorGroupOffsetPct": {
-        "x": 0.25
+        "y": 0
       },
       "centrePictureOffsetPct": {
-        "y": -14
+        "x": 0.75,
+        "y": -14.25
       }
     },
     "Spades-K": {
       "centrePictureFile": "Face-King",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureMirrorGroupOffsetPct": {
-        "x": 0.25
+        "y": 0
       },
       "centrePictureOffsetPct": {
-        "y": -14
+        "x": 0.75,
+        "y": -14.25
       }
     },
     "Stars-K": {
@@ -393,10 +396,11 @@
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureMirrorGroupOffsetPct": {
-        "x": 0.25
+        "y": 0
       },
       "centrePictureOffsetPct": {
-        "y": -14
+        "x": 0.75,
+        "y": -14.25
       }
     },
     "Moons-K": {
@@ -405,10 +409,11 @@
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureMirrorGroupOffsetPct": {
-        "x": 0.25
+        "y": 0
       },
       "centrePictureOffsetPct": {
-        "y": -14
+        "x": 0.75,
+        "y": -14.25
       }
     },
     "Coins-K": {
@@ -417,10 +422,11 @@
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureMirrorGroupOffsetPct": {
-        "x": 0.25
+        "y": 0
       },
       "centrePictureOffsetPct": {
-        "y": -14
+        "x": 0.75,
+        "y": -14.25
       }
     },
     "Bones-K": {
@@ -429,10 +435,11 @@
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureMirrorGroupOffsetPct": {
-        "x": 0.25
+        "y": 0
       },
       "centrePictureOffsetPct": {
-        "y": -14
+        "x": 0.75,
+        "y": -14.25
       }
     },
     "Hearts-Q": {
@@ -462,7 +469,7 @@
       "centrePictureFile": "Face-Emperor",
       "centrePictureScale": 0.9,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureOffsetPct": {
         "y": -16
       }
@@ -471,7 +478,7 @@
       "centrePictureFile": "Face-Emperor",
       "centrePictureScale": 0.9,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureOffsetPct": {
         "y": -16
       }
@@ -507,7 +514,7 @@
       "centrePictureFile": "Face-Emperor",
       "centrePictureScale": 0.9,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureOffsetPct": {
         "y": -16
       }
@@ -525,7 +532,7 @@
       "centrePictureFile": "Face-Seraph",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureOffsetPct": {
         "y": -16.75
       }
@@ -534,7 +541,7 @@
       "centrePictureFile": "Face-Seraph",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureOffsetPct": {
         "y": -16.75
       }
@@ -570,7 +577,7 @@
       "centrePictureFile": "Face-Seraph",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureOffsetPct": {
         "y": -16.75
       }
@@ -578,7 +585,7 @@
     "Frogs-E": {
       "centrePictureFile": "Face-Frog-Emperor",
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureOffsetPct": {
         "x": 0.5,
         "y": -13.25
@@ -588,7 +595,7 @@
       "centrePictureFile": "Face-Frog-Seraph",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "hard-light",
+      "centrePictureBlendMode": "color-burn",
       "centrePictureOffsetPct": {
         "x": 0.25,
         "y": -12
@@ -611,6 +618,180 @@
       "centrePictureOffsetPct": {
         "y": -16.75
       }
+    },
+    "Hearts-K": {
+      "centrePictureFile": "Face-King",
+      "centrePictureScale": 0.95,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureMirrorGroupOffsetPct": {
+        "y": 0
+      },
+      "centrePictureOffsetPct": {
+        "x": 0.75,
+        "y": -14.25
+      }
+    },
+    "Frogs-G": {
+      "centrePictureFile": "Face-Frog-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "y": -23
+      }
+    },
+    "Stars-G": {
+      "centrePictureFile": "Face-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
+    },
+    "Hearts-G": {
+      "centrePictureFile": "Face-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
+    },
+    "Diamonds-G": {
+      "centrePictureFile": "Face-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
+    },
+    "Clubs-G": {
+      "centrePictureFile": "Face-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
+    },
+    "Spades-G": {
+      "centrePictureFile": "Face-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
+    },
+    "Moons-G": {
+      "centrePictureFile": "Face-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
+    },
+    "Coins-G": {
+      "centrePictureFile": "Face-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
+    },
+    "Bones-G": {
+      "centrePictureFile": "Face-God",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
+    },
+    "Swords-T": {
+      "centrePictureFile": "Face-Thug",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "x": -0.25,
+        "y": -13.5
+      }
+    },
+    "Swords-B": {
+      "centrePictureFile": "Face-Bandit",
+      "centrePictureScale": 0.95,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "x": 0.5,
+        "y": -13.5
+      }
+    },
+    "Swords-H": {
+      "centrePictureFile": "Face-Highwayman",
+      "centrePictureScale": 0.95,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "y": -13.5
+      }
+    },
+    "Swords-C": {
+      "centrePictureFile": "Face-Champion",
+      "centrePictureScale": 0.95,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "x": 0.5,
+        "y": -16.25
+      }
+    },
+    "Swords-W": {
+      "centrePictureFile": "Face-Warlord",
+      "centrePictureScale": 0.95,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "y": -12
+      }
+    },
+    "Frogs-J": {
+      "centrePictureFile": "Face-Frog-Jack",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "y": -15.75
+      }
+    },
+    "Frogs-Q": {
+      "centrePictureFile": "Face-Frog-Queen",
+      "centrePictureScale": 0.95,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "x": -0.75,
+        "y": -14.75
+      }
+    },
+    "Frogs-K": {
+      "centrePictureFile": "Face-Frog-King",
+      "centrePictureScale": 0.9,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "color-burn",
+      "centrePictureOffsetPct": {
+        "x": 0.75,
+        "y": -12.25
+      }
+    },
+    "Bones-A": {
+      "centrePictureFile": "SuitBoneAce",
+      "centrePictureBlendMode": "hard-light"
+    },
+    "Moons-A": {
+      "centrePictureFile": "SuitMoonAce",
+      "centrePictureScale": 1.3,
+      "centrePictureBlendMode": "difference"
+    },
+    "Stars-A": {
+      "centrePictureFile": "SuitStarAce",
+      "centrePictureScale": 1.3,
+      "centrePictureBlendMode": "difference"
     }
   },
   "defaults": {
@@ -619,7 +800,8 @@
       "Diamonds": "CardBasicDark.png",
       "Coins": "CardBasicDark.png",
       "Stars": "CardPurple.png",
-      "Moons": "CardBasicDark.png"
+      "Moons": "CardBasicDark.png",
+      "Swords": "CardBloody"
     },
     "cornerText": {
       "offsetLeftXPct": 0.5,

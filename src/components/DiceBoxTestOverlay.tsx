@@ -72,26 +72,44 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     boneLoadPromiseRef.current = (async () => {
       const [{ GLTFLoader }] = await Promise.all([import('three/examples/jsm/loaders/GLTFLoader.js')]);
       const loader = new GLTFLoader();
+      const base = import.meta.env.BASE_URL ?? '/';
+      const candidates = ['/assets/models/Dice.glb', '/assets/models/bone_dice.glb', '/assets/models/bone_die.glb'];
+
       let gltf: any;
-      try {
-        gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/models/bone_dice.glb`);
-      } catch {
-        gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/models/bone_die.glb`);
+      let choseDiceGlb = false;
+      let lastErr: unknown;
+      for (const rel of candidates) {
+        const url = `${base.endsWith('/') ? base.slice(0, -1) : base}${rel}`.replace(/\/{2,}/g, '/');
+        try {
+          gltf = await loader.loadAsync(url);
+          choseDiceGlb = rel.includes('Dice.glb');
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
       }
+      if (!gltf) throw lastErr ?? new Error('No dice shell GLB loaded');
+
       const root = gltf.scene.clone(true);
-      const overrideTex = await loadBoneTexture();
+      root.updateMatrixWorld(true);
+      /** Authoring at non-origin: re-center bbox to pivot at (0,0,0). */
       const box = new Box3().setFromObject(root);
       const size = new Vector3();
       const center = new Vector3();
       box.getSize(size);
       box.getCenter(center);
       root.position.sub(center);
+      root.updateMatrixWorld(true);
+
       const maxAxis = Math.max(size.x, size.y, size.z);
       if (maxAxis > 0) {
         const targetSize = 1.75;
         const uniform = targetSize / maxAxis;
         root.scale.setScalar(uniform);
       }
+
+      const overrideTex = choseDiceGlb ? null : await loadBoneTexture();
+
       root.traverse((obj: any) => {
         obj.userData = { ...(obj.userData ?? {}), boneDieShell: true };
         if (obj.material) {
@@ -105,12 +123,16 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
               m.depthWrite = true;
               m.depthTest = true;
               m.side = FrontSide;
-              m.alphaTest = 0.38;
-              if (overrideTex) m.map = overrideTex;
-              if (m.color?.multiplyScalar) m.color.multiplyScalar(1.28);
-              if ('toneMapped' in m) m.toneMapped = false;
-              if ('emissive' in m && m.emissive?.setRGB) m.emissive.setRGB(0.16, 0.12, 0.08);
-              if ('emissiveIntensity' in m) m.emissiveIntensity = 0.65;
+              if (overrideTex) {
+                m.alphaTest = 0.38;
+                m.map = overrideTex;
+              } else {
+                m.alphaTest = 0;
+              }
+              if (overrideTex && m.color?.multiplyScalar) m.color.multiplyScalar(1.28);
+              if (overrideTex && 'toneMapped' in m) m.toneMapped = false;
+              if (overrideTex && 'emissive' in m && m.emissive?.setRGB) m.emissive.setRGB(0.16, 0.12, 0.08);
+              if (overrideTex && 'emissiveIntensity' in m) m.emissiveIntensity = 0.65;
               m.needsUpdate = true;
             }
           } else {
@@ -120,12 +142,16 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
             m.depthWrite = true;
             m.depthTest = true;
             m.side = FrontSide;
-            m.alphaTest = 0.38;
-            if (overrideTex) m.map = overrideTex;
-            if (m.color?.multiplyScalar) m.color.multiplyScalar(1.28);
-            if ('toneMapped' in m) m.toneMapped = false;
-            if ('emissive' in m && m.emissive?.setRGB) m.emissive.setRGB(0.16, 0.12, 0.08);
-            if ('emissiveIntensity' in m) m.emissiveIntensity = 0.65;
+            if (overrideTex) {
+              m.alphaTest = 0.38;
+              m.map = overrideTex;
+            } else {
+              m.alphaTest = 0;
+            }
+            if (overrideTex && m.color?.multiplyScalar) m.color.multiplyScalar(1.28);
+            if (overrideTex && 'toneMapped' in m) m.toneMapped = false;
+            if (overrideTex && 'emissive' in m && m.emissive?.setRGB) m.emissive.setRGB(0.16, 0.12, 0.08);
+            if (overrideTex && 'emissiveIntensity' in m) m.emissiveIntensity = 0.65;
             m.needsUpdate = true;
           }
         }
