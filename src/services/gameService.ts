@@ -2106,14 +2106,14 @@ export class GameService {
   }
 
   private emitDiceTestRoll(uid: string) {
+    /** Single d6 while we calibrate visual shell ↔ physics face mapping (`DiceBoxTestOverlay`). */
     const d1 = 1 + Math.floor(Math.random() * 6);
-    const d2 = 1 + Math.floor(Math.random() * 6);
     const payload: DiceTestRollPayload = {
       uid,
       rollId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      notation: '2d6',
-      dice: [d1, d2],
-      total: d1 + d2,
+      notation: '1d6',
+      dice: [d1],
+      total: d1,
       startedAt: Date.now(),
     };
     this.onDiceTestRoll?.(payload);

@@ -3242,7 +3242,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           onClick={handleTestDiceRoll}
           className="rounded-full border border-cyan-300/50 bg-cyan-500/15 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.24)] transition hover:bg-cyan-500/30"
         >
-          Roll 2d6 (test)
+          Roll 1d6 (test)
         </button>
       </div>
       <DesperationVignette

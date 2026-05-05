@@ -33,6 +33,9 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   const boneTextureRef = useRef<Texture | null>(null);
   const boneTexturePromiseRef = useRef<Promise<Texture | null> | null>(null);
   const patchedSpawnRef = useRef(false);
+  /** Locks shell/invisible-die bbox ratio so successive spawns aren’t jittery. */
+  const attachScaleKRef = useRef<number | null>(null);
+  const shellWorldQuatScratch = useRef(new Quaternion());
   const hideTimerRef = useRef<number | null>(null);
   const fadeTimerRef = useRef<number | null>(null);
 
@@ -166,6 +169,14 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     }
   };
 
+  const scheduleAttachBoneShell = (dieObj: any) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        void attachBoneShell(dieObj);
+      });
+    });
+  };
+
   const attachBoneShell = async (dieObj: any): Promise<void> => {
     if (!dieObj || typeof dieObj.add !== 'function') return;
     if (dieObj.getObjectByName?.('bone-die-shell-root')) return;
@@ -174,6 +185,8 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     const shell = template.clone(true);
     shell.name = 'bone-die-shell-root';
 
+    dieObj.updateMatrixWorld(true);
+    shell.updateMatrixWorld(true);
     const dieBox = new Box3().setFromObject(dieObj);
     const dieSize = new Vector3();
     dieBox.getSize(dieSize);
@@ -184,9 +197,12 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     const dieMax = Math.max(dieSize.x, dieSize.y, dieSize.z);
     if (shellMax > 0 && dieMax > 0) {
       const k = (dieMax / shellMax) * 0.98;
-      shell.scale.multiplyScalar(k);
+      const kUse = attachScaleKRef.current ?? k;
+      if (attachScaleKRef.current == null) attachScaleKRef.current = kUse;
+      shell.scale.multiplyScalar(kUse);
     }
     shell.position.set(0, 0, 0);
+    shell.quaternion.identity();
     dieObj.add(shell);
 
     const mats: any[] = Array.isArray(dieObj.material) ? dieObj.material : dieObj.material ? [dieObj.material] : [];
@@ -219,11 +235,14 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   };
 
   const shellTopValueFromOrientation = (shell: Object3D): number => {
+    shell.updateWorldMatrix(true, false);
+    const wq = shellWorldQuatScratch.current;
+    shell.getWorldQuaternion(wq);
     const up = new Vector3(0, 0, 1);
     let bestValue = 1;
     let bestDot = -Infinity;
     for (let v = 1; v <= 6; v++) {
-      const n = valueNormal(v).clone().applyQuaternion(shell.quaternion);
+      const n = valueNormal(v).clone().applyQuaternion(wq);
       const d = n.dot(up);
       if (d > bestDot) {
         bestDot = d;
@@ -257,13 +276,13 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       const out = originalSpawn(...args);
       const reusedDie = args.length > 1 ? args[1] : null;
       if (reusedDie && typeof reusedDie.add === 'function') {
-        void attachBoneShell(reusedDie);
+        scheduleAttachBoneShell(reusedDie);
       } else if (Array.isArray(anyDice.diceList)) {
         // spawnDice() returns void in this library; pick the newly appended die object.
         const afterLen = anyDice.diceList.length;
         if (afterLen > beforeLen) {
           const spawnedDie = anyDice.diceList[afterLen - 1];
-          void attachBoneShell(spawnedDie);
+          scheduleAttachBoneShell(spawnedDie);
         }
       }
       return out;
@@ -374,19 +393,25 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         await ensureReady(selector);
         if (cancelled) return;
         diceRef.current?.clear?.();
-        const [d1, d2] = roll.dice;
-        const notation = `2d6@${d1},${d2}`;
+        const ds = roll.dice;
+        const forced =
+          ds.length >= 2
+            ? `@${ds.slice(0, 2).join(',')}`
+            : ds.length === 1 && typeof ds[0] === 'number'
+              ? `@${ds[0]}`
+              : '';
+        const baseNotation = ds.length <= 1 ? '1d6' : '2d6';
+        const notation =
+          ds.length <= 1 && forced ? `1d6${forced}` : ds.length >= 2 && forced ? `2d6${forced}` : baseNotation;
         let animated = false;
         try {
           animated = await runDiceAnimation(diceRef.current, notation);
           if (!animated) {
-            // Deterministic notation parsed but produced no throw; retry plain notation.
-            animated = await runDiceAnimation(diceRef.current, '2d6');
+            animated = await runDiceAnimation(diceRef.current, baseNotation);
           }
         } catch {
-          // Fallback animation path if predetermined notation throws in runtime/browser.
           try {
-            animated = await runDiceAnimation(diceRef.current, '2d6');
+            animated = await runDiceAnimation(diceRef.current, baseNotation);
           } catch {
             animated = false;
           }
@@ -434,8 +459,12 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       )}
       {result && overlayOpaque && (
         <div className="absolute right-4 top-16 rounded-xl border border-white/30 bg-black/35 px-3 py-2 text-white backdrop-blur-sm">
-          <div className="text-[10px] font-black uppercase tracking-widest text-emerald-300">2d6</div>
-          <div className="text-xs font-bold">[{result.dice.join(', ')}] = {result.total}</div>
+          <div className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
+            {roll?.notation ?? (result.dice.length <= 1 ? '1d6' : '2d6')}
+          </div>
+          <div className="text-xs font-bold">
+            [{result.dice.join(', ')}]{result.dice.length > 1 ? ` = ${result.total}` : ''}
+          </div>
         </div>
       )}
     </div>
