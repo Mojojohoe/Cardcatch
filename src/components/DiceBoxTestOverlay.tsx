@@ -63,9 +63,16 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         diceRef.current = new DiceBox(selector, {
           assetPath: diceAssetPath(),
           sounds: false,
-          // Keep this path resilient even if packaged textures are unavailable.
-          theme_texture: 'none',
-          theme_material: 'plastic',
+          // Bone die first-pass: remap built-in "skulls" texture file to extracted GLB texture.
+          theme_customColorset: {
+            name: 'bone_die',
+            foreground: '#2f2a22',
+            background: ['#f1e5cc', '#dcc8a2', '#cab285', '#b89a6a'],
+            outline: '#1f1b16',
+            texture: 'skulls',
+            material: 'wood',
+          },
+          theme_material: 'wood',
           shadows: true,
           theme_surface: 'green-felt',
           baseScale: 85,
