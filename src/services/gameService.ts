@@ -704,6 +704,8 @@ export function computePanicCombatEffects(args: {
   opponentCardId: string;
   opponentWrathPenalty: number;
   greedTaxActive: boolean;
+  /** Align opponent stamina with calculateOutcome / evaluateTrickClash (Lust virtual hearts). */
+  opponentLustBump?: boolean;
 }): {
   exchanges: number;
   panicDestroyed: boolean;
@@ -712,6 +714,7 @@ export function computePanicCombatEffects(args: {
 } {
   let panicPow = panicSwordStrikeStrength(args.panicCardId);
   const oppPc = parseCard(args.opponentCardId);
+  const oppLh = args.opponentLustBump ?? false;
   if (panicPow <= 0 || args.opponentCardId === GROVEL_CARD_ID || oppPc.isJoker) {
     return {
       exchanges: 0,
@@ -720,7 +723,7 @@ export function computePanicCombatEffects(args: {
       extraOpponentPenalty: 0,
     };
   }
-  const raw = getCardValue(args.opponentCardId, false, args.greedTaxActive);
+  const raw = getCardValue(args.opponentCardId, oppLh, args.greedTaxActive);
   const effStart = Math.max(0, raw - args.opponentWrathPenalty);
   let eff = effStart;
   let exchanges = 0;
@@ -748,6 +751,50 @@ export function panicOpponentWrathPenaltyFromOutcome(
   return getWrathMagnitude(wf.minionCard);
 }
 
+/** Mirrors calculateOutcome’s lust handling when replaying the frozen trick after panic dice. */
+export type LustReplayContext = {
+  lustHeartRules: boolean;
+  /** When true, {@link getCardValue} applies Lust’s virtual heart ladder for this printed trick card. */
+  lhPlayed: (cardStr: string) => boolean;
+};
+
+export function lustReplayContextFromOutcome(
+  roomData: Pick<RoomData, 'settings' | 'activeCurses'>,
+  outcome: Pick<
+    NonNullable<RoomData['lastOutcome']>,
+    'powerCardIdsPlayed' | 'curseClashSuppressed' | 'powerCardTowerBlocked' | 'cardsPlayed' | 'initialCardsPlayed'
+  >,
+  hostUid: string,
+  guestUid: string,
+): LustReplayContext {
+  const curseEnabled = roomData.settings.enableCurseCards !== false;
+  const pidHost = outcome.powerCardIdsPlayed?.[hostUid] ?? null;
+  const pidGuest = outcome.powerCardIdsPlayed?.[guestUid] ?? null;
+  const suppressed = outcome.curseClashSuppressed ?? {};
+  const towerBlocked = outcome.powerCardTowerBlocked ?? {};
+  const lustHeartRules =
+    curseEnabled &&
+    (lustCurseActive(roomData.activeCurses ?? []) ||
+      (pidHost === CURSE_LUST && !towerBlocked[hostUid] && !suppressed[hostUid]) ||
+      (pidGuest === CURSE_LUST && !towerBlocked[guestUid] && !suppressed[guestUid]));
+
+  let lustPrintedHeartsBump = false;
+  for (const uid of [hostUid, guestUid] as const) {
+    const init = outcome.initialCardsPlayed?.[uid];
+    const fin = outcome.cardsPlayed?.[uid];
+    if (!init || !fin || typeof init !== 'string' || typeof fin !== 'string') continue;
+    if (parseCard(init).suit === 'Hearts' && init !== fin) {
+      lustPrintedHeartsBump = true;
+      break;
+    }
+  }
+
+  const lhPlayed = (cardStr: string) =>
+    lustHeartRules && !(lustPrintedHeartsBump && parseCard(cardStr).suit === 'Hearts');
+
+  return { lustHeartRules, lhPlayed };
+}
+
 export type PanicExchangeFrame = { panicRemaining: number; opponentEffective: number };
 
 /** One snapshot after each simultaneous −1 panic / opponent stamina tick (aligned with {@link computePanicCombatEffects}). */
@@ -756,17 +803,19 @@ export function buildPanicExchangeFrames(args: {
   opponentCardId: string;
   opponentWrathPenalty: number;
   greedTaxActive: boolean;
+  opponentLustBump?: boolean;
 }): { frames: PanicExchangeFrame[]; exchanges: number } {
   let panicPow = panicSwordStrikeStrength(args.panicCardId);
   const oppPc = parseCard(args.opponentCardId);
+  const oppLh = args.opponentLustBump ?? false;
   const frames: PanicExchangeFrame[] = [];
   if (panicPow <= 0 || args.opponentCardId === GROVEL_CARD_ID || oppPc.isJoker) {
-    const raw = getCardValue(args.opponentCardId, false, args.greedTaxActive);
+    const raw = getCardValue(args.opponentCardId, oppLh, args.greedTaxActive);
     const eff = Math.max(0, raw - args.opponentWrathPenalty);
     frames.push({ panicRemaining: Math.max(0, panicPow), opponentEffective: eff });
     return { frames, exchanges: 0 };
   }
-  const raw = getCardValue(args.opponentCardId, false, args.greedTaxActive);
+  const raw = getCardValue(args.opponentCardId, oppLh, args.greedTaxActive);
   let eff = Math.max(0, raw - args.opponentWrathPenalty);
   let exchanges = 0;
   frames.push({ panicRemaining: panicPow, opponentEffective: eff });
@@ -786,6 +835,7 @@ export function resolveFrozenTrickWinnerForPanic(params: {
   guestUid: string;
   frozen: Pick<NonNullable<RoomData['lastOutcome']>, 'cardsPlayed' | 'summonedCards' | 'targetSuit' | 'wrathFx'>;
   extraClashPenaltyByUid: Record<string, number>;
+  lustReplay?: LustReplayContext;
 }): string | 'draw' {
   const { hostUid: p1Uid, guestUid: p2Uid, frozen } = params;
   const curseEnabled = params.roomData.settings.enableCurseCards !== false;
@@ -795,7 +845,9 @@ export function resolveFrozenTrickWinnerForPanic(params: {
   const c1 = frozen.cardsPlayed[p1Uid];
   const c2 = frozen.cardsPlayed[p2Uid];
   if (!c1 || !c2 || typeof c1 !== 'string' || typeof c2 !== 'string') return 'draw';
-  const lh = false;
+  const lustCtx = params.lustReplay;
+  const lhBase = lustCtx?.lustHeartRules ?? false;
+  const lhPlayed = lustCtx?.lhPlayed ?? ((_card: string) => false);
 
   const wrathTar = frozen.wrathFx?.targetUid ?? null;
   const wrathMag =
@@ -809,16 +861,17 @@ export function resolveFrozenTrickWinnerForPanic(params: {
   const wp1 = penFor(p1Uid, c1);
   const wp2 = penFor(p2Uid, c2);
 
+  const mainSides = [lhPlayed(c1), lhPlayed(c2)] as const;
   const res = evaluateTrickClash(
     c1,
     c2,
     frozen.targetSuit,
-    lh,
+    lhBase,
     greedTaxActive,
     greedJointTrump,
     wp1,
     wp2,
-    [lh, lh],
+    mainSides,
   );
 
   const s1 = frozen.summonedCards?.[p1Uid];
@@ -829,12 +882,12 @@ export function resolveFrozenTrickWinnerForPanic(params: {
       s1,
       s2,
       frozen.targetSuit,
-      lh,
+      lhBase,
       greedTaxActive,
       greedJointTrump,
       penFor(p1Uid, s1),
       penFor(p2Uid, s2),
-      [lh, lh],
+      [lhPlayed(s1), lhPlayed(s2)],
     );
     if (res === 'p1' || r1 === 'p1') return p1Uid;
     if (res === 'p2' || r1 === 'p2') return p2Uid;
@@ -845,12 +898,12 @@ export function resolveFrozenTrickWinnerForPanic(params: {
       s1,
       c2,
       frozen.targetSuit,
-      lh,
+      lhBase,
       greedTaxActive,
       greedJointTrump,
       penFor(p1Uid, s1),
       penFor(p2Uid, c2),
-      [lh, lh],
+      [lhPlayed(s1), lhPlayed(c2)],
     );
     if (res === 'p1' || rS === 'p1') return p1Uid;
     if (res === 'p2' && rS === 'p2') return p2Uid;
@@ -861,12 +914,12 @@ export function resolveFrozenTrickWinnerForPanic(params: {
       s2,
       c1,
       frozen.targetSuit,
-      lh,
+      lhBase,
       greedTaxActive,
       greedJointTrump,
       penFor(p2Uid, s2),
       penFor(p1Uid, c1),
-      [lh, lh],
+      [lhPlayed(s2), lhPlayed(c1)],
     );
     if (res === 'p2' || rS === 'p2') return p2Uid;
     if (res === 'p1' && rS === 'p1') return p1Uid;
@@ -985,6 +1038,8 @@ export function explainPlainClash(
   greedJointDiamondsCoins = false,
   /** [winner virtual lust?, loser virtual lust?] aligned to winner/loser card order. */
   lustHeartRulesSides?: readonly [boolean, boolean],
+  /** Optional clash stamina penalties (Wrath + panic), same order as winner/loser cards — mirrors evaluateTrickClash. */
+  clashValuePenaltySides?: readonly [number, number],
 ): string {
   const prW = parseCard(winningCardStr);
   const prL = parseCard(losingCardStr);
@@ -1019,8 +1074,14 @@ export function explainPlainClash(
   const lField = isOnTargetField(losingCardStr, targ, greedJointDiamondsCoins);
   const lhW = lustHeartRulesSides?.[0] ?? lustHeartRules;
   const lhL = lustHeartRulesSides?.[1] ?? lustHeartRules;
-  const wv = getCardValue(winningCardStr, lhW, greedTaxActive);
-  const lv = getCardValue(losingCardStr, lhL, greedTaxActive);
+  let wv = getCardValue(winningCardStr, lhW, greedTaxActive);
+  let lv = getCardValue(losingCardStr, lhL, greedTaxActive);
+  if (clashValuePenaltySides) {
+    const penW = clashValuePenaltySides[0] ?? 0;
+    const penL = clashValuePenaltySides[1] ?? 0;
+    if (!prW.isJoker) wv = Math.max(0, wv - penW);
+    if (!prL.isJoker) lv = Math.max(0, lv - penL);
+  }
 
   if (wField && !lField)
     return `${sentenceCard(winningCardStr)} matched table suit (${trumpLabel}); ${lMid} did not — table suit wins.`;
@@ -2578,6 +2639,8 @@ export class GameService {
     const greedTaxActive =
       room.settings.enableCurseCards !== false && greedCurseActive(room.activeCurses ?? []);
 
+    const lustReplay = lustReplayContextFromOutcome(room, prev, hostUid, guestUid);
+
     let wrathPenOpp = 0;
     if (prev.wrathFx?.targetUid === oppUid && prev.wrathFx.minionCard) {
       const pc = parseCard(oppCard);
@@ -2591,6 +2654,7 @@ export class GameService {
       opponentCardId: oppCard,
       opponentWrathPenalty: wrathPenOpp,
       greedTaxActive,
+      opponentLustBump: lustReplay.lhPlayed(oppCard),
     });
 
     const extras: Record<string, number> = { [hostUid]: 0, [guestUid]: 0 };
@@ -2607,6 +2671,7 @@ export class GameService {
         wrathFx: prev.wrathFx,
       },
       extraClashPenaltyByUid: extras,
+      lustReplay,
     });
 
     const clashDestroyed: Record<string, boolean> = { ...(prev.clashDestroyedByPenalty ?? {}) };
@@ -2614,7 +2679,6 @@ export class GameService {
       clashDestroyed[oppUid] = combat.opponentDestroyed;
     }
 
-    const lh = false;
     let finalMessage: string;
     if (nw === 'draw') {
       finalMessage = 'Panic dice — the field deadlocks again.';
@@ -2622,14 +2686,26 @@ export class GameService {
       const winnerCard = prev.cardsPlayed[nw];
       const loserUid = nw === hostUid ? guestUid : hostUid;
       const loserCard = prev.cardsPlayed[loserUid];
+      const wrathTar = prev.wrathFx?.targetUid ?? null;
+      const wrathMag =
+        wrathTar && prev.wrathFx?.minionCard ? getWrathMagnitude(prev.wrathFx.minionCard) : 0;
+      const clashPenFor = (cardUid: string, card: string) => {
+        let pen =
+          wrathTar === cardUid && wrathMag && !parseCard(card).isJoker && card !== GROVEL_CARD_ID
+            ? wrathMag
+            : 0;
+        pen += extras[cardUid] ?? 0;
+        return pen;
+      };
       finalMessage = `${room.players[nw].name} wins — ${explainPlainClash(
         winnerCard,
         loserCard,
         prev.targetSuit,
-        lh,
+        lustReplay.lustHeartRules,
         greedTaxActive,
         greedTaxActive && prev.targetSuit === 'Diamonds',
-        [lh, lh],
+        [lustReplay.lhPlayed(winnerCard), lustReplay.lhPlayed(loserCard)],
+        [clashPenFor(nw, winnerCard), clashPenFor(loserUid, loserCard)],
       )}`;
     }
 

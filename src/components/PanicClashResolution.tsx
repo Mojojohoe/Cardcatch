@@ -4,6 +4,7 @@ import type { RoomData } from '../types';
 import { VALUES, isPanicBladeNumericValue, PANIC_BLADE_RANK_VALUES } from '../types';
 import {
   buildPanicExchangeFrames,
+  lustReplayContextFromOutcome,
   parseCard,
   panicOpponentWrathPenaltyFromOutcome,
   panicSwordStrikeStrength,
@@ -100,6 +101,12 @@ export const PanicClashResolution: React.FC<{
   const greedTax =
     room.settings.enableCurseCards !== false && greedCurseActive(room.activeCurses ?? []);
   const wrathPen = oppCardId ? panicOpponentWrathPenaltyFromOutcome(outcome, opponentUid, oppCardId) : 0;
+  const hostUid = room.hostUid;
+  const guestUid = Object.keys(room.players).find((id) => id !== hostUid) ?? '';
+  const opponentLustBump =
+    guestUid && oppCardId
+      ? lustReplayContextFromOutcome(room, outcome, hostUid, guestUid).lhPlayed(oppCardId)
+      : false;
 
   const { frames, exchanges } = useMemo(
     () =>
@@ -109,9 +116,10 @@ export const PanicClashResolution: React.FC<{
             opponentCardId: oppCardId,
             opponentWrathPenalty: wrathPen,
             greedTaxActive: greedTax,
+            opponentLustBump,
           })
         : { frames: [] as { panicRemaining: number; opponentEffective: number }[], exchanges: 0 },
-    [panicCardId, oppCardId, wrathPen, greedTax],
+    [panicCardId, oppCardId, wrathPen, greedTax, opponentLustBump],
   );
 
   const [phase, setPhase] = useState<'intro' | 'clash' | 'done'>('intro');

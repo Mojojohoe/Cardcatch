@@ -11,12 +11,17 @@ import {
   isCardBlockedByPride,
   lustBumpHeartIfApplicable,
   lustHeartUpgradeSteps,
+  lustReplayContextFromOutcome,
   parseCard,
   panicSwordStrikeStrength,
+  computePanicCombatEffects,
+  resolveFrozenTrickWinnerForPanic,
   tooltipPrintedStrengthLabel,
   pickEnvyCovetedForRound,
   pickSlothDreamResult,
 } from './gameService';
+import { CURSE_LUST } from '../curses';
+import type { RoomData } from '../types';
 import { createFixturePlayers, createFixtureRoom } from './gameService.fixtures';
 
 test('Printed tooltip ignores lust virtual ranks; Jokers show N/A', () => {
@@ -110,6 +115,73 @@ test('Pride barrier blocks target suit at or above ceiling; Grovel exempt', () =
 test('Panic blade Swords-1 has clash value 1 (for stamina animation floor)', () => {
   assert.equal(getCardValue('Swords-1', false, false), 1);
   assert.equal(panicSwordStrikeStrength('Swords-1'), 1);
+});
+
+test('Panic combat + frozen replay use Lust heart stamina (matches evaluateTrickClash)', () => {
+  const hostUid = 'h';
+  const guestUid = 'g';
+  const roomData = {
+    settings: { enableCurseCards: true as const },
+    activeCurses: [{ id: CURSE_LUST }],
+  } as Pick<RoomData, 'settings' | 'activeCurses'>;
+  const outcome = {
+    powerCardIdsPlayed: { [hostUid]: null, [guestUid]: null } as Record<string, number | null>,
+    curseClashSuppressed: {} as Record<string, boolean>,
+    powerCardTowerBlocked: {} as Record<string, boolean>,
+    cardsPlayed: { [hostUid]: 'Clubs-10', [guestUid]: 'Hearts-J' },
+    initialCardsPlayed: { [hostUid]: 'Clubs-10', [guestUid]: 'Hearts-J' },
+  };
+  const lustReplay = lustReplayContextFromOutcome(roomData, outcome, hostUid, guestUid);
+  assert.equal(lustReplay.lhPlayed('Hearts-J'), true);
+  assert.equal(lustReplay.lhPlayed('Clubs-10'), true);
+
+  const extra = computePanicCombatEffects({
+    panicCardId: 'Swords-4',
+    opponentCardId: 'Hearts-J',
+    opponentWrathPenalty: 0,
+    greedTaxActive: false,
+    opponentLustBump: lustReplay.lhPlayed('Hearts-J'),
+  }).extraOpponentPenalty;
+  assert.equal(extra, 4);
+
+  const frozen = {
+    cardsPlayed: outcome.cardsPlayed,
+    summonedCards: {} as Record<string, string>,
+    targetSuit: 'Moons' as const,
+    wrathFx: undefined,
+  };
+
+  const withLust = resolveFrozenTrickWinnerForPanic({
+    roomData,
+    hostUid,
+    guestUid,
+    frozen,
+    extraClashPenaltyByUid: { [hostUid]: 0, [guestUid]: extra },
+    lustReplay,
+  });
+
+  const ref = evaluateTrickClash(
+    'Clubs-10',
+    'Hearts-J',
+    'Moons',
+    true,
+    false,
+    false,
+    0,
+    extra,
+    [lustReplay.lhPlayed('Clubs-10'), lustReplay.lhPlayed('Hearts-J')],
+  );
+  assert.equal(withLust, ref === 'p1' ? hostUid : ref === 'p2' ? guestUid : 'draw');
+  assert.equal(withLust, 'draw');
+
+  const sansLust = resolveFrozenTrickWinnerForPanic({
+    roomData,
+    hostUid,
+    guestUid,
+    frozen,
+    extraClashPenaltyByUid: { [hostUid]: 0, [guestUid]: extra },
+  });
+  assert.equal(sansLust, hostUid);
 });
 
 test('Wrath clash penalties reduce marked side rank; Jokers ignore penalties', () => {
