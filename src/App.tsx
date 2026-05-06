@@ -2994,6 +2994,51 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
   const dismissPanicClash = useCallback(() => setPanicClashOpen(false), []);
 
+  /** Must run before any conditional return — same rule as other table hooks (React #310). */
+  useLayoutEffect(() => {
+    const el = handHudLayoutRef.current;
+    const mePlayer = room?.players?.[myUid];
+    if (!el || !room || !mePlayer || room.status === 'waiting') return;
+
+    const fanSqueeze = computeHandFanSqueeze(mePlayer.hand.length, handRowW, handFanLayout);
+    const fanWidthPx = estimateHandFanWidthPx(mePlayer.hand.length, fanSqueeze, handFanLayout);
+    const fanOverflowPx = Math.max(0, Math.round((fanWidthPx - handRowW) / 2));
+    const powerCardWidth = handFanLayout === 'wide' ? 115.2 : 57.6;
+    const powerOverlap = handFanLayout === 'wide' ? 24 : 16;
+    const powerCount = mePlayer.powerCards.length;
+    const powerBlockWidth =
+      powerCount > 0 ? powerCount * powerCardWidth - Math.max(0, powerCount - 1) * powerOverlap : 0;
+    const powerClearancePx = powerCount > 0 ? Math.min(220, fanOverflowPx) : 0;
+    const handPowerGapPx = (handFanLayout === 'wide' ? 40 : 16) + Math.min(220, fanOverflowPx);
+    const panicStripVisible =
+      room.settings.enablePanicDice &&
+      panicDiceSeatAllowed(room, myUid) &&
+      (room.status === 'playing' || room.status === 'powering');
+
+    const measure = () => {
+      const cw = el.clientWidth;
+      const panicReserve = panicStripVisible ? Math.max(132, Math.round(powerBlockWidth * 0.35) + 108) : 0;
+      const powerReserve =
+        powerCount > 0 ? Math.round(powerBlockWidth + Math.min(48, powerClearancePx)) : 0;
+      const gapReserve =
+        ((powerCount > 0 ? 1 : 0) + (panicStripVisible ? 1 : 0)) * Math.max(12, Math.min(handPowerGapPx, 48)) + 20;
+      const need = powerReserve + fanWidthPx + panicReserve + gapReserve;
+      setHandHudNeedsStack(need > cw + 2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [
+    room,
+    myUid,
+    handRowW,
+    handFanLayout,
+    room?.status,
+    room?.settings?.enablePanicDice,
+    room?.players,
+  ]);
+
   const handleDraftSelect = async (powerId: number) => {
     setLoading(true);
     try {
@@ -3300,33 +3345,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
   const panicStripHoverText = me.panicDiceUsed ? PANIC_DICE_USED_HOVER : PANIC_DICE_STRIP_HOVER_HELP;
   const panicStripFootnote = me.panicDiceUsed ? 'Used this game' : 'Locked until results';
-
-  useLayoutEffect(() => {
-    const el = handHudLayoutRef.current;
-    if (!el) return;
-    const measure = () => {
-      const cw = el.clientWidth;
-      const panicReserve = panicDiceStripVisible ? Math.max(132, Math.round(powerBlockWidth * 0.35) + 108) : 0;
-      const powerReserve =
-        powerCount > 0 ? Math.round(powerBlockWidth + Math.min(48, powerClearancePx)) : 0;
-      const gapReserve =
-        ((powerCount > 0 ? 1 : 0) + (panicDiceStripVisible ? 1 : 0)) * Math.max(12, Math.min(handPowerGapPx, 48)) + 20;
-      const need = powerReserve + fanWidthPx + panicReserve + gapReserve;
-      setHandHudNeedsStack(need > cw + 2);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [
-    powerCount,
-    powerBlockWidth,
-    powerClearancePx,
-    handPowerGapPx,
-    fanWidthPx,
-    panicDiceStripVisible,
-    handFanLayout,
-  ]);
 
   const myPendingDecision = room.pendingPowerDecisions?.[myUid] || null;
   const opponentPendingDecision = opponentUid ? room.pendingPowerDecisions?.[opponentUid] || null : null;
