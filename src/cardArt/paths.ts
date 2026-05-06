@@ -8,22 +8,9 @@ export function cardArtAssetUrl(fileName: string): string {
 /** Raster extensions tried in order (.gif after .png — e.g. `Face-God.gif`, `Face-Frog-God.gif`). */
 const RASTER_EXTS = ['.png', '.gif', '.webp', '.jpg', '.svg'] as const;
 
-/** Narrower probe for optional suit images — avoids dozens of identical 404s on GitHub Pages. */
+/** Prefer `.png` first to match shipped/json packs; then other formats pack authors sometimes use. */
 const SUIT_PROBE_EXTS_PRIMARY = ['.png'] as const;
 const SUIT_PROBE_EXTS_SECONDARY = ['.gif', '.webp', '.jpg', '.svg'] as const;
-
-/**
- * Pip / corner rasters that ship under `public/assets/images/` today (basename without extension).
- * Standard **Spades** has no raster here yet — callers fall back to {@link SuitGlyph} without probing `suitSpades.*` five times each.
- */
-const BUNDLED_SUIT_MARK_STEM: Partial<Record<string, string>> = {
-  Hearts: 'SuitHeartAce',
-  Diamonds: 'SuitDiamondsAce',
-  Clubs: 'SuitClubsAce',
-  Stars: 'SuitStarAce',
-  Moons: 'SuitMoonAce',
-  Coins: 'SuitCoinAce',
-};
 
 function pushStemUrls(stem: string, exts: readonly string[], seen: Set<string>, out: string[]) {
   for (const ext of exts) {
@@ -40,42 +27,36 @@ export function cardBackgroundUrlCandidates(): string[] {
 }
 
 /**
- * Suit pip / corner art — prefers shipped stems, then common filename patterns (.png first).
- * Standard **Spades** has no raster in the repo; we skip network probes and use {@link SuitGlyph} until a stem is added to {@link BUNDLED_SUIT_MARK_STEM}.
+ * Suit pip / corner art — **pack-first** stems like `SuitHearts.png`, `SuitSpades.png`, `SuitCoins.png`
+ * (`Suit{suit}`) before lowercase `suit*` / legacy aliases.
  */
 export function suitRasterUrlCandidates(suit: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
 
-  const bundled = BUNDLED_SUIT_MARK_STEM[suit];
-  if (bundled) {
-    pushStemUrls(bundled, RASTER_EXTS, seen, out);
-    return out;
-  }
-
-  if (suit === 'Spades') {
-    return out;
-  }
+  const suitSingularIfPlural = suit.endsWith('s') ? suit.slice(0, -1) : suit;
 
   const stems = Array.from(
     new Set(
       [
-        `suit${suit}`,
         `Suit${suit}`,
+        `suit${suit}`,
+        suitSingularIfPlural !== suit ? `Suit${suitSingularIfPlural}` : null,
+        suitSingularIfPlural !== suit ? `suit${suitSingularIfPlural}` : null,
         suit,
         suit.toLowerCase(),
         `suit_${suit}`,
         `Suit_${suit}`,
         `suits/Suit${suit}`,
         `suits/${suit}`,
-      ].filter(Boolean),
+      ].filter((s): s is string => Boolean(s)),
     ),
   );
 
   for (const stem of stems) {
     pushStemUrls(stem, SUIT_PROBE_EXTS_PRIMARY, seen, out);
   }
-  for (const stem of [`suit${suit}`, `Suit${suit}`]) {
+  for (const stem of [`Suit${suit}`, `suit${suit}`]) {
     pushStemUrls(stem, SUIT_PROBE_EXTS_SECONDARY, seen, out);
   }
 
@@ -83,8 +64,8 @@ export function suitRasterUrlCandidates(suit: string): string[] {
 }
 
 /**
- * Common shipped stems under `public/assets/images/` that do not match the game id (`Hearts-A`)
- * e.g. `SuitHeartAce.png`, `SuitDiamondsAce.png`, `SuitHeartsKing.png`.
+ * Centre-picture stems that do not match the card id (`Hearts-A`).
+ * Aces/Gods resolve through pack suit art (`SuitHearts.png` etc.) via {@link suitRasterUrlCandidates} — not forced `Suit*Ace`.
  */
 export function bundledCourtPictureStems(cardId: string): string[] {
   const i = cardId.indexOf('-');
@@ -102,33 +83,18 @@ export function bundledCourtPictureStems(cardId: string): string[] {
   const suitSingularIfPlural = suit.endsWith('s') ? suit.slice(0, -1) : suit;
   const suitPluralIfSingular = suit.endsWith('s') ? suit : `${suit}s`;
 
-  if (value === 'A') {
-    const bundledAce = BUNDLED_SUIT_MARK_STEM[suit];
-    if (bundledAce) {
-      add(bundledAce);
-    } else if (suit !== 'Spades') {
-      add(`Suit${suit}Ace`);
-      add(`Suit${suitSingularIfPlural}Ace`);
-      if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
-        add(`Suit${suitPluralIfSingular}Ace`);
-      }
-    }
-  } else if (value === 'G') {
-    if (suit !== 'Spades') {
-      add(`Suit${suit}God`);
-      add(`Suit${suitSingularIfPlural}God`);
-      if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
-        add(`Suit${suitPluralIfSingular}God`);
-      }
+  if (value === 'G') {
+    add(`Suit${suit}God`);
+    add(`Suit${suitSingularIfPlural}God`);
+    if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
+      add(`Suit${suitPluralIfSingular}God`);
     }
   } else if (value === 'J' || value === 'Q' || value === 'K') {
-    if (suit !== 'Spades') {
-      const rank = value === 'J' ? 'Jack' : value === 'Q' ? 'Queen' : 'King';
-      add(`Suit${suit}${rank}`);
-      add(`Suit${suitSingularIfPlural}${rank}`);
-      if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
-        add(`Suit${suitPluralIfSingular}${rank}`);
-      }
+    const rank = value === 'J' ? 'Jack' : value === 'Q' ? 'Queen' : 'King';
+    add(`Suit${suit}${rank}`);
+    add(`Suit${suitSingularIfPlural}${rank}`);
+    if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
+      add(`Suit${suitPluralIfSingular}${rank}`);
     }
   }
 
@@ -149,9 +115,8 @@ function pushUrlsFromStems(stems: string[], seen: Set<string>, out: string[]) {
 
 /**
  * Centre / court picture URLs for a card id.
- * Ace & God of Hearts: after any `centrePictureFile` stem, tries **standard suit rasters**
- * ({@link suitRasterUrlCandidates} — e.g. `SuitHearts.png`) so the centre can match corners without a dedicated ace PNG;
- * then bundled stems like `SuitHeartAce.png`, then `Hearts-A.png`.
+ * Aces/Gods:** after preferred stem**, tries **`Suit{Suit}.png`** etc. ({@link suitRasterUrlCandidates}),
+ * then royalty-specific bundled stems (`Suit{Suit}King`…), then `{cardId}.png`.
  */
 export function pictureCardUrlCandidates(cardId: string, preferredStem?: string | null): string[] {
   const seen = new Set<string>();

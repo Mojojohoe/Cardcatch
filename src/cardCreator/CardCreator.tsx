@@ -287,10 +287,6 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [sharedRank, setSharedRank] = useState<string>('2');
   const [applySuitChecks, setApplySuitChecks] = useState<Record<string, boolean>>({});
 
-  /** Always read latest manifest without re-running the draft sync effect on every manifest bump (that wiped unsaved card edits). */
-  const manifestRef = useRef(manifest);
-  manifestRef.current = manifest;
-
   const playingParts = useMemo(() => trySplitPlaying(selected), [selected]);
   const showCentrePictureField = Boolean(
     selected.startsWith('Joker') ||
@@ -298,10 +294,10 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 
   useEffect(() => {
-    const m = manifestRef.current[selected];
+    const m = manifest[selected];
     setLocalOverride(m ? { ...m } : null);
     setFileName(m?.customImageFile ?? '');
-  }, [selected]);
+  }, [selected, manifest]);
 
   useEffect(() => {
     setDraftDefaults({ ...defaults });

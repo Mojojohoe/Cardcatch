@@ -3002,14 +3002,11 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
     const fanSqueeze = computeHandFanSqueeze(mePlayer.hand.length, handRowW, handFanLayout);
     const fanWidthPx = estimateHandFanWidthPx(mePlayer.hand.length, fanSqueeze, handFanLayout);
-    const fanOverflowPx = Math.max(0, Math.round((fanWidthPx - handRowW) / 2));
     const powerCardWidth = handFanLayout === 'wide' ? 115.2 : 57.6;
     const powerOverlap = handFanLayout === 'wide' ? 24 : 16;
     const powerCount = mePlayer.powerCards.length;
     const powerBlockWidth =
       powerCount > 0 ? powerCount * powerCardWidth - Math.max(0, powerCount - 1) * powerOverlap : 0;
-    const powerClearancePx = powerCount > 0 ? Math.min(220, fanOverflowPx) : 0;
-    const handPowerGapPx = (handFanLayout === 'wide' ? 40 : 16) + Math.min(220, fanOverflowPx);
     const panicStripVisible =
       room.settings.enablePanicDice &&
       panicDiceSeatAllowed(room, myUid) &&
@@ -3017,13 +3014,15 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
     const measure = () => {
       const cw = el.clientWidth;
-      const panicReserve = panicStripVisible ? Math.max(132, Math.round(powerBlockWidth * 0.35) + 108) : 0;
-      const powerReserve =
-        powerCount > 0 ? Math.round(powerBlockWidth + Math.min(48, powerClearancePx)) : 0;
+      const cappedPowerW = Math.min(powerBlockWidth, 340);
+      const panicReserve = panicStripVisible ? 128 : 0;
+      const powerReserve = powerCount > 0 ? Math.round(cappedPowerW + 56) : 0;
       const gapReserve =
-        ((powerCount > 0 ? 1 : 0) + (panicStripVisible ? 1 : 0)) * Math.max(12, Math.min(handPowerGapPx, 48)) + 20;
+        ((powerCount > 0 ? 1 : 0) + (panicStripVisible ? 1 : 0)) * 28 + 40;
       const need = powerReserve + fanWidthPx + panicReserve + gapReserve;
-      setHandHudNeedsStack(need > cw + 2);
+      /** Keep 3-column [powers · hand · panic] unless the viewport is very narrow or genuinely overflowed */
+      const veryNarrow = cw < 400;
+      setHandHudNeedsStack(veryNarrow || need > cw + 112);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -4340,33 +4339,33 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
              {me.confirmed && <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">Locked in — waiting</span>}
            </div>
         </div>
-        <div className="flex w-full flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible px-1">
+        <div className="flex w-full flex-col items-stretch gap-4 overflow-x-auto overflow-y-visible px-1 pb-1">
           <div
             ref={handHudLayoutRef}
-            className={`mx-auto w-full max-w-[min(100%,72rem)] overflow-x-visible overflow-y-visible px-1 ${
+            className={`mx-auto box-border w-full max-w-[min(96rem,min(100vw-1rem))] overflow-x-auto overflow-y-visible px-2 ${
               handHudNeedsStack
-                ? 'flex flex-col items-center gap-y-7'
-                : 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-x-[clamp(0.75rem,2.8vw,2.75rem)]'
+                ? 'flex flex-col items-center gap-y-10'
+                : 'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-x-6 sm:gap-x-10 md:gap-x-14'
             }`}
           >
-            {/* Column 1 (grid) / stacked block 1 — powers */}
+            {/* Powers — left of hand (narrow screens: above hand) */}
             <div
-              className={`relative z-[14] min-h-0 min-w-0 overflow-visible pb-3 pt-8 ${
+              className={`relative z-[14] flex min-h-0 min-w-0 flex-col justify-end overflow-x-auto pb-2 pt-4 ${
                 handHudNeedsStack
-                  ? 'order-1 flex w-full justify-center pb-4 pt-10'
-                  : 'flex justify-end'
+                  ? 'order-1 w-full max-w-full items-center pb-4 pt-8'
+                  : 'col-span-1 col-start-1 row-start-1 items-end justify-end justify-self-stretch'
               }`}
             >
               {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 ? (
                 <div
-                  className={`flex shrink-0 flex-col items-center overflow-visible ${
-                    handHudNeedsStack ? 'max-w-full' : 'items-end'
+                  className={`flex shrink-0 max-w-[min(100%,min(44vw,20rem))] flex-col overflow-x-auto overscroll-x-contain sm:max-w-[min(24rem,46vw)] ${
+                    handHudNeedsStack ? 'max-w-full items-center overflow-x-auto' : 'items-end'
                   }`}
                 >
-                  <span className="mb-1 text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
+                  <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
                     Your powers
                   </span>
-                  <div className="-space-x-4 flex max-w-full flex-nowrap items-end justify-center overflow-visible px-1 pb-2 pt-1 pl-1 sm:w-max sm:-space-x-6 sm:justify-end sm:pl-0">
+                  <div className="-space-x-4 flex max-w-full flex-nowrap items-end justify-center overflow-x-auto px-1 pb-2 pt-1 pl-1 sm:w-max sm:-space-x-6 sm:justify-end sm:pr-2 sm:pl-0 md:justify-end md:overflow-x-visible">
                     {me.powerCards.map((pId, i) => (
                       <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
                         <PowerCardVisual
@@ -4382,10 +4381,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 </div>
               ) : null}
             </div>
-          {/* Column 2 / stacked block 3 — hand always centered */}
+          {/* Hand — centred in the viewport row */}
           <div
-            className={`relative z-[12] flex min-h-[13rem] min-w-0 flex-col justify-end overflow-visible sm:min-h-[12rem] ${
-              handHudNeedsStack ? 'order-3 w-full max-w-full min-w-[min(100%,24rem)]' : 'justify-self-center'
+            className={`relative z-[12] mx-auto flex min-h-[13rem] min-w-0 max-w-[min(100%,min(100vw-2rem,56rem))] flex-col justify-end overflow-x-auto overflow-y-visible sm:min-h-[12rem] ${
+              handHudNeedsStack ? 'order-2 w-full max-w-full' : 'col-start-2 row-start-1 justify-self-center'
             }`}
           >
             <div
@@ -4490,15 +4489,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               })}
             </div>
           </div>
-          {/* Column 3 (grid) / stacked block 2 — panic (informational until results); empty cell keeps hand centered */}
+          {/* Panic dice — right of hand */}
           {!handHudNeedsStack ? (
-            <div className="relative z-[13] flex min-h-0 min-w-0 flex-col justify-end self-end pb-3 pt-8">
+            <div className="relative z-[13] col-start-3 row-start-1 flex min-h-0 min-w-0 flex-col items-start justify-end justify-self-stretch pb-2 pt-4 pl-1 sm:pl-2 md:items-end">
               {panicDiceStripVisible ? (
                 <>
-                  <span className="mb-1 text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
+                  <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:w-auto sm:text-left md:text-right">
                     Panic Dice
                   </span>
-                  <div className="relative flex flex-col items-center sm:items-start">
+                  <div className="relative flex w-full max-w-[min(100%,min(44vw,20rem))] flex-col items-center sm:max-w-[min(24rem,46vw)] sm:items-start md:items-end">
                     {panicDiceStripInteractive ? (
                       <button
                         type="button"
@@ -4539,14 +4538,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       </div>
                     ) : null}
                   </div>
-                  <span className="pointer-events-none mt-1 text-center text-[7px] font-black uppercase tracking-widest text-slate-500 sm:text-left">
+                  <span className="pointer-events-none mt-1 w-full text-center text-[7px] font-black uppercase tracking-widest text-slate-500 sm:text-left md:text-right">
                     {panicStripFootnote}
                   </span>
                 </>
               ) : null}
             </div>
           ) : panicDiceStripVisible ? (
-            <div className="relative z-[13] order-2 flex w-full flex-col items-center justify-end pb-4 pt-8">
+            <div className="relative z-[13] order-3 flex w-full max-w-md flex-col items-center justify-end pb-4 pt-6">
               <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90">
                 Panic Dice
               </span>
