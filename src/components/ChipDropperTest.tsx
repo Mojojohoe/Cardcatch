@@ -3,7 +3,6 @@ import {
   ACESFilmicToneMapping,
   AmbientLight,
   Box3,
-  Color,
   DirectionalLight,
   Group,
   Mesh,
@@ -48,59 +47,17 @@ const UPRIGHT_BIAS_TORQUE = 2.35;
 const UPRIGHT_BIAS_DAMP = 1.05;
 const NEAR_REST_LATERAL_DAMP = 0.86;
 const CHIP_GLTF_URL = `${import.meta.env.BASE_URL}assets/models/poker_chip.glb`;
-/** Source GLB is red; rotate from red hue toward requested seat color. */
-const SOURCE_TEXTURE_HUE = 0;
 
 type CoinEntry = { mesh: Object3D; body: Body };
 
-function patchMaterialHueRotate(mat: MeshStandardMaterial, hueDeltaTurns: number) {
-  if (!mat.map) return;
-  mat.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      'void main() {',
-      `
-vec3 rgb2hsv(vec3 c) {
-  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-  float d = q.x - min(q.w, q.y);
-  float e = 1.0e-10;
-  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-vec3 hsv2rgb(vec3 c) {
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-void main() {
-`,
-    );
-    shader.fragmentShader = shader.fragmentShader.replace(
-      'diffuseColor *= sampledDiffuseColor;',
-      `
-vec3 hsv = rgb2hsv(sampledDiffuseColor.rgb);
-hsv.x = fract(hsv.x + ${hueDeltaTurns.toFixed(6)});
-sampledDiffuseColor.rgb = hsv2rgb(hsv);
-diffuseColor *= sampledDiffuseColor;
-`,
-    );
-  };
-  mat.needsUpdate = true;
-}
-
 function prepareTintedChipTemplate(template: Object3D, chipColorHex: number, chipEmissiveHex: number): Object3D {
   const out = template.clone(true);
-  const hsl = { h: 0, s: 0, l: 0 };
-  new Color(chipColorHex).getHSL(hsl);
-  const hueDelta = hsl.h - SOURCE_TEXTURE_HUE;
-  const shouldHueShift = Math.abs(hueDelta) > 0.01;
   out.traverse((node) => {
     const mesh = node as Mesh;
     if (!mesh.isMesh) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const cloned = mats.map((m) => {
       const sm = (m as MeshStandardMaterial).clone();
-      if (shouldHueShift) patchMaterialHueRotate(sm, hueDelta);
       sm.emissive.setHex(chipEmissiveHex);
       sm.emissiveIntensity = 0.06;
       return sm;
@@ -130,14 +87,20 @@ export type ChipSimulationHandle = {
   spawn: () => void;
 };
 
-function tokenPalette(role: PlayerRole | undefined): { border: string; fill: string; chipColor: number; chipEmissive: number } {
+function tokenPalette(role: PlayerRole | undefined): { border: string; chipColor: number; chipEmissive: number } {
   if (role === 'Prey') {
-    return { border: 'border-blue-500/45', fill: 'bg-blue-500/18', chipColor: 0x3b82f6, chipEmissive: 0x000838 };
+    return { border: 'border-blue-500/45', chipColor: 0xef4444, chipEmissive: 0x3b0000 };
   }
   if (role === 'Preydator') {
-    return { border: 'border-purple-500/45', fill: 'bg-purple-500/18', chipColor: 0xa855f7, chipEmissive: 0x18002f };
+    return { border: 'border-purple-500/45', chipColor: 0xef4444, chipEmissive: 0x3b0000 };
   }
-  return { border: 'border-red-500/45', fill: 'bg-red-500/18', chipColor: 0xef4444, chipEmissive: 0x3b0000 };
+  return { border: 'border-red-500/45', chipColor: 0xef4444, chipEmissive: 0x3b0000 };
+}
+
+function tokenHueFilter(role: PlayerRole | undefined): string {
+  if (role === 'Prey') return 'hue-rotate(200deg)';
+  if (role === 'Preydator') return 'hue-rotate(300deg)';
+  return 'none';
 }
 
 type SimulationProps = {
@@ -465,8 +428,9 @@ export const ChipDropperTest: React.FC<{
       {/* Below results / panic overlays (z-[300]+); above main table (z-[20]) */}
       <div className="pointer-events-none fixed inset-0 z-[40]" aria-hidden>
         <div
-          className={`absolute top-[44%] left-[calc(50%-30vw)] flex h-[min(46vh,29rem)] w-[min(27vw,23rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${oppPalette.border} ${oppPalette.fill} shadow-[inset_0_0_0_1px_rgba(248,113,113,0.25)]`}
+          className={`absolute top-[41%] left-[calc(50%-24vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${oppPalette.border} shadow-[inset_0_0_0_1px_rgba(248,113,113,0.16)]`}
           title="Their token catchment"
+          style={{ filter: tokenHueFilter(opponent?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
             Their tokens: {theirCount}
@@ -474,8 +438,9 @@ export const ChipDropperTest: React.FC<{
           <ChipSimulationCanvas ref={leftRef} chipColor={oppPalette.chipColor} chipEmissive={oppPalette.chipEmissive} className="min-h-0 flex-1" />
         </div>
         <div
-          className={`absolute top-1/2 left-[calc(50%+35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${myPalette.border} ${myPalette.fill} shadow-[inset_0_0_0_1px_rgba(96,165,250,0.25)]`}
+          className={`absolute top-1/2 left-[calc(50%+35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${myPalette.border} shadow-[inset_0_0_0_1px_rgba(96,165,250,0.16)]`}
           title="Your token catchment"
+          style={{ filter: tokenHueFilter(me?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
             Your tokens: {selfCount}

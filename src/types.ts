@@ -361,7 +361,7 @@ export interface RoomData {
     initialCardsPlayed: Record<string, string>;
     gains: Record<
       string,
-      { type: 'card' | 'power' | 'draw'; id: string | number | 'new-card' }[]
+      { type: 'card' | 'power' | 'draw' | 'token'; id: string | number | 'new-card' }[]
     >;
     /** Lust meter animation + persistence helper. */
     lustRoundFx?: {

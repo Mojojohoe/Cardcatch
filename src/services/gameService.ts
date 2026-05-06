@@ -691,6 +691,35 @@ export function panicDiceTotalToCardId(total: number): string {
   return `Swords-${ranks[t]}`;
 }
 
+function computeOverkillTokenAward(params: {
+  p1Uid: string;
+  p2Uid: string;
+  c1: string;
+  c2: string;
+  targetSuit: Suit;
+  greedJointTrump: boolean;
+  greedTaxActive: boolean;
+  clashPenaltyByUid: Record<string, number>;
+  lustPlayedByUid?: Record<string, boolean>;
+}): Record<string, number> {
+  const valFor = (uid: string, card: string): number => {
+    const pc = parseCard(card);
+    if (pc.isJoker) return 0;
+    if (!isOnTargetField(card, params.targetSuit, params.greedJointTrump)) return 0;
+    const lh = params.lustPlayedByUid?.[uid] ?? false;
+    const raw = getCardValue(card, lh, params.greedTaxActive);
+    const pen = params.clashPenaltyByUid[uid] ?? 0;
+    return Math.max(0, raw - pen);
+  };
+
+  const v1 = valFor(params.p1Uid, params.c1);
+  const v2 = valFor(params.p2Uid, params.c2);
+  const out: Record<string, number> = { [params.p1Uid]: 0, [params.p2Uid]: 0 };
+  if (v1 > v2) out[params.p1Uid] = v1 - v2;
+  else if (v2 > v1) out[params.p2Uid] = v2 - v1;
+  return out;
+}
+
 export function panicSwordStrikeStrength(cardId: string): number {
   const p = parseCard(cardId);
   if (!p.isJoker && p.suit === 'Swords' && isPanicBladeNumericValue(p.value)) {
@@ -1936,9 +1965,9 @@ export class GameService {
     this.onChipDrop = handler;
   }
 
-  async emitChipDrop() {
+  async emitChipDrop(uid?: string) {
     const payload: ChipDropPayload = {
-      uid: this.myUid,
+      uid: uid ?? this.myUid,
       dropId: `chip-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       startedAt: Date.now(),
     };
@@ -2754,11 +2783,47 @@ export class GameService {
         [clashPenFor(nw, winnerCard), clashPenFor(loserUid, loserCard)],
       )}`;
     }
-
-    const gains = rebuildGainsAfterPanicWinnerChange(prev, nw, {
-      hostUid,
-      famineActive: room.famineActive,
+    const clashPenByUid: Record<string, number> = {
+      [hostUid]:
+        (prev.wrathFx?.targetUid === hostUid && prev.wrathFx?.minionCard
+          ? getWrathMagnitude(prev.wrathFx.minionCard)
+          : 0) + (extras[hostUid] ?? 0),
+      [guestUid]:
+        (prev.wrathFx?.targetUid === guestUid && prev.wrathFx?.minionCard
+          ? getWrathMagnitude(prev.wrathFx.minionCard)
+          : 0) + (extras[guestUid] ?? 0),
+    };
+    const tokenByUid = computeOverkillTokenAward({
+      p1Uid: hostUid,
+      p2Uid: guestUid,
+      c1: prev.cardsPlayed[hostUid],
+      c2: prev.cardsPlayed[guestUid],
+      targetSuit: prev.targetSuit,
+      greedJointTrump: greedTaxActive && prev.targetSuit === 'Diamonds',
+      greedTaxActive,
+      clashPenaltyByUid: clashPenByUid,
+      lustPlayedByUid: {
+        [hostUid]: lustReplay.lhPlayed(prev.cardsPlayed[hostUid]),
+        [guestUid]: lustReplay.lhPlayed(prev.cardsPlayed[guestUid]),
+      },
     });
+
+    // Panic re-resolution must not carry stale rewards from the pre-panic snapshot.
+    const gains: NonNullable<RoomData['lastOutcome']>['gains'] = { [hostUid]: [], [guestUid]: [] };
+    if (nw !== 'draw' && nw) {
+      const loserUid = nw === hostUid ? guestUid : hostUid;
+      if (room.famineActive) gains[loserUid].push({ type: 'draw', id: -1 });
+      else gains[nw].push({ type: 'draw', id: 'standard' });
+    }
+    for (const uid of [hostUid, guestUid]) {
+      const n = tokenByUid[uid] ?? 0;
+      if (n > 0) gains[uid].push({ type: 'token', id: n });
+    }
+
+    if (nw !== 'draw') {
+      const tn = tokenByUid[nw] ?? 0;
+      if (tn > 0) finalMessage += ` (+${tn} token${tn === 1 ? '' : 's'})`;
+    }
 
     const panicLine: ResolutionEvent = {
       type: 'POWER_TRIGGER',
@@ -2840,7 +2905,7 @@ export class GameService {
     const events: ResolutionEvent[] = [];
     const summonedCards: Record<string, string> = {};
 
-    const gains: Record<string, { type: 'card' | 'power' | 'draw', id: string | number }[]> = {
+    const gains: Record<string, { type: 'card' | 'power' | 'draw' | 'token', id: string | number }[]> = {
       [p1Uid]: [],
       [p2Uid]: []
     };
@@ -4214,6 +4279,34 @@ export class GameService {
     }
 
     // Phase 4: Post-Resolution Gains Determination
+    const lhToken = (cardStr: string) =>
+      lustHeartRules && !(lustPrintedHeartsBump && parseCard(cardStr).suit === 'Hearts');
+    const tokenByUid = computeOverkillTokenAward({
+      p1Uid,
+      p2Uid,
+      c1,
+      c2,
+      targetSuit,
+      greedJointTrump,
+      greedTaxActive,
+      clashPenaltyByUid: { [p1Uid]: wrathPen(c1, p1Uid), [p2Uid]: wrathPen(c2, p2Uid) },
+      lustPlayedByUid: { [p1Uid]: lhToken(c1), [p2Uid]: lhToken(c2) },
+    });
+    for (const uid of [p1Uid, p2Uid]) {
+      const n = tokenByUid[uid] ?? 0;
+      if (n <= 0) continue;
+      gains[uid].push({ type: 'token', id: n });
+      events.push({
+        type: 'POWER_TRIGGER',
+        uid,
+        message: `${players[uid].name} gains ${n} token${n === 1 ? '' : 's'} (overkill).`,
+      });
+    }
+    if (winnerUid !== 'draw') {
+      const tn = tokenByUid[winnerUid] ?? 0;
+      if (tn > 0) finalMessage += ` (+${tn} token${tn === 1 ? '' : 's'})`;
+    }
+
     if (winnerUid !== 'draw' && winnerUid) {
       const loserUid = winnerUid === p1Uid ? p2Uid : p1Uid;
 

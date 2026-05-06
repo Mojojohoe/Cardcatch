@@ -2,8 +2,8 @@
  * Playing-card and power-card layout footprint (≈1.2× prior Tailwind sizes).
  * Centralize so hand rows, backs, and modals stay visually consistent.
  */
-export const PC_HAND = 'w-[3.6rem] h-[5.4rem] sm:w-[7.2rem] sm:h-[10.8rem]';
-export const PC_HAND_VEC_SM = 'w-[3rem] h-[6.6rem] sm:w-[4.2rem] sm:h-[9.9rem]';
+export const PC_HAND = 'w-[7.2rem] h-[10.8rem]';
+export const PC_HAND_VEC_SM = 'w-[4.2rem] h-[9.9rem]';
 /** @deprecated Hand assembled faces now use {@link PC_HAND} / {@link PC_HAND_VEC_SM} for a uniform footprint. */
 export const PC_ASM_SM = 'w-[3rem] sm:w-[4.2rem]';
 export const PC_ASM_MD = 'w-[3.6rem] sm:w-[7.2rem]';
