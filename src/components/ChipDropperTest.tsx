@@ -203,9 +203,9 @@ export const ChipDropperTest: React.FC = () => {
   }, []);
 
   return (
-    <div className="pointer-events-auto fixed bottom-4 right-4 z-[480] flex w-[min(92vw,20rem)] flex-col gap-2 rounded-2xl border border-amber-700/40 bg-emerald-950/92 p-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+    <div className="pointer-events-auto fixed bottom-[max(5.75rem,calc(env(safe-area-inset-bottom,0px)+5rem))] right-[max(1rem,env(safe-area-inset-right,0px)+0.5rem)] z-[480] flex w-[min(92vw,20rem)] flex-col gap-2 rounded-2xl border border-amber-700/40 bg-emerald-950/92 p-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[9px] font-black uppercase tracking-widest text-amber-400/95">Chip physics (dev)</span>
+        <span className="text-[9px] font-black uppercase tracking-widest text-amber-400/95">Chip physics (test)</span>
         <button
           type="button"
           onClick={spawnCoin}

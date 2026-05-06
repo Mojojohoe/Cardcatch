@@ -3383,7 +3383,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     <CardArtSessionBridge room={room} myUid={myUid} serviceRef={serviceRef}>
     <DisplayCardArtModeOverride highVisibilityMode={highVisibilityMode}>
     <div
-      className={`relative flex h-full min-h-0 flex-col overflow-hidden border-x border-emerald-900/50 p-4 ${
+      className={`relative flex h-full min-h-0 flex-col overflow-x-visible overflow-y-hidden border-x border-emerald-900/50 px-5 py-4 sm:px-7 ${
         artworkFelt ? 'bg-emerald-950/25' : 'bg-emerald-950/40'
       }`}
       style={
@@ -3424,7 +3424,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
       <DiceBoxTestOverlay roll={hudDiceRoll} />
-      {import.meta.env.DEV ? <ChipDropperTest /> : null}
+      <ChipDropperTest />
 
       {panicDiceStripExplainOpen && (
         <div
@@ -3666,7 +3666,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="mx-auto flex h-[13rem] w-max max-w-full items-end justify-center -space-x-9 overflow-x-auto px-2 opacity-80 flex-nowrap sm:h-[13.5rem] sm:-space-x-14 sm:scale-100 scale-90">
+                  <div className="mx-auto flex h-[13rem] w-max max-w-full items-end justify-center -space-x-9 overflow-x-visible px-2 opacity-80 flex-nowrap sm:h-[13.5rem] sm:-space-x-14 sm:scale-100 scale-90">
             {Array.from({ length: opponent.hand.length }).map((_, i) => (
               <CardVisual key={`opp-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
             ))}
@@ -3693,7 +3693,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {/* Table grid: opp row · deck column share one rail — no overlapping absolutes */}
-      <div className="relative z-[20] isolate flex min-h-0 flex-1 flex-col gap-2 sm:gap-3">
+      <div className="relative z-[20] isolate flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-visible overflow-y-auto overscroll-y-contain sm:gap-3">
           {myWheelDecisionSpinning && (
             <div className="pointer-events-none absolute inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/45 px-2 backdrop-blur-[2px]">
               <span className="text-center text-[9px] font-black uppercase tracking-widest text-amber-300">
@@ -4339,33 +4339,33 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
              {me.confirmed && <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">Locked in — waiting</span>}
            </div>
         </div>
-        <div className="flex w-full flex-col items-stretch gap-4 overflow-x-auto overflow-y-visible px-1 pb-1">
+        <div className="flex w-full min-w-0 flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible px-0 pb-1 sm:px-1">
           <div
             ref={handHudLayoutRef}
-            className={`mx-auto box-border w-full max-w-[min(96rem,min(100vw-1rem))] overflow-x-auto overflow-y-visible px-2 ${
+            className={`mx-auto box-border w-full min-w-0 max-w-[min(100vw-1.25rem,120rem)] overflow-x-visible overflow-y-visible px-0 sm:px-1 ${
               handHudNeedsStack
                 ? 'flex flex-col items-center gap-y-10'
-                : 'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-x-6 sm:gap-x-10 md:gap-x-14'
+                : 'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-x-6 sm:gap-x-10 md:gap-x-14 lg:gap-x-16'
             }`}
           >
-            {/* Powers — left of hand (narrow screens: above hand) */}
+            {/* Powers — left of hand · extra left inset so overlaps / shadows aren’t clipped */}
             <div
-              className={`relative z-[14] flex min-h-0 min-w-0 flex-col justify-end overflow-x-auto pb-2 pt-4 ${
+              className={`relative z-[14] flex min-h-0 min-w-0 flex-col justify-end overflow-visible pb-2 pl-3 pt-4 sm:pl-6 ${
                 handHudNeedsStack
-                  ? 'order-1 w-full max-w-full items-center pb-4 pt-8'
+                  ? 'order-1 w-full max-w-full items-center pb-4 pl-4 pt-8 sm:pl-6'
                   : 'col-span-1 col-start-1 row-start-1 items-end justify-end justify-self-stretch'
               }`}
             >
               {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 ? (
                 <div
-                  className={`flex shrink-0 max-w-[min(100%,min(44vw,20rem))] flex-col overflow-x-auto overscroll-x-contain sm:max-w-[min(24rem,46vw)] ${
-                    handHudNeedsStack ? 'max-w-full items-center overflow-x-auto' : 'items-end'
+                  className={`flex min-w-0 max-w-none shrink-0 flex-col overflow-visible ${
+                    handHudNeedsStack ? 'w-full max-w-full items-center' : 'w-full items-end'
                   }`}
                 >
                   <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
                     Your powers
                   </span>
-                  <div className="-space-x-4 flex max-w-full flex-nowrap items-end justify-center overflow-x-auto px-1 pb-2 pt-1 pl-1 sm:w-max sm:-space-x-6 sm:justify-end sm:pr-2 sm:pl-0 md:justify-end md:overflow-x-visible">
+                  <div className="-space-x-4 flex w-max max-w-none min-w-0 flex-nowrap items-end justify-center overflow-visible px-2 pb-2 pt-1 sm:-space-x-6 sm:justify-end sm:pr-2 sm:pl-1">
                     {me.powerCards.map((pId, i) => (
                       <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
                         <PowerCardVisual
@@ -4383,7 +4383,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           {/* Hand — centred in the viewport row */}
           <div
-            className={`relative z-[12] mx-auto flex min-h-[13rem] min-w-0 max-w-[min(100%,min(100vw-2rem,56rem))] flex-col justify-end overflow-x-auto overflow-y-visible sm:min-h-[12rem] ${
+            className={`relative z-[12] mx-auto flex min-h-[13rem] min-w-0 max-w-none flex-col justify-end overflow-visible sm:min-h-[12rem] ${
               handHudNeedsStack ? 'order-2 w-full max-w-full' : 'col-start-2 row-start-1 justify-self-center'
             }`}
           >
@@ -4491,13 +4491,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
           {/* Panic dice — right of hand */}
           {!handHudNeedsStack ? (
-            <div className="relative z-[13] col-start-3 row-start-1 flex min-h-0 min-w-0 flex-col items-start justify-end justify-self-stretch pb-2 pt-4 pl-1 sm:pl-2 md:items-end">
+            <div className="relative z-[13] col-start-3 row-start-1 flex min-h-0 min-w-0 flex-col items-start justify-end justify-self-stretch overflow-visible pb-2 pr-3 pt-4 pl-1 sm:pr-6 sm:pl-2 md:items-end">
               {panicDiceStripVisible ? (
                 <>
                   <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:w-auto sm:text-left md:text-right">
                     Panic Dice
                   </span>
-                  <div className="relative flex w-full max-w-[min(100%,min(44vw,20rem))] flex-col items-center sm:max-w-[min(24rem,46vw)] sm:items-start md:items-end">
+                  <div className="relative flex w-full max-w-none min-w-0 flex-col items-center overflow-visible sm:items-start md:items-end">
                     {panicDiceStripInteractive ? (
                       <button
                         type="button"
@@ -4717,7 +4717,7 @@ export default function App() {
     <>
       {/* CardCreator is fixed full-screen; keep outside overflow-hidden so it is not clipped. */}
       <CardCreatorHashOverlay />
-    <div className="min-h-screen bg-emerald-950 text-white selection:bg-yellow-400 selection:text-black font-sans overflow-hidden">
+    <div className="min-h-screen overflow-x-visible overflow-y-hidden bg-emerald-950 font-sans text-white selection:bg-yellow-400 selection:text-black">
       {/* Dev Toggle */}
       <div className="fixed top-4 left-4 z-[220] flex gap-2">
         <button 
@@ -4732,12 +4732,14 @@ export default function App() {
       </div>
 
       <div className={`h-screen transition-all duration-500 flex bg-emerald-950`}>
-        <div className={`h-full transition-all duration-500 overflow-hidden ${isDual ? 'w-1/2' : 'w-full'}`}>
+        <div
+          className={`h-full min-h-0 transition-all duration-500 overflow-x-visible overflow-y-hidden ${isDual ? 'w-1/2' : 'w-full'}`}
+        >
           <GameInstance instanceId="p1" isDual={isDual} />
         </div>
         
         {isDual && (
-          <div className="w-1/2 h-full overflow-hidden">
+          <div className="h-full min-h-0 w-1/2 overflow-x-visible overflow-y-hidden">
             <GameInstance 
               instanceId="p2"
               isDual
