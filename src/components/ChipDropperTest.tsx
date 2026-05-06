@@ -14,7 +14,6 @@ import {
   Scene,
   Vector3,
   WebGLRenderer,
-  CylinderGeometry,
   SRGBColorSpace,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -28,20 +27,8 @@ const COIN_R = 2.58;
 const COIN_H = 0.74;
 const DROP_Y = 52;
 
-/** Inner half-extents (world units): X wider than Z for a shallow “slab” pile. */
-const PLAY_HALF_X = 6.4;
-const PLAY_HALF_Z = 3.8;
-const WALL_THICK = 0.36;
-const WALL_HEIGHT_Y = 56;
-/** Keep cylinder centroid at least this far inside the inner wall plane so we never spawn intersecting statics. */
-const SPAWN_INSET = 0.28;
-
-function spawnSafeHalfExtents(): { halfX: number; halfZ: number } {
-  return {
-    halfX: Math.max(0.25, PLAY_HALF_X - COIN_R - SPAWN_INSET),
-    halfZ: Math.max(0.2, PLAY_HALF_Z - COIN_R - SPAWN_INSET),
-  };
-}
+/** Tiny spawn spread so chips fall into one stack lane. */
+const STACK_SPAWN_JITTER = 0.18;
 
 /** Advance physics this many × wall-clock time → snappier fall. */
 const SIM_SPEED = 2;
@@ -153,8 +140,6 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
   const cameraRef = useRef<PerspectiveCamera | null>(null);
   const coinsRef = useRef<CoinEntry[]>([]);
   const rafRef = useRef<number>(0);
-  const geomRef = useRef<CylinderGeometry | null>(null);
-  const matRef = useRef<MeshStandardMaterial | null>(null);
   const chipTemplateRef = useRef<Object3D | null>(null);
   const groundBodyRef = useRef<Body | null>(null);
   const physicsMatsRef = useRef<{ chip: Material } | null>(null);
@@ -163,31 +148,31 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
   const spawnCoin = useCallback(() => {
     const world = worldRef.current;
     const scene = sceneRef.current;
-    const geom = geomRef.current;
-    const mat = matRef.current;
     const template = chipTemplateRef.current;
     const pm = physicsMatsRef.current;
-    if (!world || !scene || !pm || (!template && (!geom || !mat))) return;
+    if (!world || !scene || !pm || !template) return;
 
     const shape = new Cylinder(COIN_R, COIN_R, COIN_H, 24);
-    const { halfX: sx, halfZ: sz } = spawnSafeHalfExtents();
+    const sx = STACK_SPAWN_JITTER;
+    const sz = STACK_SPAWN_JITTER;
     const body = new Body({
       mass: 0.45,
       shape,
       material: pm.chip,
-      linearDamping: 0.2,
-      angularDamping: 0.56,
+      linearDamping: 0.35,
+      angularDamping: 0.82,
       position: new Vec3((Math.random() - 0.5) * 2 * sx, DROP_Y, (Math.random() - 0.5) * 2 * sz),
     });
-    body.velocity.set((Math.random() - 0.5) * 0.72, -0.8, (Math.random() - 0.5) * 0.28);
-    body.angularVelocity.set((Math.random() - 0.5) * 0.95, (Math.random() - 0.5) * 1.25, (Math.random() - 0.5) * 0.95);
-    /** Large overlaps were putting bodies to sleep or jittering them out of frame in one step. */
+    body.quaternion.setFromAxisAngle(new Vec3(0, 1, 0), Math.random() * Math.PI * 2);
+    body.velocity.set(0, -0.75, 0);
+    body.angularVelocity.set(0, (Math.random() - 0.5) * 0.08, 0);
+    body.angularFactor.set(0, 1, 0);
     body.allowSleep = true;
     body.sleepSpeedLimit = 0.03;
     body.sleepTimeLimit = 2.8;
     world.addBody(body);
 
-    const mesh = template ? instantiateTintedChip(template) : new Mesh(geom!, mat!);
+    const mesh = instantiateTintedChip(template);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.position.set(body.position.x, body.position.y, body.position.z);
@@ -243,37 +228,6 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     ground.position.set(0, -groundHalf.y, 0);
     world.addBody(ground);
     groundBodyRef.current = ground;
-
-    const wy = WALL_HEIGHT_Y / 2;
-    const zExtent = PLAY_HALF_Z + WALL_THICK;
-    const xExtent = PLAY_HALF_X + WALL_THICK;
-    const chipWallMat = new Material('chipWall');
-    world.addContactMaterial(new ContactMaterial(chipMat, chipWallMat, { friction: 0.5, restitution: 0.04 }));
-    world.addContactMaterial(new ContactMaterial(chipWallMat, feltMat, { friction: 0.56, restitution: 0.03 }));
-
-    const addWall = (half: Vec3, pos: Vec3) => {
-      const b = new Body({ mass: 0, shape: new Box(half), material: chipWallMat });
-      b.position.copy(pos);
-      world.addBody(b);
-    };
-    const hx = WALL_THICK / 2;
-    const hz = WALL_THICK / 2;
-    addWall(new Vec3(hx, wy, zExtent), new Vec3(PLAY_HALF_X + hx, wy, 0));
-    addWall(new Vec3(hx, wy, zExtent), new Vec3(-PLAY_HALF_X - hx, wy, 0));
-    addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, PLAY_HALF_Z + hz));
-    addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, -PLAY_HALF_Z - hz));
-
-    const geom = new CylinderGeometry(COIN_R, COIN_R, COIN_H, 40);
-    geomRef.current = geom;
-
-    const mat = new MeshStandardMaterial({
-      color: chipColor,
-      emissive: chipEmissive,
-      emissiveIntensity: 0.26,
-      metalness: 0.48,
-      roughness: 0.28,
-    });
-    matRef.current = mat;
 
     let mounted = true;
     const loader = new GLTFLoader();
@@ -384,16 +338,12 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
       if (groundBodyRef.current) world.removeBody(groundBodyRef.current);
       groundBodyRef.current = null;
       physicsMatsRef.current = null;
-      geom.dispose();
-      mat.dispose();
       renderer.dispose();
       root.removeChild(renderer.domElement);
       sceneRef.current = null;
       worldRef.current = null;
       rendererRef.current = null;
       cameraRef.current = null;
-      geomRef.current = null;
-      matRef.current = null;
       disposeObjectMaterials(chipTemplateRef.current);
       chipTemplateRef.current = null;
     };
