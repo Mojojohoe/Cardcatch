@@ -1,6 +1,5 @@
 import { CURSE_IDS } from '../curses';
-import { SUITS, VALUES } from '../types';
-import { cardArtAssetUrl, bundledCourtPictureStems } from './paths';
+import { cardArtAssetUrl } from './paths';
 import { shippedBundledPowerBackUrl, shippedBundledPowerFaceUrl, shippedPlayingCardBackRasterUrl } from './shippedRasterFallbacks';
 import type { CardArtManifest } from './types';
 
@@ -18,7 +17,13 @@ function warmUrl(url: string) {
 function maybeWarmImageFile(fileName?: string | null) {
   const t = fileName?.trim();
   if (!t) return;
-  warmUrl(cardArtAssetUrl(t));
+  if (/\.(png|webp|jpg|jpeg|gif|svg)$/i.test(t)) {
+    warmUrl(cardArtAssetUrl(t));
+    return;
+  }
+  for (const ext of ['.png', '.gif', '.webp', '.jpg', '.svg'] as const) {
+    warmUrl(cardArtAssetUrl(`${t}${ext}`));
+  }
 }
 
 /**
@@ -36,12 +41,6 @@ export function warmCardArtImages(manifest?: CardArtManifest | null) {
     if (u) warmUrl(u);
   }
 
-  // Suit symbols (png-first convention for this project).
-  for (const suit of [...SUITS, 'Stars', 'Moons', 'Frogs', 'Coins', 'Bones']) {
-    warmUrl(cardArtAssetUrl(`suit${suit}.png`));
-    warmUrl(cardArtAssetUrl(`Suit${suit}.png`));
-  }
-
   // Shipped power / curse face fallbacks.
   for (let i = 0; i <= 21; i++) {
     const u = shippedBundledPowerFaceUrl(i, false);
@@ -50,16 +49,6 @@ export function warmCardArtImages(manifest?: CardArtManifest | null) {
   for (const cid of CURSE_IDS) {
     const u = shippedBundledPowerFaceUrl(cid, true);
     if (u) warmUrl(u);
-  }
-
-  // Common court stems (first-choice png convention).
-  for (const suit of [...SUITS, 'Stars', 'Moons', 'Frogs', 'Coins', 'Bones']) {
-    for (const value of ['A', 'J', 'Q', 'K', 'G']) {
-      const cardId = `${suit}-${value}`;
-      for (const stem of bundledCourtPictureStems(cardId)) {
-        warmUrl(cardArtAssetUrl(`${stem}.png`));
-      }
-    }
   }
 
   // User-provided manifest overrides.

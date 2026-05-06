@@ -53,7 +53,7 @@ export function resolveNotifierScale(rank: string, defaults?: CardArtGlobalDefau
   return scale;
 }
 
-const RASTER_EXT_ORDER = ['.png', '.webp', '.jpg', '.svg'] as const;
+const RASTER_EXT_ORDER = ['.png', '.gif', '.webp', '.jpg', '.svg'] as const;
 
 /** Single stem → URLs with extension fallbacks. */
 export function rasterCandidatesForFileStem(stem: string): string[] {

@@ -2922,6 +2922,19 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     [room, myUid, loading],
   );
 
+  /** Must run before any conditional returns — otherwise lobby → table changes hook count (React #310). */
+  const confirmPanicDiceUse = useCallback(async () => {
+    setLoading(true);
+    try {
+      await serviceRef.current.usePanicDice();
+      setPanicDiceConfirmOpen(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Panic dice failed');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const handleDraftSelect = async (powerId: number) => {
     setLoading(true);
     try {
@@ -3227,18 +3240,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     !me.panicDiceUsed &&
     !me.readyForNextRound &&
     !showResolutionSequence;
-
-  const confirmPanicDiceUse = useCallback(async () => {
-    setLoading(true);
-    try {
-      await serviceRef.current.usePanicDice();
-      setPanicDiceConfirmOpen(false);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Panic dice failed');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const myPendingDecision = room.pendingPowerDecisions?.[myUid] || null;
   const opponentPendingDecision = opponentUid ? room.pendingPowerDecisions?.[opponentUid] || null : null;

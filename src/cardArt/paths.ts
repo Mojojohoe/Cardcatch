@@ -5,8 +5,8 @@ export function cardArtAssetUrl(fileName: string): string {
   return `${base.endsWith('/') ? base : `${base}/`}assets/images/${path}`;
 }
 
-/** Raster extensions tried in order (svg included for vector suit packs). */
-const RASTER_EXTS = ['.png', '.webp', '.jpg', '.gif', '.svg'] as const;
+/** Raster extensions tried in order (.gif after .png — e.g. `Face-God.gif`, `Face-Frog-God.gif`). */
+const RASTER_EXTS = ['.png', '.gif', '.webp', '.jpg', '.svg'] as const;
 
 export function cardBackgroundUrlCandidates(): string[] {
   return RASTER_EXTS.map((ext) => cardArtAssetUrl(`CardBasicLight${ext}`));
