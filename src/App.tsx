@@ -116,6 +116,7 @@ import { computeHandFanSqueeze, estimateHandFanWidthPx, playerHandFanMotion, typ
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
 import { DisplayCardArtModeOverride, mergeCardArtWithRoom, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
+import { panicDiceSeatAllowed } from './services/panicDiceSeat';
 import { warmCardArtImages } from './cardArt/preload';
 import { shippedPlayingCardBackRasterUrl } from './cardArt/shippedRasterFallbacks';
 import { CardCreator } from './cardCreator/CardCreator';
@@ -2556,7 +2557,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const cardSelectionTurnRef = useRef<number | null>(null);
   const myUid = serviceRef.current.getUid();
   const [famineBannerPhase, setFamineBannerPhase] = useState<FamineBannerPhase>('idle');
-  const [diceTestRoll, setDiceTestRoll] = useState<DiceTestRollPayload | null>(null);
+  const [hudDiceRoll, setHudDiceRoll] = useState<DiceTestRollPayload | null>(null);
+  const [panicDiceConfirmOpen, setPanicDiceConfirmOpen] = useState(false);
   const handRowRef = useRef<HTMLDivElement>(null);
   const [handRowW, setHandRowW] = useState(400);
   const [handFanLayout, setHandFanLayout] = useState<HandFanBreakpoint>('compact');
@@ -2758,7 +2760,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
   useEffect(() => {
     serviceRef.current.onDiceTestRollEvent((payload) => {
-      setDiceTestRoll(payload);
+      setHudDiceRoll(payload);
     });
     return () => {
       serviceRef.current.onDiceTestRollEvent(null);
@@ -3032,14 +3034,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     }
   };
 
-  const handleTestDiceRoll = async () => {
-    try {
-      await serviceRef.current.requestDiceTestRoll();
-    } catch (err: any) {
-      setError(err?.message || 'Failed to roll test dice');
-    }
-  };
-
   if (!roomId) {
     return (
       <div className="relative h-full flex items-center justify-center p-4">
@@ -3214,6 +3208,34 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
+
+  const panicDiceHandHud =
+    room.settings.enablePanicDice &&
+    panicDiceSeatAllowed(room, myUid) &&
+    !me.panicDiceUsed &&
+    (room.status === 'playing' || room.status === 'powering');
+
+  const panicDiceResultsHud =
+    room.status === 'results' &&
+    Boolean(room.lastOutcome) &&
+    room.settings.enablePanicDice &&
+    panicDiceSeatAllowed(room, myUid) &&
+    !me.panicDiceUsed &&
+    !me.readyForNextRound &&
+    !showResolutionSequence;
+
+  const confirmPanicDiceUse = useCallback(async () => {
+    setLoading(true);
+    try {
+      await serviceRef.current.usePanicDice();
+      setPanicDiceConfirmOpen(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Panic dice failed');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const myPendingDecision = room.pendingPowerDecisions?.[myUid] || null;
   const opponentPendingDecision = opponentUid ? room.pendingPowerDecisions?.[opponentUid] || null : null;
   const powerShowdown = room.status === 'powering' && room.awaitingPowerShowdown === true;
@@ -3288,20 +3310,47 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           </div>
         </>
       )}
-      <div className="absolute left-1/2 top-3 z-[242] -translate-x-1/2">
-        <button
-          type="button"
-          onClick={handleTestDiceRoll}
-          className="rounded-full border border-cyan-300/50 bg-cyan-500/15 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.24)] transition hover:bg-cyan-500/30"
-        >
-          Roll pip d6 (test)
-        </button>
-      </div>
       <DesperationVignette
         tier={me.desperationTier}
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
-      <DiceBoxTestOverlay roll={diceTestRoll} />
+      <DiceBoxTestOverlay roll={hudDiceRoll} />
+
+      {panicDiceConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[460] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm panic dice"
+        >
+          <div className="max-w-md rounded-2xl border border-amber-900/50 bg-slate-950 p-6 shadow-[0_0_60px_rgba(0,0,0,0.55)]">
+            <p className="text-[11px] font-black uppercase tracking-widest text-amber-400">Panic dice</p>
+            <p className="mt-3 text-sm font-semibold leading-snug text-slate-100">
+              Are you sure you want to use your panic dice? They can only be used once. The result of your panic dice
+              roll will chip away at your opponent&apos;s committed clash rank and the round winner is rechecked from
+              the frozen tableau (powers do not fire again).
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => setPanicDiceConfirmOpen(false)}
+                className="rounded-xl border border-slate-600 px-5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void confirmPanicDiceUse()}
+                className="rounded-xl border border-amber-500/70 bg-amber-600/90 px-5 py-2 text-[10px] font-black uppercase tracking-widest text-amber-950 hover:bg-amber-500 disabled:opacity-40"
+              >
+                Yes, roll
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!powerShowdown && room.status === 'powering' && myPendingDecision && myPendingDecision.selectedOption === null && (
         <PowerDecisionModal
@@ -3990,6 +4039,27 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           </div>
                         </motion.div>
                       )}
+                      {room.lastOutcome?.panicFx && room.lastOutcome.panicFx.opponentUid === uid && (
+                        <motion.div
+                          className="pointer-events-none absolute top-12 left-1/2 z-[41] flex w-[10rem] -translate-x-1/2 justify-center sm:top-[3.35rem] sm:w-[11rem]"
+                          initial={{ y: -4, opacity: 1 }}
+                          animate={{ y: [0, -9, 0], opacity: 1 }}
+                          transition={{
+                            y: { repeat: Infinity, duration: 1.08, ease: 'easeInOut' },
+                          }}
+                        >
+                          <div className="origin-top scale-[0.6] drop-shadow-[0_12px_28px_rgba(0,0,0,0.65)] sm:scale-[0.66]">
+                            <CardVisual
+                              card={room.lastOutcome.panicFx!.panicCardId}
+                              panicBladeFace
+                              revealed
+                              noAnimate
+                              presentation="none"
+                              small
+                            />
+                          </div>
+                        </motion.div>
+                      )}
                       <CardVisual
                         card={room.lastOutcome!.cardsPlayed[uid]}
                         revealed
@@ -4008,6 +4078,24 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            </div>
                          )}
                       </div>
+                      {uid === myUid && panicDiceResultsHud && (
+                        <button
+                          type="button"
+                          onClick={() => setPanicDiceConfirmOpen(true)}
+                          title="Panic dice can be used to influence a round outcome after the round has been resolved."
+                          className="group mt-3 outline-none transition-transform hover:scale-[1.05] active:scale-95"
+                        >
+                          <img
+                            src={cardArtAssetUrl('PanicDice.png')}
+                            alt=""
+                            draggable={false}
+                            className="relative h-[3.5rem] w-auto max-w-[5rem] object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_18px_rgba(251,191,36,0.45)]"
+                          />
+                          <span className="pointer-events-none block text-center text-[7px] font-black uppercase tracking-widest text-amber-400/95">
+                            Use dice
+                          </span>
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -4240,6 +4328,26 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               })}
             </div>
           </div>
+          {panicDiceHandHud && (
+            <div className="relative z-[13] flex shrink-0 flex-col items-center justify-end pb-6 sm:w-[5.5rem] sm:pb-3">
+              <button
+                type="button"
+                onClick={() => setPanicDiceConfirmOpen(true)}
+                title="Panic dice can be used to influence a round outcome after the round has been resolved."
+                className="group outline-none transition-transform hover:scale-[1.05] active:scale-95"
+              >
+                <img
+                  src={cardArtAssetUrl('PanicDice.png')}
+                  alt=""
+                  draggable={false}
+                  className="relative h-[4.75rem] w-auto max-w-[6rem] object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.5)]"
+                />
+              </button>
+              <span className="pointer-events-none mt-1 hidden text-[7px] font-black uppercase tracking-wider text-amber-200/85 sm:block">
+                Panic
+              </span>
+            </div>
+          )}
         </div>
         </div>
 

@@ -69,7 +69,7 @@ import {
   parseCard,
   tooltipPrintedStrengthLabel,
 } from '../services/gameService';
-import { MAJOR_ARCANA, PlayerRole } from '../types';
+import { MAJOR_ARCANA, PlayerRole, VALUES } from '../types';
 import {
   PC_BACK_MD,
   PC_BACK_SM,
@@ -378,6 +378,8 @@ export interface CardVisualProps {
    * @default true
    */
   motionLayout?: boolean;
+  /** Panic dice ephemeral blade — CardRed stock + red suit marks. */
+  panicBladeFace?: boolean;
 }
 
 export const CardVisual: React.FC<CardVisualProps> = (props) => {
@@ -402,6 +404,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     resolutionMorph = null,
     resolutionWiggleTick = 0,
     motionLayout = true,
+    panicBladeFace = false,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -423,8 +426,15 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const hasCustomRasterFace = Boolean(
     cardArtOverride?.customDataUrl || (cardArtOverride?.customImageFile && cardArtOverride.customImageFile.trim()),
   );
+  const panicVec =
+    panicBladeFace &&
+    revealed &&
+    !isJoker &&
+    suit === 'Swords' &&
+    (VALUES as readonly string[]).includes(value);
   const useAssembledFace = Boolean(
-    cardArt &&
+    !panicVec &&
+      cardArt &&
       cardArt.mode === 'raster' &&
       revealed &&
       resolutionMorph !== 'transform' &&
@@ -453,8 +463,9 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const isGrovelsSuit = suit === 'Grovels';
   const isSwordsSuit = suit === 'Swords';
   const faceValueText = isCrownsSuit ? displaySuitCardValue(suit, value) : value;
-  const vectorSuitGlyphClass =
-    isMoonSuit || isCrownsSuit || isGrovelsSuit || isSwordsSuit
+  const vectorSuitGlyphClass = panicVec
+    ? 'text-red-700'
+    : isMoonSuit || isCrownsSuit || isGrovelsSuit || isSwordsSuit
       ? (SUIT_COLORS[suit] ?? 'text-red-400')
       : vectorWhiteStockSuitClass(suit);
   const wrathPen = isSwordsSuit && revealed && card ? getWrathMagnitude(card) : 0;
@@ -482,6 +493,15 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       ? {
           filter:
             'drop-shadow(0 0 0.8px rgba(250, 204, 21, 0.98)) drop-shadow(0 0 5px rgba(250, 204, 21, 0.9)) drop-shadow(0 0 12px rgba(250, 204, 21, 0.55))',
+        }
+      : undefined;
+  const panicBackdropStyle: React.CSSProperties | undefined =
+    panicVec && !useAssembledFace
+      ? {
+          backgroundImage: `url(${cardArtAssetUrl('CardRed.png')})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
         }
       : undefined;
 
@@ -594,6 +614,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         {...entrance}
         style={{
           ...(assembledAlphaOutlineStyle ?? {}),
+          ...(panicBackdropStyle ?? {}),
           transformPerspective:
             presentation === 'deckPull' || resolutionMorph === 'transform'
               ? 900
@@ -607,8 +628,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           ${faceWrap} ${useAssembledFace ? '' : 'shadow-xl'} flex flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-lg
           transition-[box-shadow] outline-none will-change-transform
           ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
-          ${useAssembledFace ? 'bg-transparent' : isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
-          ${useAssembledFace ? (selected ? 'shadow-lg' : '') : selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
+          ${useAssembledFace ? 'bg-transparent' : panicVec ? 'bg-transparent' : isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
+          ${useAssembledFace ? (selected ? 'shadow-lg' : '') : selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : panicVec ? 'border-red-900/90 shadow-[0_14px_40px_rgba(0,0,0,0.55)]' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
           ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
           ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
           ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}

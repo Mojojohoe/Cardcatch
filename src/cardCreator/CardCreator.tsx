@@ -48,7 +48,15 @@ for (const s of ['Hearts', 'Diamonds', 'Clubs', 'Spades', 'Stars', 'Moons', 'Fro
   }
 }
 
-const SPECIAL_PLAYING = ['Crowns-E', 'Grovels-1', ...WRATH_MINION_BY_ROUND.map((r) => r.id)];
+const PANIC_SWORD_CARDS = (['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q'] as const).map(
+  (r) => `Swords-${r}`,
+);
+const SPECIAL_PLAYING = [
+  'Crowns-E',
+  'Grovels-1',
+  ...WRATH_MINION_BY_ROUND.map((r) => r.id),
+  ...PANIC_SWORD_CARDS,
+];
 
 const JOKER_CARDS = ['Joker-1', 'Joker-2'] as const;
 

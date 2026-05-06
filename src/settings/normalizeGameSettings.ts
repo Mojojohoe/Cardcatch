@@ -58,6 +58,10 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   curseCardsInPowerDeck: false,
   enablePokerChips: true,
   enablePanicDice: true,
+  panicDicePredatorEnabled: true,
+  panicDicePreyEnabled: true,
+  panicDicePreydatorHostEnabled: true,
+  panicDicePreydatorGuestEnabled: true,
   enableDesperation: true,
   desperationStarterTierEnabled: true,
   preydatorDesperationSeats: 'guest',
@@ -113,6 +117,13 @@ export function normalizeGameSettings(raw: Partial<GameSettings> | GameSettings)
     curseCardsInPowerDeck: Boolean(raw.curseCardsInPowerDeck),
     enablePokerChips: raw.enablePokerChips !== false,
     enablePanicDice: raw.enablePanicDice !== false,
+    panicDicePredatorEnabled:
+      raw.panicDicePredatorEnabled !== undefined ? raw.panicDicePredatorEnabled !== false : true,
+    panicDicePreyEnabled: raw.panicDicePreyEnabled !== undefined ? raw.panicDicePreyEnabled !== false : true,
+    panicDicePreydatorHostEnabled:
+      raw.panicDicePreydatorHostEnabled !== undefined ? raw.panicDicePreydatorHostEnabled !== false : true,
+    panicDicePreydatorGuestEnabled:
+      raw.panicDicePreydatorGuestEnabled !== undefined ? raw.panicDicePreydatorGuestEnabled !== false : true,
     enableDesperation: raw.enableDesperation !== undefined ? Boolean(raw.enableDesperation) : DEFAULT_GAME_SETTINGS.enableDesperation,
     desperationStarterTierEnabled:
       raw.desperationStarterTierEnabled !== undefined

@@ -47,6 +47,7 @@ import {
   loadPersistedLobbySettings,
   persistLobbyDefaults,
 } from '../settings/normalizeGameSettings';
+import { panicDiceSeatAllowed } from './panicDiceSeat';
 
 export const createDeck = (disableJokers: boolean): string[] => {
   const deck: string[] = [];
@@ -144,7 +145,12 @@ export const getCardValue = (cardStr: string, lustHeartRules = false, greedTax =
   if (cardStr.startsWith('Joker')) return 20; // Beat Ace (14)
   const [suit, value] = cardStr.split('-');
   if (suit === 'Grovels') return 0;
-  if (suit === 'Swords') return 0;
+  /** Wrath agents use letter values (not in VALUES); panic blades use Values ranks only. */
+  if (suit === 'Swords') {
+    if ((VALUES as readonly string[]).includes(value))
+      return standardPlayingCardRankValue(suit, value, greedTax);
+    return 0;
+  }
   if (suit === 'Crowns' && value === 'E') return 17;
 
   let effSuit = suit;
@@ -200,7 +206,11 @@ export function tooltipPrintedStrengthLabel(cardStr: string): string {
   const p = parseCard(cardStr);
   if (p.isJoker) return 'N/A';
   if (p.suit === 'Grovels') return '0';
-  if (p.suit === 'Swords') return 'N/A';
+  if (p.suit === 'Swords') {
+    if ((VALUES as readonly string[]).includes(p.value))
+      return String(standardPlayingCardRankValue(p.suit, p.value, false));
+    return 'N/A';
+  }
   if (p.suit === 'Crowns') return displaySuitCardValue(p.suit, p.value);
   return String(standardPlayingCardRankValue(p.suit, p.value, false));
 }
@@ -210,7 +220,10 @@ export function plainCardLabelForLustEmpower(cardStr: string): string {
   const p = parseCard(cardStr);
   if (p.isJoker) return 'Joker';
   if (p.suit === 'Grovels') return 'Grovel';
-  if (p.suit === 'Swords') return describeWrathMinionTitle(cardStr);
+  if (p.suit === 'Swords') {
+    if ((VALUES as readonly string[]).includes(p.value)) return `${p.value} of Swords`;
+    return describeWrathMinionTitle(cardStr);
+  }
   if (p.suit === 'Crowns') return `${displaySuitCardValue(p.suit, p.value)} of Crowns`;
   return `${p.value} of ${p.suit}`;
 }
@@ -480,7 +493,13 @@ const RANK_WORDS: Record<string, string> = {
 export const describeCardPlain = (cardStr: string): string => {
   const p = parseCard(cardStr);
   if (p.isJoker) return 'a Joker';
-  if (p.suit === 'Swords') return `the ${describeWrathMinionTitle(cardStr)}`;
+  if (p.suit === 'Swords') {
+    if ((VALUES as readonly string[]).includes(p.value)) {
+      const rk = RANK_WORDS[p.value] ?? p.value;
+      return `the ${rk} of Swords`;
+    }
+    return `the ${describeWrathMinionTitle(cardStr)}`;
+  }
   if (p.suit === 'Grovels') return 'Grovel';
   if (p.suit === 'Crowns') return `the ${displaySuitCardValue(p.suit, p.value)} of Crowns`;
   if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) return 'God of Hearts';
@@ -500,7 +519,10 @@ export function compactCardLabel(cardStr: string): string {
   if (p.suit === 'Grovels') return 'Grovel';
   if (p.suit === 'Crowns') return `${displaySuitCardValue(p.suit, p.value)} of Crowns`;
   if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) return 'God of Hearts';
-  if (p.suit === 'Swords') return describeWrathMinionTitle(cardStr);
+  if (p.suit === 'Swords') {
+    if ((VALUES as readonly string[]).includes(p.value)) return `${p.value} of Swords`;
+    return describeWrathMinionTitle(cardStr);
+  }
   const rk = RANK_WORDS[p.value] ?? p.value;
   return `${rk} of ${p.suit}`;
 }
@@ -642,6 +664,262 @@ export function evaluateTrickClash(
   return 'draw';
 }
 
+/** Map 2d6 sum (2–12) onto an ephemeral Suit-Swords blade for panic rerolls. */
+export function panicDiceTotalToCardId(total: number): string {
+  const t = Math.min(12, Math.max(2, Math.round(total)));
+  const ranks: Record<number, string> = {
+    2: '2',
+    3: '3',
+    4: '4',
+    5: '5',
+    6: '6',
+    7: '7',
+    8: '8',
+    9: '9',
+    10: '10',
+    11: 'J',
+    12: 'Q',
+  };
+  return `Swords-${ranks[t]}`;
+}
+
+export function panicSwordStrikeStrength(cardId: string): number {
+  const p = parseCard(cardId);
+  if (!p.isJoker && p.suit === 'Swords' && (VALUES as readonly string[]).includes(p.value)) {
+    return standardPlayingCardRankValue(p.suit, p.value, false);
+  }
+  return 0;
+}
+
+export function computePanicCombatEffects(args: {
+  panicCardId: string;
+  opponentCardId: string;
+  opponentWrathPenalty: number;
+  greedTaxActive: boolean;
+}): {
+  exchanges: number;
+  panicDestroyed: boolean;
+  opponentDestroyed: boolean;
+  extraOpponentPenalty: number;
+} {
+  let panicPow = panicSwordStrikeStrength(args.panicCardId);
+  const oppPc = parseCard(args.opponentCardId);
+  if (panicPow <= 0 || args.opponentCardId === GROVEL_CARD_ID || oppPc.isJoker) {
+    return {
+      exchanges: 0,
+      panicDestroyed: true,
+      opponentDestroyed: false,
+      extraOpponentPenalty: 0,
+    };
+  }
+  const raw = getCardValue(args.opponentCardId, false, args.greedTaxActive);
+  const effStart = Math.max(0, raw - args.opponentWrathPenalty);
+  let eff = effStart;
+  let exchanges = 0;
+  while (panicPow > 0 && eff > 0) {
+    panicPow -= 1;
+    eff -= 1;
+    exchanges += 1;
+  }
+  const opponentDestroyed = eff <= 0;
+  const panicDestroyed = panicPow <= 0;
+  const extraOpponentPenalty = Math.max(0, effStart - eff);
+  return { exchanges, panicDestroyed, opponentDestroyed, extraOpponentPenalty };
+}
+
+/** Replay trick winner using frozen outcome cards (+ Justice summons) with appended clash penalties — host is always `calculateOutcome`'s historical p1. */
+export function resolveFrozenTrickWinnerForPanic(params: {
+  roomData: Pick<RoomData, 'settings' | 'activeCurses'>;
+  hostUid: string;
+  guestUid: string;
+  frozen: Pick<NonNullable<RoomData['lastOutcome']>, 'cardsPlayed' | 'summonedCards' | 'targetSuit' | 'wrathFx'>;
+  extraClashPenaltyByUid: Record<string, number>;
+}): string | 'draw' {
+  const { hostUid: p1Uid, guestUid: p2Uid, frozen } = params;
+  const curseEnabled = params.roomData.settings.enableCurseCards !== false;
+  const greedTaxActive = curseEnabled && greedCurseActive(params.roomData.activeCurses ?? []);
+  const greedJointTrump = greedTaxActive && frozen.targetSuit === 'Diamonds';
+
+  const c1 = frozen.cardsPlayed[p1Uid];
+  const c2 = frozen.cardsPlayed[p2Uid];
+  const lh = false;
+
+  const wrathTar = frozen.wrathFx?.targetUid ?? null;
+  const wrathMag =
+    wrathTar && frozen.wrathFx?.minionCard ? getWrathMagnitude(frozen.wrathFx.minionCard) : 0;
+  const penFor = (uid: string, card: string): number => {
+    let pen = wrathTar === uid && wrathMag && !parseCard(card).isJoker && card !== GROVEL_CARD_ID ? wrathMag : 0;
+    pen += params.extraClashPenaltyByUid[uid] ?? 0;
+    return pen;
+  };
+
+  const wp1 = penFor(p1Uid, c1);
+  const wp2 = penFor(p2Uid, c2);
+
+  const res = evaluateTrickClash(
+    c1,
+    c2,
+    frozen.targetSuit,
+    lh,
+    greedTaxActive,
+    greedJointTrump,
+    wp1,
+    wp2,
+    [lh, lh],
+  );
+
+  const s1 = frozen.summonedCards?.[p1Uid];
+  const s2 = frozen.summonedCards?.[p2Uid];
+
+  if (s1 && s2) {
+    const r1 = evaluateTrickClash(
+      s1,
+      s2,
+      frozen.targetSuit,
+      lh,
+      greedTaxActive,
+      greedJointTrump,
+      penFor(p1Uid, s1),
+      penFor(p2Uid, s2),
+      [lh, lh],
+    );
+    if (res === 'p1' || r1 === 'p1') return p1Uid;
+    if (res === 'p2' || r1 === 'p2') return p2Uid;
+    return 'draw';
+  }
+  if (s1) {
+    const rS = evaluateTrickClash(
+      s1,
+      c2,
+      frozen.targetSuit,
+      lh,
+      greedTaxActive,
+      greedJointTrump,
+      penFor(p1Uid, s1),
+      penFor(p2Uid, c2),
+      [lh, lh],
+    );
+    if (res === 'p1' || rS === 'p1') return p1Uid;
+    if (res === 'p2' && rS === 'p2') return p2Uid;
+    return 'draw';
+  }
+  if (s2) {
+    const rS = evaluateTrickClash(
+      s2,
+      c1,
+      frozen.targetSuit,
+      lh,
+      greedTaxActive,
+      greedJointTrump,
+      penFor(p2Uid, s2),
+      penFor(p1Uid, c1),
+      [lh, lh],
+    );
+    if (res === 'p2' || rS === 'p2') return p2Uid;
+    if (res === 'p1' && rS === 'p1') return p1Uid;
+    return 'draw';
+  }
+
+  return res === 'p1' ? p1Uid : res === 'p2' ? p2Uid : 'draw';
+}
+
+type OutcomeGain = NonNullable<RoomData['lastOutcome']>['gains'][string][number];
+
+function cloneOutcomeGains(
+  gains: NonNullable<RoomData['lastOutcome']>['gains'],
+): NonNullable<RoomData['lastOutcome']>['gains'] {
+  const keys = Object.keys(gains || {});
+  const out: Record<string, OutcomeGain[]> = {};
+  for (const k of keys) {
+    out[k] = [...(gains[k] || [])];
+  }
+  return out;
+}
+
+/** Re-stitch draw-based acquisitions after clash-only panic rerolls (standard ladder + famine penalty). */
+export function rebuildGainsAfterPanicWinnerChange(
+  prevOutcome: NonNullable<RoomData['lastOutcome']>,
+  nextWinner: string | 'draw',
+  roomSnap: Pick<RoomData, 'hostUid' | 'famineActive'>,
+): NonNullable<RoomData['lastOutcome']>['gains'] {
+  const gains = cloneOutcomeGains(prevOutcome.gains);
+  const uids = Object.keys(gains);
+  if (uids.length < 2) return gains;
+
+  const p1Uid = roomSnap.hostUid;
+  const p2Uid = uids.find((id) => id !== p1Uid)!;
+
+  for (const uid of [p1Uid, p2Uid]) {
+    gains[uid] = gains[uid].filter((g) => !(g.type === 'draw' && g.id === 'standard'));
+  }
+  /** Famine loser penalty stacks as one “card loss” marker on the prior loser snapshot; strip and optionally re-append. */
+  for (const uid of [p1Uid, p2Uid]) {
+    gains[uid] = gains[uid].filter((g) => !(g.type === 'draw' && typeof g.id === 'number' && g.id < 0));
+  }
+
+  if (nextWinner === 'draw' || !nextWinner) return gains;
+
+  const famineRule = !!roomSnap.famineActive;
+  const newLoser = nextWinner === p1Uid ? p2Uid : p1Uid;
+
+  if (famineRule) {
+    gains[newLoser].push({ type: 'draw', id: -1 });
+  } else {
+    gains[nextWinner].push({ type: 'draw', id: 'standard' });
+  }
+
+  const chariotPatch = (
+    loserUid: string | null,
+    winnerWas: typeof nextWinner | 'draw',
+  ): { uid: string; cardId: string } | null => {
+    if (winnerWas === 'draw' || !loserUid) return null;
+    const maj = prevOutcome.powerCardIdsPlayed[loserUid];
+    if (maj !== 7 || prevOutcome.powerCardTowerBlocked?.[loserUid]) return null;
+    const played = prevOutcome.cardsPlayed[loserUid];
+    const pc = parseCard(played);
+    if (pc.isJoker) return null;
+    const ix = (VALUES as readonly string[]).indexOf(pc.value as (typeof VALUES)[number]);
+    if (ix < 0) return null;
+    const newVal = VALUES[Math.min(ix + 1, VALUES.length - 1)];
+    return { uid: loserUid, cardId: `${pc.suit}-${newVal}` };
+  };
+
+  const magicianPatch = (
+    loserUid: string | null,
+    winnerWas: typeof nextWinner | 'draw',
+  ): string | null => {
+    if (winnerWas === 'draw' || !loserUid) return null;
+    const maj = prevOutcome.powerCardIdsPlayed[loserUid];
+    if (maj !== 2 || prevOutcome.powerCardTowerBlocked?.[loserUid]) return null;
+    return loserUid;
+  };
+
+  /** Remove salvage lines tied to whichever seat *lost* previously, then replay for the recomputed loser. */
+  const oldLoserUid =
+    prevOutcome.winnerUid === 'draw'
+      ? null
+      : prevOutcome.winnerUid === p1Uid
+        ? p2Uid
+        : p1Uid;
+  const oldChariot = chariotPatch(oldLoserUid, prevOutcome.winnerUid);
+  if (oldChariot) {
+    gains[oldChariot.uid] = gains[oldChariot.uid].filter(
+      (g) => !(g.type === 'card' && g.id === oldChariot.cardId),
+    );
+  }
+  const oldMag = magicianPatch(oldLoserUid, prevOutcome.winnerUid);
+  if (oldMag) {
+    gains[oldMag] = gains[oldMag].filter((g) => !(g.type === 'draw' && g.id === 1));
+  }
+
+  const nc = chariotPatch(newLoser, nextWinner);
+  if (nc) gains[nc.uid].push({ type: 'card', id: nc.cardId });
+  const nm = magicianPatch(newLoser, nextWinner);
+  if (nm) gains[nm].push({ type: 'draw', id: 1 });
+
+  return gains;
+}
+
 /**
  * One-line reason the winning card beats the losing card (winner card first), aligned with evaluateTrickClash.
  */
@@ -726,7 +1004,7 @@ type GameEvent =
   | { type: 'SUBMIT_POWER_DECISION', uid: string, option: string, wheelOffset?: number; priestessSwapToCard?: string | null }
   | { type: 'SET_LOBBY_READY', uid: string, ready: boolean }
   | { type: 'SEND_CHAT', uid: string, text: string }
-  | { type: 'ROLL_DICE_TEST_REQUEST', uid: string }
+  | { type: 'USE_PANIC_DICE', uid: string }
   | {
       type: 'ROLL_DICE_TEST_BROADCAST',
       uid: string,
@@ -938,7 +1216,8 @@ export class GameService {
           desperationTier: 0,
           desperationResult: null,
           desperationSpinning: false,
-          desperationOffset: 0
+          desperationOffset: 0,
+          panicDiceUsed: false,
         }
       },
       currentTurn: 1,
@@ -1114,9 +1393,9 @@ export class GameService {
         if (remoteUid && event.uid === remoteUid) {
           this.handleChatMessage(remoteUid, event.text);
         }
-      } else if (event.type === 'ROLL_DICE_TEST_REQUEST') {
+      } else if (event.type === 'USE_PANIC_DICE') {
         if (remoteUid && event.uid === remoteUid) {
-          this.emitDiceTestRoll(remoteUid);
+          this.handlePanicDiceUse(remoteUid);
         }
       }
     } else {
@@ -1203,7 +1482,8 @@ export class GameService {
           desperationTier: 0,
           desperationResult: null,
           desperationSpinning: false,
-          desperationOffset: 0
+          desperationOffset: 0,
+          panicDiceUsed: false,
         }
       },
       updatedAt: Date.now()
@@ -1303,14 +1583,16 @@ export class GameService {
           role: settings.hostRole === 'Preydator' ? 'Preydator' : hostRole,
           hand: hostHand,
           desperationTier:
-            settings.enableDesperation && (settings.hostRole !== 'Predator') ? desperationOpenTier : 0
+            settings.enableDesperation && (settings.hostRole !== 'Predator') ? desperationOpenTier : 0,
+          panicDiceUsed: false,
         },
         [guestUid]: {
           ...this.state.players[guestUid],
           role: settings.hostRole === 'Preydator' ? 'Preydator' : guestRole,
           hand: guestHand,
           desperationTier:
-            settings.enableDesperation && guestRole !== 'Predator' ? desperationOpenTier : 0
+            settings.enableDesperation && guestRole !== 'Predator' ? desperationOpenTier : 0,
+          panicDiceUsed: false,
         }
       },
       status: settings.disablePowerCards ? 'playing' : 'drafting',
@@ -1508,12 +1790,9 @@ export class GameService {
     this.onDiceTestRoll = handler;
   }
 
-  async requestDiceTestRoll() {
-    if (this.isHost) {
-      this.emitDiceTestRoll(this.myUid);
-    } else {
-      this.sendEvent({ type: 'ROLL_DICE_TEST_REQUEST', uid: this.myUid });
-    }
+  async usePanicDice() {
+    if (this.isHost) this.handlePanicDiceUse(this.myUid);
+    else this.sendEvent({ type: 'USE_PANIC_DICE', uid: this.myUid });
   }
 
   async proceedToNextRound() {
@@ -2204,17 +2483,8 @@ export class GameService {
     }
   }
 
-  private emitDiceTestRoll(uid: string) {
-    /** Single pip d6 test overlay (`dpip` preset in @3d-dice/dice-box-threejs). */
-    const d1 = 1 + Math.floor(Math.random() * 6);
-    const payload: DiceTestRollPayload = {
-      uid,
-      rollId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      notation: '1dpip',
-      dice: [d1],
-      total: d1,
-      startedAt: Date.now(),
-    };
+  /** HUD dice overlay (@3d-dice/dice-box-threejs pip dice + forced totals). */
+  private broadcastHudDiceRoll(payload: DiceTestRollPayload) {
     this.onDiceTestRoll?.(payload);
     this.sendEvent({
       type: 'ROLL_DICE_TEST_BROADCAST',
@@ -2225,6 +2495,144 @@ export class GameService {
       total: payload.total,
       startedAt: payload.startedAt,
     });
+  }
+
+  private handlePanicDiceUse(uid: string) {
+    if (!this.state || !this.isHost || this.state.status !== 'results' || !this.state.lastOutcome) return;
+
+    const room = this.state;
+    const me = room.players[uid];
+    if (!me || me.panicDiceUsed || me.readyForNextRound) return;
+    if (!room.settings.enablePanicDice || !panicDiceSeatAllowed(room, uid)) return;
+
+    const oppUid = Object.keys(room.players).find((id) => id !== uid);
+    if (!oppUid) return;
+
+    const prev = room.lastOutcome;
+    const oppCard = prev.cardsPlayed[oppUid];
+    const hostUid = room.hostUid;
+    const guestUid = Object.keys(room.players).find((id) => id !== hostUid)!;
+
+    const d1 = 1 + Math.floor(Math.random() * 6);
+    const d2 = 1 + Math.floor(Math.random() * 6);
+    const total = d1 + d2;
+    const panicCard = panicDiceTotalToCardId(total);
+    const rollId = `panic-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    const greedTaxActive =
+      room.settings.enableCurseCards !== false && greedCurseActive(room.activeCurses ?? []);
+
+    let wrathPenOpp = 0;
+    if (prev.wrathFx?.targetUid === oppUid && prev.wrathFx.minionCard) {
+      const pc = parseCard(oppCard);
+      if (!pc.isJoker && oppCard !== GROVEL_CARD_ID) {
+        wrathPenOpp = getWrathMagnitude(prev.wrathFx.minionCard);
+      }
+    }
+
+    const combat = computePanicCombatEffects({
+      panicCardId: panicCard,
+      opponentCardId: oppCard,
+      opponentWrathPenalty: wrathPenOpp,
+      greedTaxActive,
+    });
+
+    const extras: Record<string, number> = { [hostUid]: 0, [guestUid]: 0 };
+    extras[oppUid] = combat.extraOpponentPenalty;
+
+    const nw = resolveFrozenTrickWinnerForPanic({
+      roomData: room,
+      hostUid,
+      guestUid,
+      frozen: {
+        cardsPlayed: prev.cardsPlayed,
+        summonedCards: prev.summonedCards,
+        targetSuit: prev.targetSuit,
+        wrathFx: prev.wrathFx,
+      },
+      extraClashPenaltyByUid: extras,
+    });
+
+    const clashDestroyed: Record<string, boolean> = { ...(prev.clashDestroyedByPenalty ?? {}) };
+    if (!parseCard(oppCard).isJoker && oppCard !== GROVEL_CARD_ID) {
+      clashDestroyed[oppUid] = combat.opponentDestroyed;
+    }
+
+    const lh = false;
+    let finalMessage: string;
+    if (nw === 'draw') {
+      finalMessage = 'Panic dice — the field deadlocks again.';
+    } else {
+      const winnerCard = prev.cardsPlayed[nw];
+      const loserUid = nw === hostUid ? guestUid : hostUid;
+      const loserCard = prev.cardsPlayed[loserUid];
+      finalMessage = `${room.players[nw].name} wins — ${explainPlainClash(
+        winnerCard,
+        loserCard,
+        prev.targetSuit,
+        lh,
+        greedTaxActive,
+        greedTaxActive && prev.targetSuit === 'Diamonds',
+        [lh, lh],
+      )}`;
+    }
+
+    const gains = rebuildGainsAfterPanicWinnerChange(prev, nw, {
+      hostUid,
+      famineActive: room.famineActive,
+    });
+
+    const panicLine: ResolutionEvent = {
+      type: 'POWER_TRIGGER',
+      message: `${room.players[uid].name} rolls panic dice (${d1}+${d2}=${total}) — ${compactCardLabel(panicCard)} clashes with ${room.players[oppUid].name}'s play (${combat.exchanges} exchanges).`,
+    };
+
+    const nextOutcome: NonNullable<RoomData['lastOutcome']> = {
+      ...prev,
+      winnerUid: nw,
+      message: finalMessage,
+      gains,
+      clashDestroyedByPenalty: clashDestroyed,
+      events: [...prev.events, panicLine],
+      panicFx: {
+        attackerUid: uid,
+        opponentUid: oppUid,
+        panicCardId: panicCard,
+        dice: [d1, d2],
+        diceRollId: rollId,
+        exchanges: combat.exchanges,
+        panicDestroyed: combat.panicDestroyed,
+        opponentDestroyed: combat.opponentDestroyed,
+        extraOpponentPenalty: combat.extraOpponentPenalty,
+      },
+    };
+
+    const updatedPlayers = { ...room.players };
+    for (const u of [hostUid, guestUid]) {
+      const p = updatedPlayers[u];
+      updatedPlayers[u] = {
+        ...p,
+        readyForNextRound: false,
+        panicDiceUsed: u === uid ? true : p.panicDiceUsed,
+      };
+    }
+
+    this.broadcastHudDiceRoll({
+      uid,
+      rollId,
+      notation: '2dpip',
+      dice: [d1, d2],
+      total,
+      startedAt: Date.now(),
+    });
+
+    this.state = {
+      ...room,
+      players: updatedPlayers,
+      lastOutcome: nextOutcome,
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
   }
 
   private calculateOutcome(roomData: RoomData, players: Record<string, PlayerData>) {

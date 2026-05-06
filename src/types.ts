@@ -87,8 +87,16 @@ export interface GameSettings {
   curseCardsInPowerDeck: boolean;
   /** Optional future module — no gameplay effect yet. */
   enablePokerChips: boolean;
-  /** Optional future module — no gameplay effect yet. */
+  /** Rule module — once-per-match panic reroll dice on the results sheet. */
   enablePanicDice: boolean;
+  /** When not Preydator: predator-role seat may earn a panic dice. */
+  panicDicePredatorEnabled: boolean;
+  /** When not Preydator: prey-role seat may earn a panic dice. */
+  panicDicePreyEnabled: boolean;
+  /** Preydator lobbies — host-seat panic dice. */
+  panicDicePreydatorHostEnabled: boolean;
+  /** Preydator lobbies — guest-seat panic dice. */
+  panicDicePreydatorGuestEnabled: boolean;
   enableDesperation: boolean;
   /**
    * When desperation is on: if true, prey seats begin **at desperation tier 0** from deal (on the ladder immediately).
@@ -148,6 +156,8 @@ export interface PlayerData {
     cards: string[];
     powerCards: number[];
   } | null;
+  /** Spent panic dice — one use per seat per match when enabled for that seat. */
+  panicDiceUsed?: boolean;
 }
 
 export interface PendingPowerDecision {
@@ -406,6 +416,18 @@ export interface RoomData {
     };
     /** Devil pact: inject this curse next apply when no curse was active entering results. */
     devilForcedCurseId?: number;
+    /** Post-resolution panic reroll applying an ephemeral Sword to chip the opponent's clash stamina. */
+    panicFx?: {
+      attackerUid: string;
+      opponentUid: string;
+      panicCardId: string;
+      dice: [number, number];
+      diceRollId: string;
+      exchanges: number;
+      panicDestroyed: boolean;
+      opponentDestroyed: boolean;
+      extraOpponentPenalty: number;
+    };
   };
 }
 

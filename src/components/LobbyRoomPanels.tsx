@@ -350,10 +350,70 @@ export const HostLobbyPanel: React.FC<HostLobbyPanelProps> = ({
                 >
                   <Dice3 className="mb-1 h-5 w-5" />
                   <span className="text-[10px] font-black uppercase">Panic dice</span>
-                  <span className="text-[8px] font-bold opacity-80">Rule module (later)</span>
+                  <span className="text-[8px] font-bold opacity-80">One reroll / seat / match</span>
                   <span className="text-[8px] font-bold">{room.settings.enablePanicDice ? 'ON' : 'OFF'}</span>
                 </button>
               </div>
+              {room.settings.enablePanicDice && (
+                <div className="grid grid-cols-2 gap-3 rounded-xl border border-amber-900/40 bg-amber-950/20 p-3">
+                  <p className="col-span-2 text-[9px] font-black uppercase tracking-widest text-amber-400/95">
+                    {room.settings.hostRole === 'Preydator' ? 'Panic dice seats' : 'Panic dice seats'}
+                  </p>
+                  {room.settings.hostRole === 'Preydator' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onPatchSettings({
+                            panicDicePreydatorHostEnabled: !room.settings.panicDicePreydatorHostEnabled,
+                          })
+                        }
+                        className={`flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-2 transition-all ${toggleTileClass(room.settings.panicDicePreydatorHostEnabled)}`}
+                      >
+                        <span className="text-[9px] font-black uppercase">Host seat</span>
+                        <span className="text-[8px] font-bold">{room.settings.panicDicePreydatorHostEnabled ? 'On' : 'Off'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onPatchSettings({
+                            panicDicePreydatorGuestEnabled: !room.settings.panicDicePreydatorGuestEnabled,
+                          })
+                        }
+                        className={`flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-2 transition-all ${toggleTileClass(room.settings.panicDicePreydatorGuestEnabled)}`}
+                      >
+                        <span className="text-[9px] font-black uppercase">Guest seat</span>
+                        <span className="text-[8px] font-bold">{room.settings.panicDicePreydatorGuestEnabled ? 'On' : 'Off'}</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onPatchSettings({
+                            panicDicePredatorEnabled: !room.settings.panicDicePredatorEnabled,
+                          })
+                        }
+                        className={`flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-2 transition-all ${toggleTileClass(room.settings.panicDicePredatorEnabled)}`}
+                      >
+                        <span className="text-[9px] font-black uppercase">Predator seat</span>
+                        <span className="text-[8px] font-bold">{room.settings.panicDicePredatorEnabled ? 'On' : 'Off'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onPatchSettings({ panicDicePreyEnabled: !room.settings.panicDicePreyEnabled })
+                        }
+                        className={`flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-2 transition-all ${toggleTileClass(room.settings.panicDicePreyEnabled)}`}
+                      >
+                        <span className="text-[9px] font-black uppercase">Prey seat</span>
+                        <span className="text-[8px] font-bold">{room.settings.panicDicePreyEnabled ? 'On' : 'Off'}</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
