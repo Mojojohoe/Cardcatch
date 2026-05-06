@@ -428,11 +428,18 @@ export function envyAllowsPlayCardId(
 }
 
 export const parseCard = (cardStr: string): { suit: string, value: string, isJoker: boolean } => {
-  if (cardStr.startsWith('Joker')) {
+  if (cardStr == null || typeof cardStr !== 'string') {
+    return { suit: '', value: '', isJoker: false };
+  }
+  const trimmed = cardStr.trim();
+  if (!trimmed) {
+    return { suit: '', value: '', isJoker: false };
+  }
+  if (trimmed.startsWith('Joker')) {
     return { suit: 'Joker', value: 'Joker', isJoker: true };
   }
-  const [suit, value] = cardStr.split('-');
-  return { suit, value, isJoker: false };
+  const [suit, value = ''] = trimmed.split('-');
+  return { suit: suit ?? '', value, isJoker: false };
 };
 
 /** Card ids per frame for CARD_EMPOWER “upgrade” resolution animation (Strength / Emperor rank walks). */
@@ -742,6 +749,7 @@ export function resolveFrozenTrickWinnerForPanic(params: {
 
   const c1 = frozen.cardsPlayed[p1Uid];
   const c2 = frozen.cardsPlayed[p2Uid];
+  if (!c1 || !c2 || typeof c1 !== 'string' || typeof c2 !== 'string') return 'draw';
   const lh = false;
 
   const wrathTar = frozen.wrathFx?.targetUid ?? null;
@@ -1039,7 +1047,7 @@ export const DESPERATION_SLICES = DESPERATION_GAME_SLICES;
 /** Whether `uid` may start a desperation spin under current role + Preydator seat rules. */
 export function desperationSpinAllowed(room: RoomData, uid: string, player: PlayerData): boolean {
   const s = room.settings;
-  if (!s.enableDesperation) return false;
+  if (!s || !s.enableDesperation) return false;
   if (s.hostRole === 'Preydator') {
     const mode = s.preydatorDesperationSeats ?? 'guest';
     if (mode === 'both') return true;
@@ -1400,7 +1408,12 @@ export class GameService {
       }
     } else {
       if (event.type === 'STATE_UPDATE') {
-        this.state = event.state;
+        const st = event.state;
+        /** Guests must not trust raw P2P payloads — missing `settings.tiers` etc. whitescreens the lobby/results UI. */
+        this.state = {
+          ...st,
+          settings: normalizeGameSettings(st.settings ?? {}),
+        };
         this.onStateChange?.(this.state);
       } else if (event.type === 'ROLL_DICE_TEST_BROADCAST') {
         this.onDiceTestRoll?.({
@@ -2512,6 +2525,8 @@ export class GameService {
     const oppCard = prev.cardsPlayed[oppUid];
     const hostUid = room.hostUid;
     const guestUid = Object.keys(room.players).find((id) => id !== hostUid)!;
+
+    if (!oppCard || typeof oppCard !== 'string') return;
 
     const d1 = 1 + Math.floor(Math.random() * 6);
     const d2 = 1 + Math.floor(Math.random() * 6);

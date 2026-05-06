@@ -121,14 +121,16 @@ export type DesperationTierRow = { ladderIdx: number; label: string };
 
 /** When tier-0-from-deal is off, ladder index 0 is unused — hide it from tier lists while keeping `tiers[0]` in saved settings. */
 export function desperationTierRowsForDisplay(settings: Pick<GameSettings, 'tiers' | 'desperationStarterTierEnabled'>): DesperationTierRow[] {
-  return settings.tiers
+  const tiers = Array.isArray(settings.tiers) ? settings.tiers : [];
+  return tiers
     .map((label, ladderIdx) => ({ ladderIdx, label }))
     .filter((row) => settings.desperationStarterTierEnabled || row.ladderIdx > 0);
 }
 
 /** Denominator for vignette intensity when tier 0 is omitted from play. */
 export function effectiveActiveDesperationTierCount(settings: Pick<GameSettings, 'tiers' | 'desperationStarterTierEnabled'>): number {
-  const n = settings.tiers.length;
+  const tiers = Array.isArray(settings.tiers) ? settings.tiers : [];
+  const n = tiers.length;
   if (n === 0) return 0;
   return settings.desperationStarterTierEnabled ? n : Math.max(1, n - 1);
 }

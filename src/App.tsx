@@ -4068,7 +4068,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         clashGhost={Boolean(room.lastOutcome.clashDestroyedByPenalty?.[uid])}
                       />
                       <div className="flex gap-1 h-6">
-                         {room.lastOutcome?.powerCardIdsPlayed[uid] !== null && (
+                         {room.lastOutcome?.powerCardIdsPlayed?.[uid] != null && (
                            <div className="scale-75 origin-top group relative">
                              <PowerCardVisual
                                cardId={room.lastOutcome!.powerCardIdsPlayed[uid]!}

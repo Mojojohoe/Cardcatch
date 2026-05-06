@@ -6,7 +6,7 @@ export function panicDiceSeatAllowed(
   uid: string,
 ): boolean {
   const s = room.settings;
-  if (!s.enablePanicDice) return false;
+  if (!s || !s.enablePanicDice) return false;
   const player = room.players[uid];
   if (!player) return false;
 
