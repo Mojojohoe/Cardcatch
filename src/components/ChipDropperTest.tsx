@@ -3,7 +3,6 @@ import {
   ACESFilmicToneMapping,
   AmbientLight,
   Box3,
-  BoxGeometry,
   Color,
   DirectionalLight,
   Group,
@@ -311,18 +310,7 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     const fill = new DirectionalLight(0xffcaca, 0.45);
     fill.position.set(-40, 24, -22);
     scene.add(fill);
-    const guardMat = new MeshStandardMaterial({ color: 0x070707, metalness: 0, roughness: 0.96 });
-    const guardW = 2 * (CONTAINER_HALF_X + CONTAINER_WALL_THICK);
-    const guardH = CONTAINER_WALL_HEIGHT_Y;
-    const guardD = CONTAINER_WALL_THICK;
-    const frontGuard = new Mesh(new BoxGeometry(guardW, guardH, guardD), guardMat);
-    frontGuard.position.set(0, guardH / 2, CONTAINER_HALF_Z + CONTAINER_WALL_THICK / 2);
-    frontGuard.receiveShadow = true;
-    scene.add(frontGuard);
-    const backGuard = new Mesh(new BoxGeometry(guardW, guardH, guardD), guardMat.clone());
-    backGuard.position.set(0, guardH / 2, -CONTAINER_HALF_Z - CONTAINER_WALL_THICK / 2);
-    backGuard.receiveShadow = true;
-    scene.add(backGuard);
+    // Keep front/back containment in physics only (no opaque render blockers).
 
     const resize = () => {
       const w = root.clientWidth;
