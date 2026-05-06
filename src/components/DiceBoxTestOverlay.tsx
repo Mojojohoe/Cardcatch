@@ -4,7 +4,7 @@ import type { DiceTestRollPayload } from '../services/gameService';
 /**
  * Dice test overlay — uses `@3d-dice/dice-box-threejs` **only**, no custom mesh overlay.
  *
- * Important: forced outcomes (`1d6@n`) are applied internally by swapping **geometry material indices**
+ * Important: forced outcomes (`1dpip@n`) are applied internally by swapping **geometry material indices**
  * on the library dice mesh — not by rotating another model. Replacing visuals with a child GLB
  * breaks that contract (wrong face vs network result). Roll flow also calls `spawnDice` twice per
  * die (create + reposition); async shell attachment could attach twice → overlapping dice.
@@ -156,9 +156,9 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
             : ds.length === 1 && typeof ds[0] === 'number'
               ? `@${ds[0]}`
               : '';
-        const baseNotation = ds.length <= 1 ? '1d6' : '2d6';
+        const baseNotation = ds.length <= 1 ? '1dpip' : '2dpip';
         const notation =
-          ds.length <= 1 && forced ? `1d6${forced}` : ds.length >= 2 && forced ? `2d6${forced}` : baseNotation;
+          ds.length <= 1 && forced ? `1dpip${forced}` : ds.length >= 2 && forced ? `2dpip${forced}` : baseNotation;
         let animated = false;
         try {
           animated = await runDiceAnimation(diceRef.current!, notation);
@@ -213,7 +213,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       {result && overlayOpaque && (
         <div className="absolute right-4 top-16 rounded-xl border border-white/45 bg-black/25 px-4 py-3 text-white backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
           <div className="text-[11px] font-semibold uppercase tracking-widest text-emerald-50">
-            {roll?.notation ?? (result.dice.length <= 1 ? '1d6' : '2d6')}
+            {roll?.notation ?? (result.dice.length <= 1 ? '1dpip' : '2dpip')}
           </div>
           <div className="mt-1 text-lg font-semibold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
             Result: {result.total}

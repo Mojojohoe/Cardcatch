@@ -2205,12 +2205,12 @@ export class GameService {
   }
 
   private emitDiceTestRoll(uid: string) {
-    /** Single d6 dice test overlay (library mesh + swapDiceFace; no custom overlay mesh). */
+    /** Single pip d6 test overlay (`dpip` preset in @3d-dice/dice-box-threejs). */
     const d1 = 1 + Math.floor(Math.random() * 6);
     const payload: DiceTestRollPayload = {
       uid,
       rollId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      notation: '1d6',
+      notation: '1dpip',
       dice: [d1],
       total: d1,
       startedAt: Date.now(),
