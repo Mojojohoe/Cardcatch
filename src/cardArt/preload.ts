@@ -21,9 +21,8 @@ function maybeWarmImageFile(fileName?: string | null) {
     warmUrl(cardArtAssetUrl(t));
     return;
   }
-  for (const ext of ['.png', '.gif', '.webp', '.jpg', '.svg'] as const) {
-    warmUrl(cardArtAssetUrl(`${t}${ext}`));
-  }
+  // Keep preload probing strict to PNG to avoid noisy 404 bursts.
+  warmUrl(cardArtAssetUrl(`${t}.png`));
 }
 
 /**

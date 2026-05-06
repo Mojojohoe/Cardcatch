@@ -3,7 +3,7 @@ import {
   ACESFilmicToneMapping,
   AmbientLight,
   Box3,
-  Color,
+  BoxGeometry,
   DirectionalLight,
   Group,
   Mesh,
@@ -24,9 +24,13 @@ import { World, Vec3, Body, Box, Cylinder, ContactMaterial, Material } from 'can
  * Chip radius must stay **inside** {@link PLAY_HALF_X} / {@link PLAY_HALF_Z} with margin — larger coins than the
  * pen caused overlap explosions / tunneling so meshes vanished until random luck on spawn.
  */
-const COIN_R = 2.58;
-const COIN_H = 0.74;
+const COIN_R = 5.16;
+const COIN_H = 1.48;
 const DROP_Y = 52;
+const CONTAINER_HALF_X = 22;
+const CONTAINER_HALF_Z = 13;
+const CONTAINER_WALL_THICK = 0.56;
+const CONTAINER_WALL_HEIGHT_Y = 74;
 
 /** Tiny spawn spread so chips fall into one stack lane. */
 const STACK_SPAWN_JITTER = 0.18;
@@ -39,61 +43,20 @@ const REST_FLATNESS_MIN = 0.82;
 const REST_TIME_FLAT_S = 1.1;
 const REST_TIME_ANY_S = 2.6;
 const CHIP_GLTF_URL = `${import.meta.env.BASE_URL}assets/models/casino_poker_chip.glb`;
-/** The default chip texture is warm/orange-ish; rotate from this hue into seat color. */
-const SOURCE_TEXTURE_HUE = 0.08;
 
 type CoinEntry = { mesh: Object3D; body: Body };
 
-function patchMaterialHueRotate(mat: MeshStandardMaterial, hueDeltaTurns: number) {
-  if (!mat.map) return;
-  mat.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      'void main() {',
-      `
-vec3 rgb2hsv(vec3 c) {
-  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-  float d = q.x - min(q.w, q.y);
-  float e = 1.0e-10;
-  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-vec3 hsv2rgb(vec3 c) {
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-void main() {
-`,
-    );
-    shader.fragmentShader = shader.fragmentShader.replace(
-      'diffuseColor *= sampledDiffuseColor;',
-      `
-vec3 hsv = rgb2hsv(sampledDiffuseColor.rgb);
-hsv.x = fract(hsv.x + ${hueDeltaTurns.toFixed(6)});
-sampledDiffuseColor.rgb = hsv2rgb(hsv);
-diffuseColor *= sampledDiffuseColor;
-`,
-    );
-  };
-  mat.needsUpdate = true;
-}
-
 function prepareTintedChipTemplate(template: Object3D, chipColorHex: number, chipEmissiveHex: number): Object3D {
   const out = template.clone(true);
-  const hsl = { h: 0, s: 0, l: 0 };
-  new Color(chipColorHex).getHSL(hsl);
-  const hueDelta = hsl.h - SOURCE_TEXTURE_HUE;
   out.traverse((node) => {
     const mesh = node as Mesh;
     if (!mesh.isMesh) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const cloned = mats.map((m) => {
       const sm = (m as MeshStandardMaterial).clone();
-      sm.color.setHex(0xffffff);
+      // Preserve the GLB's native poker texture; only add subtle seat glow.
       sm.emissive.setHex(chipEmissiveHex);
-      sm.emissiveIntensity = 0.2;
-      patchMaterialHueRotate(sm, hueDelta);
+      sm.emissiveIntensity = 0.06;
       return sm;
     });
     mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0];
@@ -225,6 +188,9 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     const chipMat = new Material('chip');
     const feltMat = new Material('felt');
     world.addContactMaterial(new ContactMaterial(chipMat, feltMat, { friction: 0.66, restitution: 0.03 }));
+    const wallMat = new Material('chip-wall');
+    world.addContactMaterial(new ContactMaterial(chipMat, wallMat, { friction: 0.72, restitution: 0.01 }));
+    world.addContactMaterial(new ContactMaterial(feltMat, wallMat, { friction: 0.75, restitution: 0.01 }));
     physicsMatsRef.current = { chip: chipMat };
 
     const fallbackGeom = new CylinderGeometry(COIN_R, COIN_R, COIN_H, 40);
@@ -244,6 +210,21 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     ground.position.set(0, -groundHalf.y, 0);
     world.addBody(ground);
     groundBodyRef.current = ground;
+
+    const wy = CONTAINER_WALL_HEIGHT_Y / 2;
+    const hx = CONTAINER_WALL_THICK / 2;
+    const hz = CONTAINER_WALL_THICK / 2;
+    const zExtent = CONTAINER_HALF_Z + CONTAINER_WALL_THICK;
+    const xExtent = CONTAINER_HALF_X + CONTAINER_WALL_THICK;
+    const addWall = (half: Vec3, pos: Vec3) => {
+      const wall = new Body({ mass: 0, shape: new Box(half), material: wallMat });
+      wall.position.copy(pos);
+      world.addBody(wall);
+    };
+    addWall(new Vec3(hx, wy, zExtent), new Vec3(CONTAINER_HALF_X + hx, wy, 0));
+    addWall(new Vec3(hx, wy, zExtent), new Vec3(-CONTAINER_HALF_X - hx, wy, 0));
+    addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, CONTAINER_HALF_Z + hz));
+    addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, -CONTAINER_HALF_Z - hz));
 
     let mounted = true;
     const loader = new GLTFLoader();
@@ -289,6 +270,18 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     const fill = new DirectionalLight(0xffcaca, 0.45);
     fill.position.set(-40, 24, -22);
     scene.add(fill);
+    const guardMat = new MeshStandardMaterial({ color: 0x070707, metalness: 0, roughness: 0.96 });
+    const guardW = 2 * (CONTAINER_HALF_X + CONTAINER_WALL_THICK);
+    const guardH = CONTAINER_WALL_HEIGHT_Y;
+    const guardD = CONTAINER_WALL_THICK;
+    const frontGuard = new Mesh(new BoxGeometry(guardW, guardH, guardD), guardMat);
+    frontGuard.position.set(0, guardH / 2, CONTAINER_HALF_Z + CONTAINER_WALL_THICK / 2);
+    frontGuard.receiveShadow = true;
+    scene.add(frontGuard);
+    const backGuard = new Mesh(new BoxGeometry(guardW, guardH, guardD), guardMat.clone());
+    backGuard.position.set(0, guardH / 2, -CONTAINER_HALF_Z - CONTAINER_WALL_THICK / 2);
+    backGuard.receiveShadow = true;
+    scene.add(backGuard);
 
     const resize = () => {
       const w = root.clientWidth;
