@@ -8,36 +8,77 @@ export function cardArtAssetUrl(fileName: string): string {
 /** Raster extensions tried in order (.gif after .png — e.g. `Face-God.gif`, `Face-Frog-God.gif`). */
 const RASTER_EXTS = ['.png', '.gif', '.webp', '.jpg', '.svg'] as const;
 
+/** Narrower probe for optional suit images — avoids dozens of identical 404s on GitHub Pages. */
+const SUIT_PROBE_EXTS_PRIMARY = ['.png'] as const;
+const SUIT_PROBE_EXTS_SECONDARY = ['.gif', '.webp', '.jpg', '.svg'] as const;
+
+/**
+ * Pip / corner rasters that ship under `public/assets/images/` today (basename without extension).
+ * Standard **Spades** has no raster here yet — callers fall back to {@link SuitGlyph} without probing `suitSpades.*` five times each.
+ */
+const BUNDLED_SUIT_MARK_STEM: Partial<Record<string, string>> = {
+  Hearts: 'SuitHeartAce',
+  Diamonds: 'SuitDiamondsAce',
+  Clubs: 'SuitClubsAce',
+  Stars: 'SuitStarAce',
+  Moons: 'SuitMoonAce',
+  Coins: 'SuitCoinAce',
+};
+
+function pushStemUrls(stem: string, exts: readonly string[], seen: Set<string>, out: string[]) {
+  for (const ext of exts) {
+    const url = cardArtAssetUrl(`${stem}${ext}`);
+    if (!seen.has(url)) {
+      seen.add(url);
+      out.push(url);
+    }
+  }
+}
+
 export function cardBackgroundUrlCandidates(): string[] {
   return RASTER_EXTS.map((ext) => cardArtAssetUrl(`CardBasicLight${ext}`));
 }
 
 /**
- * Suit pip / corner art — tries several stems because asset packs vary (SuitHearts vs Hearts only, etc.).
+ * Suit pip / corner art — prefers shipped stems, then common filename patterns (.png first).
+ * Standard **Spades** has no raster in the repo; we skip network probes and use {@link SuitGlyph} until a stem is added to {@link BUNDLED_SUIT_MARK_STEM}.
  */
 export function suitRasterUrlCandidates(suit: string): string[] {
-  const stems = [
-    /** Pack convention: `public/assets/images/suitHearts.png`, `suitDiamonds.png`, … */
-    `suit${suit}`,
-    `Suit${suit}`,
-    `${suit}`,
-    `${suit.toLowerCase()}`,
-    `suit_${suit}`,
-    `Suit_${suit}`,
-    `suits/Suit${suit}`,
-    `suits/${suit}`,
-  ];
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const stem of stems) {
-    for (const ext of RASTER_EXTS) {
-      const url = cardArtAssetUrl(`${stem}${ext}`);
-      if (!seen.has(url)) {
-        seen.add(url);
-        out.push(url);
-      }
-    }
+
+  const bundled = BUNDLED_SUIT_MARK_STEM[suit];
+  if (bundled) {
+    pushStemUrls(bundled, RASTER_EXTS, seen, out);
+    return out;
   }
+
+  if (suit === 'Spades') {
+    return out;
+  }
+
+  const stems = Array.from(
+    new Set(
+      [
+        `suit${suit}`,
+        `Suit${suit}`,
+        suit,
+        suit.toLowerCase(),
+        `suit_${suit}`,
+        `Suit_${suit}`,
+        `suits/Suit${suit}`,
+        `suits/${suit}`,
+      ].filter(Boolean),
+    ),
+  );
+
+  for (const stem of stems) {
+    pushStemUrls(stem, SUIT_PROBE_EXTS_PRIMARY, seen, out);
+  }
+  for (const stem of [`suit${suit}`, `Suit${suit}`]) {
+    pushStemUrls(stem, SUIT_PROBE_EXTS_SECONDARY, seen, out);
+  }
+
   return out;
 }
 
@@ -62,23 +103,32 @@ export function bundledCourtPictureStems(cardId: string): string[] {
   const suitPluralIfSingular = suit.endsWith('s') ? suit : `${suit}s`;
 
   if (value === 'A') {
-    add(`Suit${suit}Ace`);
-    add(`Suit${suitSingularIfPlural}Ace`);
-    if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
-      add(`Suit${suitPluralIfSingular}Ace`);
+    const bundledAce = BUNDLED_SUIT_MARK_STEM[suit];
+    if (bundledAce) {
+      add(bundledAce);
+    } else if (suit !== 'Spades') {
+      add(`Suit${suit}Ace`);
+      add(`Suit${suitSingularIfPlural}Ace`);
+      if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
+        add(`Suit${suitPluralIfSingular}Ace`);
+      }
     }
   } else if (value === 'G') {
-    add(`Suit${suit}God`);
-    add(`Suit${suitSingularIfPlural}God`);
-    if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
-      add(`Suit${suitPluralIfSingular}God`);
+    if (suit !== 'Spades') {
+      add(`Suit${suit}God`);
+      add(`Suit${suitSingularIfPlural}God`);
+      if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
+        add(`Suit${suitPluralIfSingular}God`);
+      }
     }
   } else if (value === 'J' || value === 'Q' || value === 'K') {
-    const rank = value === 'J' ? 'Jack' : value === 'Q' ? 'Queen' : 'King';
-    add(`Suit${suit}${rank}`);
-    add(`Suit${suitSingularIfPlural}${rank}`);
-    if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
-      add(`Suit${suitPluralIfSingular}${rank}`);
+    if (suit !== 'Spades') {
+      const rank = value === 'J' ? 'Jack' : value === 'Q' ? 'Queen' : 'King';
+      add(`Suit${suit}${rank}`);
+      add(`Suit${suitSingularIfPlural}${rank}`);
+      if (suitPluralIfSingular !== suit && suitPluralIfSingular !== suitSingularIfPlural) {
+        add(`Suit${suitPluralIfSingular}${rank}`);
+      }
     }
   }
 

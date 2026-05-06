@@ -90,7 +90,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
           theme_material: 'wood',
           shadows: true,
           theme_surface: 'green-felt',
-          baseScale: 170,
+          baseScale: 200,
           strength: 1.05,
         });
       }
@@ -195,7 +195,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
 
   return (
     <div
-      className={`pointer-events-none fixed inset-0 z-[420] transition-opacity duration-700 ${
+      className={`pointer-events-none fixed inset-x-0 bottom-0 z-[420] flex h-[min(42dvh,22rem)] flex-col justify-end transition-opacity duration-700 sm:h-[min(46dvh,26rem)] ${
         overlayOpaque && !fading ? 'opacity-100' : 'opacity-0'
       }`}
       aria-hidden={!overlayOpaque}
@@ -203,15 +203,15 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       <div
         id={mountId}
         ref={mountRef}
-        className="dice-box-test-mount absolute inset-0 h-full min-h-[100dvh] w-full"
+        className="dice-box-test-mount relative h-full min-h-[12rem] w-full"
       />
       {overlayOpaque && !diceReady && (
-        <div className="absolute left-4 top-16 rounded-xl border border-rose-300/40 bg-black/45 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-rose-200 backdrop-blur-sm">
+        <div className="pointer-events-none absolute left-4 top-2 rounded-xl border border-rose-300/40 bg-black/45 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-rose-200 backdrop-blur-sm">
           Dice render init failed (see console)
         </div>
       )}
       {result && overlayOpaque && (
-        <div className="absolute right-4 top-16 rounded-xl border border-white/45 bg-black/25 px-4 py-3 text-white backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+        <div className="pointer-events-none absolute right-3 top-3 rounded-xl border border-white/45 bg-black/25 px-4 py-3 text-white backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
           <div className="text-[11px] font-semibold uppercase tracking-widest text-emerald-50">
             {roll?.notation ?? (result.dice.length <= 1 ? '1dpip' : '2dpip')}
           </div>

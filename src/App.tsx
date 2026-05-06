@@ -3503,6 +3503,27 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {opponent && <RoomChat room={room} myUid={myUid} serviceRef={serviceRef} />}
+
+      {room.status === 'playing' && selectedCardIndex !== null && !me.confirmed && (
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-[max(6.75rem,calc(env(safe-area-inset-bottom,0px)+5.25rem))] z-[248] flex justify-center px-3 sm:bottom-[8.25rem]"
+          aria-live="polite"
+        >
+          <button
+            type="button"
+            onClick={() => void handlePlayCard()}
+            disabled={
+              loading ||
+              (me.hand[selectedCardIndex] != null &&
+                (prideBlocksCard(room, myUid, me.hand[selectedCardIndex]) ||
+                  envySealBlocksHandIndex(room, myUid, me.hand, selectedCardIndex)))
+            }
+            className="pointer-events-auto rounded-xl bg-yellow-400 px-7 py-3 text-[11px] font-black uppercase text-emerald-950 shadow-[0_12px_40px_rgba(250,204,21,0.45)] ring-2 ring-yellow-300/80 transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 sm:px-10 sm:py-3.5 sm:text-xs"
+          >
+            Play card
+          </button>
+        </div>
+      )}
       
       {isDevMenuOpen && (
         <DevPowerMenu 
@@ -3673,7 +3694,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {/* Table grid: opp row · deck column share one rail — no overlapping absolutes */}
-      <div className="relative flex min-h-0 flex-1 flex-col gap-2 sm:gap-3">
+      <div className="relative z-[20] isolate flex min-h-0 flex-1 flex-col gap-2 sm:gap-3">
           {myWheelDecisionSpinning && (
             <div className="pointer-events-none absolute inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/45 px-2 backdrop-blur-[2px]">
               <span className="text-center text-[9px] font-black uppercase tracking-widest text-amber-300">
@@ -3690,11 +3711,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           )}
 
             {(room.status === 'playing' || room.status === 'powering') && opponent ? (
-            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(0,15.6rem)_minmax(0,1fr)_minmax(7.8rem,11.4rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:grid-cols-[minmax(0,18rem)_minmax(0,1fr)_minmax(8.4rem,12rem)] sm:gap-x-3 md:gap-y-1.5">
+            <div className="grid min-h-0 w-full max-w-full flex-1 grid-cols-[minmax(0,15.6rem)_minmax(0,1fr)_minmax(7.8rem,11.4rem)] grid-rows-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 px-1 transition-all duration-500 sm:grid-cols-[minmax(0,18rem)_minmax(0,1fr)_minmax(9rem,13.5rem)] sm:gap-x-3 md:gap-y-1.5 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(10rem,15rem)]">
               {/* Row 1 napkin sketch: spacer | opp hand | opp powers — deck stacks row2 col3 */}
               <div className="hidden min-h-[0.125rem] sm:col-start-1 sm:row-start-1 sm:block" aria-hidden />
               <div
-                className={`relative col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:w-full sm:max-w-[min(100%,36rem)] ${
+                className={`relative col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:w-full sm:max-w-[min(100%,min(94vw,44rem))] md:max-w-[min(100%,min(92vw,52rem))] xl:max-w-[min(100%,min(92vw,64rem))] ${
                   opponentWheelDecisionSpinning ? 'min-h-[10rem] sm:min-h-[12rem]' : 'min-h-[11rem] sm:min-h-[12rem]'
                 }`}
               >
@@ -3757,7 +3778,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                  </div>
               </aside>
 
-              <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:w-full sm:max-w-[min(100%,36rem)] sm:px-3">
+              <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:w-full sm:max-w-[min(100%,min(94vw,44rem))] md:max-w-[min(100%,min(92vw,52rem))] xl:max-w-[min(100%,min(92vw,64rem))] sm:px-3">
                 <div className="relative z-10 flex w-full min-w-0 flex-col items-center">
                {room.status === 'playing' &&
                  room.settings.enableCurseCards &&
@@ -4284,7 +4305,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {/* Bottom strip: hand & powers · desperation capsule last (napkin div9 under cards) */}
-      <div className="mt-auto shrink-0 overflow-x-visible overflow-y-visible px-4 pb-4">
+      <div className="relative z-10 mt-auto shrink-0 overflow-x-visible overflow-y-visible px-4 pb-4">
         <div className="mb-2 flex items-end justify-between">
            <div className="flex flex-col">
               <span className="text-[10px] font-bold opacity-50 uppercase tracking-tighter">Cards: {me.hand.length}</span>
@@ -4315,20 +4336,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     </span>
                   </button>
                 </motion.div>
-             )}
-             {selectedCardIndex !== null && !me.confirmed && (
-               <button
-                 onClick={handlePlayCard}
-                 disabled={
-                   loading ||
-                   (me.hand[selectedCardIndex] != null &&
-                     (prideBlocksCard(room, myUid, me.hand[selectedCardIndex]) ||
-                       envySealBlocksHandIndex(room, myUid, me.hand, selectedCardIndex)))
-                 }
-                 className="bg-yellow-400 text-emerald-950 px-6 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-yellow-400/20 active:scale-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-               >
-                 Play card
-               </button>
              )}
              {me.confirmed && <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">Locked in — waiting</span>}
            </div>
@@ -4507,7 +4514,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           src={cardArtAssetUrl('PanicDice.png')}
                           alt=""
                           draggable={false}
-                          className="relative mx-auto h-[9.5rem] w-auto max-w-[min(92vw,12rem)] opacity-85 object-contain saturate-[0.92] contrast-[1.03] grayscale-[0.12] transition-[filter,opacity] group-hover:opacity-95 group-hover:grayscale-[0.05] drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)]"
+                          className="relative mx-auto h-28 w-auto max-w-[min(92vw,9.5rem)] opacity-85 object-contain saturate-[0.92] contrast-[1.03] grayscale-[0.12] transition-[filter,opacity] group-hover:opacity-95 group-hover:grayscale-[0.05] drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)] sm:h-32"
                         />
                       </button>
                     ) : (
@@ -4522,7 +4529,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           src={cardArtAssetUrl('PanicDice.png')}
                           alt=""
                           draggable={false}
-                          className="pointer-events-none relative mx-auto h-[9.5rem] w-auto max-w-[min(92vw,12rem)] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
+                          className="pointer-events-none relative mx-auto h-28 w-auto max-w-[min(92vw,9.5rem)] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)] sm:h-32"
                         />
                       </div>
                     )}
@@ -4559,7 +4566,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       src={cardArtAssetUrl('PanicDice.png')}
                       alt=""
                       draggable={false}
-                      className="relative mx-auto h-[9.5rem] w-auto max-w-[min(92vw,12rem)] opacity-85 object-contain saturate-[0.92] contrast-[1.03] grayscale-[0.12] transition-[filter,opacity] group-hover:opacity-95 group-hover:grayscale-[0.05] drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)]"
+                      className="relative mx-auto h-28 w-auto max-w-[min(92vw,9.5rem)] opacity-85 object-contain saturate-[0.92] contrast-[1.03] grayscale-[0.12] transition-[filter,opacity] group-hover:opacity-95 group-hover:grayscale-[0.05] drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)] sm:h-32"
                     />
                   </button>
                 ) : (
@@ -4574,7 +4581,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       src={cardArtAssetUrl('PanicDice.png')}
                       alt=""
                       draggable={false}
-                      className="pointer-events-none relative mx-auto h-[9.5rem] w-auto max-w-[min(92vw,12rem)] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
+                      className="pointer-events-none relative mx-auto h-28 w-auto max-w-[min(92vw,9.5rem)] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)] sm:h-32"
                     />
                   </div>
                 )}
