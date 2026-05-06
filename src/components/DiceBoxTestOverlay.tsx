@@ -81,16 +81,16 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
           sounds: false,
           theme_customColorset: {
             name: 'bone_die',
-            foreground: '#2f2a22',
+            foreground: '#f4efe6',
             background: ['#f1e5cc', '#dcc8a2', '#cab285', '#b89a6a'],
-            outline: '#1f1b16',
+            outline: '#2a241c',
             texture: 'skulls',
             material: 'wood',
           },
           theme_material: 'wood',
           shadows: true,
           theme_surface: 'green-felt',
-          baseScale: 85,
+          baseScale: 170,
           strength: 1.05,
         });
       }
@@ -211,12 +211,16 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         </div>
       )}
       {result && overlayOpaque && (
-        <div className="absolute right-4 top-16 rounded-xl border border-white/30 bg-black/35 px-3 py-2 text-white backdrop-blur-sm">
-          <div className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
+        <div className="absolute right-4 top-16 rounded-xl border border-white/45 bg-black/25 px-4 py-3 text-white backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+          <div className="text-[11px] font-semibold uppercase tracking-widest text-emerald-50">
             {roll?.notation ?? (result.dice.length <= 1 ? '1d6' : '2d6')}
           </div>
-          <div className="text-sm font-black tabular-nums">Result: {result.total}</div>
-          <div className="text-[11px] font-semibold opacity-90">Dice: [{result.dice.join(', ')}]</div>
+          <div className="mt-1 text-lg font-semibold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
+            Result: {result.total}
+          </div>
+          <div className="mt-0.5 text-[12px] font-medium text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">
+            Dice: [{result.dice.join(', ')}]
+          </div>
         </div>
       )}
     </div>

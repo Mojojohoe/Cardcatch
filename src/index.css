@@ -19,6 +19,11 @@ body.simple-card-fonts .font-card-rank {
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Tone down Tailwind `font-black` (900) on ranks when simple fonts are on */
+body.simple-card-fonts .font-card-rank.font-black {
+  font-weight: 500;
+}
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;

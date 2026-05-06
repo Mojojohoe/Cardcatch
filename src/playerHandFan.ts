@@ -21,7 +21,7 @@ export function playerHandFanMotion(
   squeeze = 1,
 ): { rotate: number; x: number; y: number; baseZ: number } {
   if (count <= 1) {
-    return { rotate: 0, x: 0, y: 0, baseZ: 16 };
+    return { rotate: 0, x: 0, y: 0, baseZ: 20 };
   }
   const mid = (count - 1) / 2;
   const d = index - mid;
@@ -40,7 +40,11 @@ export function playerHandFanMotion(
   const baseLift = 7 + Math.min(6, count * 0.3);
   const edgeEase = 1 - Math.cos(edge * (Math.PI / 2));
   const y = -baseLift + edgeEase * curveDepth;
-  const baseZ = Math.round(14 + mid - Math.abs(index - mid));
+  /**
+   * Monotonic left→right stacking so each card paints above the one to its left (overlap keeps top-left
+   * indices readable). A center-peaked z-order put both outer wings low — the right half read “backward”.
+   */
+  const baseZ = 20 + index;
   return { rotate, x, y, baseZ };
 }
 

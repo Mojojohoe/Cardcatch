@@ -3,6 +3,9 @@ import { AssembledPlayingCardFace, CARD_ART_HEIGHT, CARD_ART_WIDTH } from './Ass
 import { useOptionalCardArt } from './cardArtContext';
 import type { CardArtGlobalDefaults, CardArtOverride } from './types';
 
+/** Matches {@link PC_HAND} portrait ratio (`h/w`); used when layout reports width before height (mode toggle). */
+const SLOT_H_OVER_W = 1.5;
+
 type Props = {
   card: string;
   override?: CardArtOverride;
@@ -20,6 +23,8 @@ type Props = {
 export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, className, previewDefaults }) => {
   const ctx = useOptionalCardArt();
   const defaults = previewDefaults !== undefined ? previewDefaults : ctx?.defaults;
+  /** Bumps effect when switching vector ↔ raster so we never keep a stale scale from the wrong layout pass. */
+  const layoutEpoch = `${ctx?.mode ?? 'x'}:${ctx?.manifestVersion ?? 0}:${card}`;
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -27,26 +32,40 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
+
     const measure = () => {
       const rect = el.getBoundingClientRect();
       const w = rect.width > 0.5 ? rect.width : el.clientWidth;
-      const h = rect.height > 0.5 ? rect.height : el.clientHeight;
-      if (w > 0.5 && h > 0.5) {
-        setScale(Math.min(w / CARD_ART_WIDTH, h / CARD_ART_HEIGHT));
-      } else if (w > 0.5) {
-        setScale(w / CARD_ART_WIDTH);
-      }
+      const hRaw = rect.height > 0.5 ? rect.height : el.clientHeight;
+      if (w <= 0.5) return;
+      /**
+       * When height is not laid out yet (common right after leaving vector / flex timing), width-only scale
+       * overshoots `min(w,h)` fit → overflow hidden clips the face (“cropped / zoomed”).
+       * Assume the slot matches the playing-card footprint aspect until we get a real height.
+       */
+      const h = hRaw > 0.5 ? hRaw : w * SLOT_H_OVER_W;
+      setScale(Math.min(w / CARD_ART_WIDTH, h / CARD_ART_HEIGHT));
     };
+
     measure();
+
+    let alive = true;
+    requestAnimationFrame(() => {
+      if (!alive) return;
+      measure();
+      requestAnimationFrame(() => {
+        if (!alive) return;
+        measure();
+      });
+    });
+
     const ro = new ResizeObserver(() => measure());
     ro.observe(el);
-    /** One deferred measure is enough — double-rAF tended to amplify preview flicker in Card Creator. */
-    const raf = requestAnimationFrame(measure);
     return () => {
+      alive = false;
       ro.disconnect();
-      cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [layoutEpoch]);
 
   return (
     <div
