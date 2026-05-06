@@ -1127,6 +1127,12 @@ type GameEvent =
       dice: number[],
       total: number,
       startedAt: number,
+    }
+  | {
+      type: 'CHIP_DROP_BROADCAST',
+      uid: string,
+      dropId: string,
+      startedAt: number,
     };
 
 export type DiceTestRollPayload = {
@@ -1135,6 +1141,12 @@ export type DiceTestRollPayload = {
   notation: string;
   dice: number[];
   total: number;
+  startedAt: number;
+};
+
+export type ChipDropPayload = {
+  uid: string;
+  dropId: string;
   startedAt: number;
 };
 
@@ -1171,6 +1183,7 @@ export class GameService {
   private state: RoomData | null = null;
   private onStateChange: ((state: RoomData) => void) | null = null;
   private onDiceTestRoll: ((payload: DiceTestRollPayload) => void) | null = null;
+  private onChipDrop: ((payload: ChipDropPayload) => void) | null = null;
   private myUid: string = '';
   private powerResolutionTimer: ReturnType<typeof setTimeout> | null = null;
   private powerShowdownClearTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1511,6 +1524,14 @@ export class GameService {
         if (remoteUid && event.uid === remoteUid) {
           this.handlePanicDiceUse(remoteUid);
         }
+      } else if (event.type === 'CHIP_DROP_BROADCAST') {
+        if (remoteUid && event.uid === remoteUid) {
+          this.onChipDrop?.({
+            uid: event.uid,
+            dropId: event.dropId,
+            startedAt: event.startedAt,
+          });
+        }
       }
     } else {
       if (event.type === 'STATE_UPDATE') {
@@ -1524,6 +1545,12 @@ export class GameService {
           notation: event.notation,
           dice: event.dice,
           total: event.total,
+          startedAt: event.startedAt,
+        });
+      } else if (event.type === 'CHIP_DROP_BROADCAST') {
+        this.onChipDrop?.({
+          uid: event.uid,
+          dropId: event.dropId,
           startedAt: event.startedAt,
         });
       }
@@ -1903,6 +1930,25 @@ export class GameService {
 
   onDiceTestRollEvent(handler: ((payload: DiceTestRollPayload) => void) | null) {
     this.onDiceTestRoll = handler;
+  }
+
+  onChipDropEvent(handler: ((payload: ChipDropPayload) => void) | null) {
+    this.onChipDrop = handler;
+  }
+
+  async emitChipDrop() {
+    const payload: ChipDropPayload = {
+      uid: this.myUid,
+      dropId: `chip-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      startedAt: Date.now(),
+    };
+    this.onChipDrop?.(payload);
+    this.sendEvent({
+      type: 'CHIP_DROP_BROADCAST',
+      uid: payload.uid,
+      dropId: payload.dropId,
+      startedAt: payload.startedAt,
+    });
   }
 
   async usePanicDice() {

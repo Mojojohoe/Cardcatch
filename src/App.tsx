@@ -52,6 +52,7 @@ import {
 import {
   GameService,
   type DiceTestRollPayload,
+  type ChipDropPayload,
   parseCard,
   desperationSpinAllowed,
   describeWrathMinionTitle,
@@ -2594,6 +2595,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const myUid = serviceRef.current.getUid();
   const [famineBannerPhase, setFamineBannerPhase] = useState<FamineBannerPhase>('idle');
   const [hudDiceRoll, setHudDiceRoll] = useState<DiceTestRollPayload | null>(null);
+  const [chipDropEvent, setChipDropEvent] = useState<ChipDropPayload | null>(null);
   const [panicDiceConfirmOpen, setPanicDiceConfirmOpen] = useState(false);
   const [panicDiceStripExplainOpen, setPanicDiceStripExplainOpen] = useState(false);
   const [panicDiceStripHover, setPanicDiceStripHover] = useState(false);
@@ -2810,6 +2812,15 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     });
     return () => {
       serviceRef.current.onDiceTestRollEvent(null);
+    };
+  }, []);
+
+  useEffect(() => {
+    serviceRef.current.onChipDropEvent((payload) => {
+      setChipDropEvent(payload);
+    });
+    return () => {
+      serviceRef.current.onChipDropEvent(null);
     };
   }, []);
 
@@ -3443,7 +3454,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
       <DiceBoxTestOverlay roll={hudDiceRoll} />
-      <ChipDropperTest />
+      <ChipDropperTest
+        room={room}
+        myUid={myUid}
+        lastDrop={chipDropEvent}
+        onRequestDrop={() => {
+          void serviceRef.current.emitChipDrop();
+        }}
+      />
 
       {panicDiceStripExplainOpen && (
         <div

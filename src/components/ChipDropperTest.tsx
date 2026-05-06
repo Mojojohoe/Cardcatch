@@ -19,6 +19,8 @@ import {
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { World, Vec3, Body, Box, Cylinder, ContactMaterial, Material } from 'cannon-es';
+import type { PlayerRole, RoomData } from '../types';
+import type { ChipDropPayload } from '../services/gameService';
 
 /**
  * Chip radius must stay **inside** {@link PLAY_HALF_X} / {@link PLAY_HALF_Z} with margin — larger coins than the
@@ -30,7 +32,7 @@ const DROP_Y = 52;
 const CONTAINER_HALF_X = 22;
 const CONTAINER_HALF_Z = 13;
 const CONTAINER_WALL_THICK = 0.56;
-const CONTAINER_WALL_HEIGHT_Y = 74;
+const CONTAINER_WALL_HEIGHT_Y = 90;
 
 /** Tiny spawn spread so chips fall into one stack lane. */
 const STACK_SPAWN_JITTER = 0.18;
@@ -124,6 +126,16 @@ export type ChipSimulationHandle = {
   spawn: () => void;
 };
 
+function tokenPalette(role: PlayerRole | undefined): { border: string; fill: string; chipColor: number; chipEmissive: number } {
+  if (role === 'Prey') {
+    return { border: 'border-blue-500/45', fill: 'bg-blue-500/18', chipColor: 0x3b82f6, chipEmissive: 0x000838 };
+  }
+  if (role === 'Preydator') {
+    return { border: 'border-purple-500/45', fill: 'bg-purple-500/18', chipColor: 0xa855f7, chipEmissive: 0x18002f };
+  }
+  return { border: 'border-red-500/45', fill: 'bg-red-500/18', chipColor: 0xef4444, chipEmissive: 0x3b0000 };
+}
+
 type SimulationProps = {
   /** Chip body colour */
   chipColor: number;
@@ -167,8 +179,8 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
       mass: 0.45,
       shape,
       material: pm.chip,
-      linearDamping: 0.35,
-      angularDamping: 0.82,
+      linearDamping: 0.46,
+      angularDamping: 0.88,
       position: new Vec3((Math.random() - 0.5) * 2 * sx, DROP_Y, (Math.random() - 0.5) * 2 * sz),
     });
     body.quaternion.setFromAxisAngle(new Vec3(0, 1, 0), Math.random() * Math.PI * 2);
@@ -227,10 +239,10 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
 
     const chipMat = new Material('chip');
     const feltMat = new Material('felt');
-    world.addContactMaterial(new ContactMaterial(chipMat, feltMat, { friction: 0.66, restitution: 0.03 }));
+    world.addContactMaterial(new ContactMaterial(chipMat, feltMat, { friction: 0.84, restitution: 0.02 }));
     const wallMat = new Material('chip-wall');
-    world.addContactMaterial(new ContactMaterial(chipMat, wallMat, { friction: 0.72, restitution: 0.01 }));
-    world.addContactMaterial(new ContactMaterial(feltMat, wallMat, { friction: 0.75, restitution: 0.01 }));
+    world.addContactMaterial(new ContactMaterial(chipMat, wallMat, { friction: 0.9, restitution: 0.005 }));
+    world.addContactMaterial(new ContactMaterial(feltMat, wallMat, { friction: 0.86, restitution: 0.005 }));
     physicsMatsRef.current = { chip: chipMat };
 
     const fallbackGeom = new CylinderGeometry(COIN_R, COIN_R, COIN_H, 40);
@@ -397,38 +409,70 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
 });
 
 /** Dev physics chip test: two viewports ±35vw from table centre, beneath round-resolution overlay (z-[300]). */
-export const ChipDropperTest: React.FC = () => {
+export const ChipDropperTest: React.FC<{
+  room: RoomData;
+  myUid: string;
+  lastDrop: ChipDropPayload | null;
+  onRequestDrop: () => void;
+}> = ({ room, myUid, lastDrop, onRequestDrop }) => {
   const leftRef = useRef<ChipSimulationHandle | null>(null);
   const rightRef = useRef<ChipSimulationHandle | null>(null);
+  const seenDropIdsRef = useRef<Set<string>>(new Set());
+  const selfCountRef = useRef(0);
+  const theirCountRef = useRef(0);
+  const [selfCount, setSelfCount] = React.useState(0);
+  const [theirCount, setTheirCount] = React.useState(0);
 
-  const spawnBoth = useCallback(() => {
-    leftRef.current?.spawn();
-    rightRef.current?.spawn();
-  }, []);
+  const opponentUid = Object.keys(room.players).find((uid) => uid !== myUid) ?? null;
+  const me = room.players[myUid];
+  const opponent = opponentUid ? room.players[opponentUid] : null;
+  const myPalette = tokenPalette(me?.role);
+  const oppPalette = tokenPalette(opponent?.role);
+
+  useEffect(() => {
+    if (!lastDrop || seenDropIdsRef.current.has(lastDrop.dropId)) return;
+    seenDropIdsRef.current.add(lastDrop.dropId);
+    const mine = lastDrop.uid === myUid;
+    if (mine) {
+      leftRef.current?.spawn();
+      selfCountRef.current += 1;
+      setSelfCount(selfCountRef.current);
+    } else {
+      rightRef.current?.spawn();
+      theirCountRef.current += 1;
+      setTheirCount(theirCountRef.current);
+    }
+  }, [lastDrop, myUid]);
 
   return (
     <>
       {/* Below results / panic overlays (z-[300]+); above main table (z-[20]) */}
       <div className="pointer-events-none fixed inset-0 z-[40]" aria-hidden>
         <div
-          className="absolute top-1/2 left-[calc(50%-35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-red-500/45 bg-red-500/18 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.25)]"
-          title="Red chip catchment (debug)"
+          className={`absolute top-1/2 left-[calc(50%-35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${myPalette.border} ${myPalette.fill} shadow-[inset_0_0_0_1px_rgba(248,113,113,0.25)]`}
+          title="Your token catchment"
         >
-          <ChipSimulationCanvas ref={leftRef} chipColor={0xef4444} chipEmissive={0x3b0000} className="min-h-0 flex-1" />
+          <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
+            Your tokens: {selfCount}
+          </div>
+          <ChipSimulationCanvas ref={leftRef} chipColor={myPalette.chipColor} chipEmissive={myPalette.chipEmissive} className="min-h-0 flex-1" />
         </div>
         <div
-          className="absolute top-1/2 left-[calc(50%+35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-blue-500/45 bg-blue-500/18 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.25)]"
-          title="Blue chip catchment (debug)"
+          className={`absolute top-[58%] left-[calc(50%+29vw)] flex h-[min(48vh,30rem)] w-[min(27vw,23rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${oppPalette.border} ${oppPalette.fill} shadow-[inset_0_0_0_1px_rgba(96,165,250,0.25)]`}
+          title="Opponent token catchment"
         >
-          <ChipSimulationCanvas ref={rightRef} chipColor={0x3b82f6} chipEmissive={0x000838} className="min-h-0 flex-1" />
+          <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
+            Their tokens: {theirCount}
+          </div>
+          <ChipSimulationCanvas ref={rightRef} chipColor={oppPalette.chipColor} chipEmissive={oppPalette.chipEmissive} className="min-h-0 flex-1" />
         </div>
       </div>
       <button
         type="button"
-        onClick={spawnBoth}
+        onClick={onRequestDrop}
         className="pointer-events-auto fixed top-[max(4.75rem,calc(env(safe-area-inset-top,0px)+4.25rem))] right-[max(1rem,env(safe-area-inset-right,0px)+0.5rem)] z-[480] rounded-lg border border-red-400/75 bg-red-500/90 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-red-950 shadow-[0_6px_18px_rgba(0,0,0,0.35)] hover:bg-red-400"
       >
-        Drop chip
+        Drop token
       </button>
     </>
   );
