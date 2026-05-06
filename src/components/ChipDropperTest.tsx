@@ -14,15 +14,28 @@ import {
 } from 'three';
 import { World, Vec3, Body, Box, Cylinder, ContactMaterial, Material } from 'cannon-es';
 
-const COIN_R = 3.8;
-const COIN_H = 1.6;
+/**
+ * Chip radius must stay **inside** {@link PLAY_HALF_X} / {@link PLAY_HALF_Z} with margin — larger coins than the
+ * pen caused overlap explosions / tunneling so meshes vanished until random luck on spawn.
+ */
+const COIN_R = 2.15;
+const COIN_H = 0.92;
 const DROP_Y = 52;
 
-/** Shallow play slab on Z — chips stay near the focal plane so perspective doesn’t shrink “backward” motion. */
-const PLAY_HALF_X = 3.05;
-const PLAY_HALF_Z = 0.88;
+/** Inner half-extents (world units): X wider than Z for a shallow “slab” pile. */
+const PLAY_HALF_X = 4.85;
+const PLAY_HALF_Z = 2.65;
 const WALL_THICK = 0.32;
 const WALL_HEIGHT_Y = 56;
+/** Keep cylinder centroid at least this far inside the inner wall plane so we never spawn intersecting statics. */
+const SPAWN_INSET = 0.28;
+
+function spawnSafeHalfExtents(): { halfX: number; halfZ: number } {
+  return {
+    halfX: Math.max(0.25, PLAY_HALF_X - COIN_R - SPAWN_INSET),
+    halfZ: Math.max(0.2, PLAY_HALF_Z - COIN_R - SPAWN_INSET),
+  };
+}
 
 /** Advance physics this many × wall-clock time → snappier fall. */
 const SIM_SPEED = 2;
@@ -67,20 +80,21 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     if (!world || !scene || !geom || !mat || !pm) return;
 
     const shape = new Cylinder(COIN_R, COIN_R, COIN_H, 24);
+    const { halfX: sx, halfZ: sz } = spawnSafeHalfExtents();
     const body = new Body({
       mass: 0.45,
       shape,
       material: pm.chip,
       linearDamping: 0.08,
       angularDamping: 0.22,
-      position: new Vec3(
-        (Math.random() - 0.5) * 2 * PLAY_HALF_X * 0.92,
-        DROP_Y,
-        (Math.random() - 0.5) * 2 * PLAY_HALF_Z * 0.88,
-      ),
+      position: new Vec3((Math.random() - 0.5) * 2 * sx, DROP_Y, (Math.random() - 0.5) * 2 * sz),
     });
     body.velocity.set((Math.random() - 0.5) * 1.05, -0.9, (Math.random() - 0.5) * 0.38);
     body.angularVelocity.set((Math.random() - 0.5) * 2.2, (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 2.2);
+    /** Large overlaps were putting bodies to sleep or jittering them out of frame in one step. */
+    body.allowSleep = false;
+    body.sleepSpeedLimit = 0.09;
+    body.sleepTimeLimit = 1.2;
     world.addBody(body);
 
     const mesh = new Mesh(geom, mat);
