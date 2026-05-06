@@ -3341,6 +3341,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     !showResolutionSequence;
 
   const panicDiceResultsInteractive = panicDiceResultsVisible && !me.panicDiceUsed;
+  const panicDiceResultsUsedVisible =
+    room.status === 'results' &&
+    Boolean(room.lastOutcome) &&
+    room.settings.enablePanicDice &&
+    panicDiceSeatAllowed(room, myUid) &&
+    !me.readyForNextRound &&
+    me.panicDiceUsed;
 
   const panicStripHoverText = me.panicDiceUsed ? PANIC_DICE_USED_HOVER : PANIC_DICE_STRIP_HOVER_HELP;
   const panicStripFootnote = me.panicDiceUsed ? 'Used this game' : 'Locked until results';
@@ -3505,7 +3512,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
       {room.status === 'playing' && selectedCardIndex !== null && !me.confirmed && (
         <div
-          className="pointer-events-none fixed inset-x-0 bottom-[max(6.75rem,calc(env(safe-area-inset-bottom,0px)+5.25rem))] z-[248] flex justify-center px-3 sm:bottom-[8.25rem]"
+          className="pointer-events-none fixed inset-x-0 bottom-[max(1.1rem,calc(env(safe-area-inset-bottom,0px)+0.9rem))] z-[248] flex justify-center px-3 sm:bottom-[max(1.35rem,calc(env(safe-area-inset-bottom,0px)+1.15rem))]"
           aria-live="polite"
         >
           <button
@@ -4218,7 +4225,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            </div>
                          )}
                       </div>
-                      {uid === myUid && panicDiceResultsVisible && (
+                      {uid === myUid && (panicDiceResultsVisible || panicDiceResultsUsedVisible) && (
                         <div className="relative mt-3 flex flex-col items-center">
                           {panicDiceResultsInteractive ? (
                             <button

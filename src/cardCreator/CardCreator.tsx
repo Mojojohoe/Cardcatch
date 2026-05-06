@@ -1491,7 +1491,9 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   {defaultsTab === 'backgrounds' && (
                     <div className="space-y-3">
                       <p className="text-xs text-slate-400">
-                        Filename in <code className="text-slate-300">public/assets/images/</code> (extensions auto-tried). Falls back to CardBasicLight.
+                        Filename in <code className="text-slate-300">public/assets/images/</code>. Auto-probe uses
+                        <code className="text-slate-300"> .png</code> only unless you include an explicit extension.
+                        Falls back to CardBasicLight.
                       </p>
                       {(['Hearts', 'Diamonds', 'Clubs', 'Spades'] as const).map((suit) => (
                         <label key={suit} className="flex flex-col gap-1 text-[11px]">
@@ -1531,6 +1533,53 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 }));
                               }}
                               placeholder={`${suit} face stem`}
+                              className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs"
+                            />
+                          </label>
+                        ),
+                      )}
+                      <p className="pt-3 text-[10px] font-black uppercase text-slate-500">Suit icon image files</p>
+                      <p className="text-[10px] text-slate-500">
+                        Used for corner suit markers, pip symbols, and artwork-mode suit glyphs. Prefer explicit filenames
+                        like <code className="text-slate-300">SuitSpades.png</code>.
+                      </p>
+                      {(['Hearts', 'Diamonds', 'Clubs', 'Spades'] as const).map((suit) => (
+                        <label key={`icon-${suit}`} className="flex flex-col gap-1 text-[11px]">
+                          <span className="font-bold text-slate-300">{suit} icon</span>
+                          <input
+                            value={draftDefaults.suitIconFile?.[suit] ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value.trim();
+                              setDraftDefaults((prev) => ({
+                                ...prev,
+                                suitIconFile: {
+                                  ...prev.suitIconFile,
+                                  [suit]: v || undefined,
+                                },
+                              }));
+                            }}
+                            placeholder={`Suit${suit}.png`}
+                            className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs"
+                          />
+                        </label>
+                      ))}
+                      {(['Stars', 'Moons', 'Frogs', 'Coins', 'Bones', 'Crowns', 'Grovels', 'Swords'] as const).map(
+                        (suit) => (
+                          <label key={`icon-${suit}`} className="flex flex-col gap-1 text-[11px]">
+                            <span className="font-bold text-slate-300">{suit} icon</span>
+                            <input
+                              value={draftDefaults.suitIconFile?.[suit] ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value.trim();
+                                setDraftDefaults((prev) => ({
+                                  ...prev,
+                                  suitIconFile: {
+                                    ...prev.suitIconFile,
+                                    [suit]: v || undefined,
+                                  },
+                                }));
+                              }}
+                              placeholder={`${suit} icon filename`}
                               className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs"
                             />
                           </label>

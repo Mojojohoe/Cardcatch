@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import type { RoomData } from '../types';
 import {
   buildPanicExchangeFrames,
+  parseCard,
   panicOpponentWrathPenaltyFromOutcome,
   panicSwordStrikeStrength,
 } from '../services/gameService';
@@ -57,6 +58,17 @@ const LAYOUT_SWITCH_MS = 420;
 /** Simultaneous −1 panic vs opponent stamina, every beat. */
 const EXCHANGE_STEP_MS = 600;
 const OUTRO_PAUSE_MS = 900;
+const DESCENDING_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', 'G', 'S', 'E'] as const;
+
+function reduceCardVisualRank(cardId: string, downBy: number): string {
+  if (downBy <= 0) return cardId;
+  const p = parseCard(cardId);
+  if (p.isJoker) return cardId;
+  const idx = DESCENDING_RANKS.indexOf(p.value as (typeof DESCENDING_RANKS)[number]);
+  if (idx <= 0) return cardId;
+  const nextIdx = Math.max(0, idx - downBy);
+  return `${p.suit}-${DESCENDING_RANKS[nextIdx]}`;
+}
 
 export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => void }> = ({
   room,
@@ -92,6 +104,11 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
   const [frameIdx, setFrameIdx] = useState(0);
   const [showCut, setShowCut] = useState(false);
   const [strikeKey, setStrikeKey] = useState(0);
+  const initialPanic = frames[0]?.panicRemaining ?? panicSwordStrikeStrength(panicCardId);
+  const initialOpponent = frames[0]?.opponentEffective ?? 0;
+  const panicCardFx = reduceCardVisualRank(panicCardId, Math.max(0, initialPanic - f.panicRemaining));
+  const opponentCardFx =
+    oppCardId == null ? '' : reduceCardVisualRank(oppCardId, Math.max(0, initialOpponent - f.opponentEffective));
 
   useEffect(() => {
     if (!oppCardId || frames.length === 0) {
@@ -199,7 +216,7 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
             animate={{ y: 0, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 320, damping: 26 }}
           >
-            <CardVisual card={panicCardId} revealed noAnimate presentation="none" lustHeartRulesActive={false} />
+            <CardVisual card={panicCardFx} revealed noAnimate presentation="none" lustHeartRulesActive={false} />
             <StatBadge tone="panic" label="Panic" value={f.panicRemaining} />
           </motion.div>
 
@@ -210,7 +227,7 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
                 {showCut ? <PanicStrikeCut key={`strike-${strikeKey}`} /> : null}
               </AnimatePresence>
               <CardVisual
-                card={oppCardId}
+                card={opponentCardFx}
                 revealed
                 noAnimate
                 presentation="none"

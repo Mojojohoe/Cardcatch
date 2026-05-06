@@ -1,3 +1,5 @@
+import type { CardArtGlobalDefaults } from './types';
+
 /** Vite serves `public/` at site root; respects `base` from vite.config. */
 export function cardArtAssetUrl(fileName: string): string {
   const base = import.meta.env.BASE_URL || '/';
@@ -5,16 +7,26 @@ export function cardArtAssetUrl(fileName: string): string {
   return `${base.endsWith('/') ? base : `${base}/`}assets/images/${path}`;
 }
 
-/** Raster extensions tried in order (.gif after .png — e.g. `Face-God.gif`, `Face-Frog-God.gif`). */
-const RASTER_EXTS = ['.png', '.gif', '.webp', '.jpg', '.svg'] as const;
+/** Keep auto-probing strict to PNG unless an explicit extension is provided. */
+const RASTER_EXTS = ['.png'] as const;
 
-/** Prefer `.png` first to match shipped/json packs; then other formats pack authors sometimes use. */
-const SUIT_PROBE_EXTS_PRIMARY = ['.png'] as const;
-const SUIT_PROBE_EXTS_SECONDARY = ['.gif', '.webp', '.jpg', '.svg'] as const;
+function hasImageExtension(path: string): boolean {
+  return /\.(png|gif|webp|jpg|jpeg|svg)$/i.test(path.trim());
+}
 
 function pushStemUrls(stem: string, exts: readonly string[], seen: Set<string>, out: string[]) {
+  const trimmed = stem.trim();
+  if (!trimmed) return;
+  if (hasImageExtension(trimmed)) {
+    const exact = cardArtAssetUrl(trimmed);
+    if (!seen.has(exact)) {
+      seen.add(exact);
+      out.push(exact);
+    }
+    return;
+  }
   for (const ext of exts) {
-    const url = cardArtAssetUrl(`${stem}${ext}`);
+    const url = cardArtAssetUrl(`${trimmed}${ext}`);
     if (!seen.has(url)) {
       seen.add(url);
       out.push(url);
@@ -30,11 +42,15 @@ export function cardBackgroundUrlCandidates(): string[] {
  * Suit pip / corner art — **pack-first** stems like `SuitHearts.png`, `SuitSpades.png`, `SuitCoins.png`
  * (`Suit{suit}`) before lowercase `suit*` / legacy aliases.
  */
-export function suitRasterUrlCandidates(suit: string): string[] {
+export function suitRasterUrlCandidates(suit: string, defaults?: CardArtGlobalDefaults): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
 
   const suitSingularIfPlural = suit.endsWith('s') ? suit.slice(0, -1) : suit;
+  const configuredFile = defaults?.suitIconFile?.[suit]?.trim();
+  if (configuredFile) {
+    pushStemUrls(configuredFile, RASTER_EXTS, seen, out);
+  }
 
   const stems = Array.from(
     new Set(
@@ -54,10 +70,7 @@ export function suitRasterUrlCandidates(suit: string): string[] {
   );
 
   for (const stem of stems) {
-    pushStemUrls(stem, SUIT_PROBE_EXTS_PRIMARY, seen, out);
-  }
-  for (const stem of [`Suit${suit}`, `suit${suit}`]) {
-    pushStemUrls(stem, SUIT_PROBE_EXTS_SECONDARY, seen, out);
+    pushStemUrls(stem, RASTER_EXTS, seen, out);
   }
 
   return out;

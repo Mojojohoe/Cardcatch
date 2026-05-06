@@ -143,18 +143,20 @@ type Props = {
 
 function PipImage({
   suit,
+  defaults,
   x,
   y,
   maxSideFrac,
   orient,
 }: {
   suit: string;
+  defaults?: CardArtGlobalDefaults;
   x: number;
   y: number;
   maxSideFrac: number;
   orient: PipOrient;
 }) {
-  const candidates = useMemo(() => suitRasterUrlCandidates(suit), [suit]);
+  const candidates = useMemo(() => suitRasterUrlCandidates(suit, defaults), [suit, defaults]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -191,8 +193,16 @@ function PipImage({
   );
 }
 
-function CornerSuitRaster({ suit, sizePx }: { suit: string; sizePx: number }) {
-  const candidates = useMemo(() => suitRasterUrlCandidates(suit), [suit]);
+function CornerSuitRaster({
+  suit,
+  sizePx,
+  defaults,
+}: {
+  suit: string;
+  sizePx: number;
+  defaults?: CardArtGlobalDefaults;
+}) {
+  const candidates = useMemo(() => suitRasterUrlCandidates(suit, defaults), [suit, defaults]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -591,7 +601,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
                 : `calc(${CORNER_TOP} + ${rTY}% + ${notifierStackPx}px)`,
             }}
           >
-            <CornerSuitRaster suit={suit} sizePx={cornerGlyphPx} />
+            <CornerSuitRaster suit={suit} sizePx={cornerGlyphPx} defaults={defaults} />
           </div>
           <div
             className="pointer-events-none absolute z-[3] leading-[0.85] rotate-180"
@@ -626,7 +636,7 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
                   : `calc(${CORNER_TOP} - ${rTY}% + ${notifierStackPx}px)`,
             }}
           >
-            <CornerSuitRaster suit={suit} sizePx={cornerGlyphPx} />
+            <CornerSuitRaster suit={suit} sizePx={cornerGlyphPx} defaults={defaults} />
           </div>
         </>
       )}
@@ -1007,14 +1017,14 @@ function PipInterior({
           // Cross mode: render two suit rasters on the same tile (normal + horizontal mirror).
           return (
             <React.Fragment key={`${i}-${cell.col}-${cell.row}-cross`}>
-              <PipImage suit={suit} x={x} y={y} maxSideFrac={maxSide} orient={0} />
-              <PipImage suit={suit} x={x} y={y} maxSideFrac={maxSide} orient={1} />
+              <PipImage suit={suit} defaults={defaults} x={x} y={y} maxSideFrac={maxSide} orient={0} />
+              <PipImage suit={suit} defaults={defaults} x={x} y={y} maxSideFrac={maxSide} orient={1} />
             </React.Fragment>
           );
         }
         return (
           <React.Fragment key={`${i}-${cell.col}-${cell.row}-${o}`}>
-            <PipImage suit={suit} x={x} y={y} maxSideFrac={maxSide} orient={o} />
+            <PipImage suit={suit} defaults={defaults} x={x} y={y} maxSideFrac={maxSide} orient={o} />
           </React.Fragment>
         );
       })}

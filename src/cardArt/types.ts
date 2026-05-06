@@ -111,6 +111,11 @@ export type CardArtGlobalDefaults = {
    * Standard suits + any extra (e.g. `Frogs`, `Coins`, `Moons`, `Joker` for a shared joker field).
    */
   suitBackgroundFile?: Partial<Record<string, string>>;
+  /**
+   * Suit notifier/pip icon image per suit (corners, pip grids, table glyph in artwork mode).
+   * Prefer explicit filenames with extension (e.g. `SuitSpades.png`) to avoid fallback probing.
+   */
+  suitIconFile?: Partial<Record<string, string>>;
   /** Corner rank, court rank fallback, and background-only caption text — CSS colours per suit name. */
   suitFaceTextColor?: Partial<Record<string, string>>;
   /**

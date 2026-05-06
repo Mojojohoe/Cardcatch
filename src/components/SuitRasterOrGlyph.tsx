@@ -16,7 +16,10 @@ export function SuitRasterOrGlyph({
 }) {
   const ctx = useOptionalCardArt();
   const useRaster = ctx?.mode === 'raster';
-  const candidates = useMemo(() => (useRaster ? suitRasterUrlCandidates(suit) : []), [suit, useRaster]);
+  const candidates = useMemo(
+    () => (useRaster ? suitRasterUrlCandidates(suit, ctx?.defaults) : []),
+    [suit, useRaster, ctx?.defaults],
+  );
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
