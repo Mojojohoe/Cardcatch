@@ -4,6 +4,7 @@ import {
   AmbientLight,
   Box3,
   BoxGeometry,
+  Color,
   DirectionalLight,
   Group,
   Mesh,
@@ -42,19 +43,59 @@ const REST_ANGULAR_W2 = 0.0003;
 const REST_FLATNESS_MIN = 0.82;
 const REST_TIME_FLAT_S = 1.1;
 const REST_TIME_ANY_S = 2.6;
-const CHIP_GLTF_URL = `${import.meta.env.BASE_URL}assets/models/casino_poker_chip.glb`;
+const CHIP_GLTF_URL = `${import.meta.env.BASE_URL}assets/models/poker_chip.glb`;
+/** Source GLB is red; rotate from red hue toward requested seat color. */
+const SOURCE_TEXTURE_HUE = 0;
 
 type CoinEntry = { mesh: Object3D; body: Body };
 
+function patchMaterialHueRotate(mat: MeshStandardMaterial, hueDeltaTurns: number) {
+  if (!mat.map) return;
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      'void main() {',
+      `
+vec3 rgb2hsv(vec3 c) {
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+vec3 hsv2rgb(vec3 c) {
+  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+void main() {
+`,
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      'diffuseColor *= sampledDiffuseColor;',
+      `
+vec3 hsv = rgb2hsv(sampledDiffuseColor.rgb);
+hsv.x = fract(hsv.x + ${hueDeltaTurns.toFixed(6)});
+sampledDiffuseColor.rgb = hsv2rgb(hsv);
+diffuseColor *= sampledDiffuseColor;
+`,
+    );
+  };
+  mat.needsUpdate = true;
+}
+
 function prepareTintedChipTemplate(template: Object3D, chipColorHex: number, chipEmissiveHex: number): Object3D {
   const out = template.clone(true);
+  const hsl = { h: 0, s: 0, l: 0 };
+  new Color(chipColorHex).getHSL(hsl);
+  const hueDelta = hsl.h - SOURCE_TEXTURE_HUE;
   out.traverse((node) => {
     const mesh = node as Mesh;
     if (!mesh.isMesh) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const cloned = mats.map((m) => {
       const sm = (m as MeshStandardMaterial).clone();
-      // Preserve the GLB's native poker texture; only add subtle seat glow.
+      patchMaterialHueRotate(sm, hueDelta);
       sm.emissive.setHex(chipEmissiveHex);
       sm.emissiveIntensity = 0.06;
       return sm;
