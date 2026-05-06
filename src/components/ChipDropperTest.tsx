@@ -14,6 +14,7 @@ import {
   Scene,
   Vector3,
   WebGLRenderer,
+  CylinderGeometry,
   SRGBColorSpace,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -37,7 +38,7 @@ const REST_ANGULAR_W2 = 0.0003;
 const REST_FLATNESS_MIN = 0.82;
 const REST_TIME_FLAT_S = 1.1;
 const REST_TIME_ANY_S = 2.6;
-const CHIP_GLTF_URL = '/assets/models/casino_poker_chip.glb';
+const CHIP_GLTF_URL = `${import.meta.env.BASE_URL}assets/models/casino_poker_chip.glb`;
 /** The default chip texture is warm/orange-ish; rotate from this hue into seat color. */
 const SOURCE_TEXTURE_HUE = 0.08;
 
@@ -140,6 +141,8 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
   const cameraRef = useRef<PerspectiveCamera | null>(null);
   const coinsRef = useRef<CoinEntry[]>([]);
   const rafRef = useRef<number>(0);
+  const geomRef = useRef<CylinderGeometry | null>(null);
+  const matRef = useRef<MeshStandardMaterial | null>(null);
   const chipTemplateRef = useRef<Object3D | null>(null);
   const groundBodyRef = useRef<Body | null>(null);
   const physicsMatsRef = useRef<{ chip: Material } | null>(null);
@@ -148,9 +151,11 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
   const spawnCoin = useCallback(() => {
     const world = worldRef.current;
     const scene = sceneRef.current;
+    const geom = geomRef.current;
+    const mat = matRef.current;
     const template = chipTemplateRef.current;
     const pm = physicsMatsRef.current;
-    if (!world || !scene || !pm || !template) return;
+    if (!world || !scene || !pm || (!template && (!geom || !mat))) return;
 
     const shape = new Cylinder(COIN_R, COIN_R, COIN_H, 24);
     const sx = STACK_SPAWN_JITTER;
@@ -172,7 +177,7 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     body.sleepTimeLimit = 2.8;
     world.addBody(body);
 
-    const mesh = instantiateTintedChip(template);
+    const mesh = template ? instantiateTintedChip(template) : new Mesh(geom!, mat!);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.position.set(body.position.x, body.position.y, body.position.z);
@@ -221,6 +226,17 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     const feltMat = new Material('felt');
     world.addContactMaterial(new ContactMaterial(chipMat, feltMat, { friction: 0.66, restitution: 0.03 }));
     physicsMatsRef.current = { chip: chipMat };
+
+    const fallbackGeom = new CylinderGeometry(COIN_R, COIN_R, COIN_H, 40);
+    const fallbackMat = new MeshStandardMaterial({
+      color: chipColor,
+      emissive: chipEmissive,
+      emissiveIntensity: 0.26,
+      metalness: 0.48,
+      roughness: 0.28,
+    });
+    geomRef.current = fallbackGeom;
+    matRef.current = fallbackMat;
 
     const groundHalf = new Vec3(220, 0.18, 220);
     const groundShape = new Box(groundHalf);
@@ -338,12 +354,16 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
       if (groundBodyRef.current) world.removeBody(groundBodyRef.current);
       groundBodyRef.current = null;
       physicsMatsRef.current = null;
+      geomRef.current?.dispose();
+      matRef.current?.dispose();
       renderer.dispose();
       root.removeChild(renderer.domElement);
       sceneRef.current = null;
       worldRef.current = null;
       rendererRef.current = null;
       cameraRef.current = null;
+      geomRef.current = null;
+      matRef.current = null;
       disposeObjectMaterials(chipTemplateRef.current);
       chipTemplateRef.current = null;
     };
