@@ -2599,6 +2599,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [panicClashOpen, setPanicClashOpen] = useState(false);
   /** Avoid scheduling duplicate timers (React Strict dev double-mount clears the first timeout). */
   const panicClashPlayedRollIdsRef = useRef<Set<string>>(new Set());
+  const [handDragFromIndex, setHandDragFromIndex] = useState<number | null>(null);
+  const [handDragHoverIndex, setHandDragHoverIndex] = useState<number | null>(null);
   const handHudLayoutRef = useRef<HTMLDivElement>(null);
   const [handHudNeedsStack, setHandHudNeedsStack] = useState(false);
   const handRowRef = useRef<HTMLDivElement>(null);
@@ -3510,27 +3512,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
       {opponent && <RoomChat room={room} myUid={myUid} serviceRef={serviceRef} />}
 
-      {room.status === 'playing' && selectedCardIndex !== null && !me.confirmed && (
-        <div
-          className="pointer-events-none fixed inset-x-0 bottom-[max(1.1rem,calc(env(safe-area-inset-bottom,0px)+0.9rem))] z-[248] flex justify-center px-3 sm:bottom-[max(1.35rem,calc(env(safe-area-inset-bottom,0px)+1.15rem))]"
-          aria-live="polite"
-        >
-          <button
-            type="button"
-            onClick={() => void handlePlayCard()}
-            disabled={
-              loading ||
-              (me.hand[selectedCardIndex] != null &&
-                (prideBlocksCard(room, myUid, me.hand[selectedCardIndex]) ||
-                  envySealBlocksHandIndex(room, myUid, me.hand, selectedCardIndex)))
-            }
-            className="pointer-events-auto rounded-xl bg-yellow-400 px-7 py-3 text-[11px] font-black uppercase text-emerald-950 shadow-[0_12px_40px_rgba(250,204,21,0.45)] ring-2 ring-yellow-300/80 transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 sm:px-10 sm:py-3.5 sm:text-xs"
-          >
-            Play card
-          </button>
-        </div>
-      )}
-      
       {isDevMenuOpen && (
         <DevPowerMenu 
           onSelect={(id) => serviceRef.current.cheatPowerCard(id)} 
@@ -3764,8 +3745,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   opponentPendingDecision={opponentPendingDecision}
                   opponentWheelDecisionSpinning={opponentWheelDecisionSpinning}
                 />
+                {opponent.powerCards.length > 0 ? (
+                  <div className="pointer-events-none absolute right-0 top-3 hidden flex-row gap-2 sm:flex sm:items-start sm:pr-1">
+                    {opponent.powerCards.map((pid, i) => (
+                      <div key={`ogr-float-${pid}-${i}`} className="flex shrink-0 flex-none justify-center">
+                        <PowerCardVisual cardId={pid} revealed={false} small staticBackdrop />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
             </div>
-              <div className="col-span-full flex min-h-[3.5rem] flex-row flex-wrap justify-center gap-x-4 gap-y-2 self-start overflow-visible py-2 pt-3 opacity-95 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-full sm:max-w-none sm:flex-nowrap sm:justify-end sm:gap-x-6 sm:self-stretch sm:px-1 sm:pb-1 sm:pt-3">
+              <div className="col-span-full flex min-h-[3.5rem] flex-row flex-wrap justify-center gap-x-4 gap-y-2 self-start overflow-visible py-2 pt-3 opacity-95 sm:hidden">
                 {opponent.powerCards.map((pid, i) => (
                   <div key={`ogr-${pid}-${i}`} className="flex shrink-0 flex-none justify-center">
                     <PowerCardVisual cardId={pid} revealed={false} small staticBackdrop />
@@ -4390,10 +4380,30 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           {/* Hand — centred in the viewport row */}
           <div
-            className={`relative z-[12] mx-auto flex min-h-[13rem] min-w-0 max-w-none flex-col justify-end overflow-visible sm:min-h-[12rem] ${
-              handHudNeedsStack ? 'order-2 w-full max-w-full' : 'col-start-2 row-start-1 justify-self-center'
-            }`}
+            className={`relative mx-auto flex min-h-[13rem] min-w-0 max-w-none flex-col justify-end overflow-visible sm:min-h-[12rem] ${
+              room.status === 'playing' && selectedCardIndex !== null && !me.confirmed ? 'z-[24]' : 'z-[12]'
+            } ${handHudNeedsStack ? 'order-2 w-full max-w-full' : 'col-start-2 row-start-1 justify-self-center'}`}
           >
+            {room.status === 'playing' && selectedCardIndex !== null && !me.confirmed && (
+              <div
+                className="pointer-events-none relative z-[248] flex w-full justify-center pb-2"
+                aria-live="polite"
+              >
+                <button
+                  type="button"
+                  onClick={() => void handlePlayCard()}
+                  disabled={
+                    loading ||
+                    (me.hand[selectedCardIndex] != null &&
+                      (prideBlocksCard(room, myUid, me.hand[selectedCardIndex]) ||
+                        envySealBlocksHandIndex(room, myUid, me.hand, selectedCardIndex)))
+                  }
+                  className="pointer-events-auto rounded-xl bg-yellow-400 px-7 py-3 text-[11px] font-black uppercase text-emerald-950 shadow-[0_12px_40px_rgba(250,204,21,0.45)] ring-2 ring-yellow-300/80 transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 sm:px-10 sm:py-3.5 sm:text-xs"
+                >
+                  Play card
+                </button>
+              </div>
+            )}
             <div
               ref={handRowRef}
               className={`select-none flex min-h-[12rem] w-full items-end justify-center overflow-visible -space-x-6 flex-nowrap px-1 transition-[filter,opacity] duration-300 sm:min-h-[11.5rem] sm:-space-x-9 ${
@@ -4404,6 +4414,21 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               {me.hand.map((card, i) => {
                 const selected = selectedCardIndex === i;
                 const fan = playerHandFanMotion(i, me.hand.length, fanSqueeze);
+                const dragGapActive =
+                  handDragFromIndex !== null &&
+                  handDragHoverIndex !== null &&
+                  handDragFromIndex !== handDragHoverIndex;
+                const gapPush = dragGapActive ? 18 : 0;
+                const gapShift =
+                  dragGapActive && handDragFromIndex !== null && handDragHoverIndex !== null
+                    ? handDragFromIndex < handDragHoverIndex
+                      ? i > handDragFromIndex && i <= handDragHoverIndex
+                        ? gapPush
+                        : 0
+                      : i >= handDragHoverIndex && i < handDragFromIndex
+                        ? -gapPush
+                        : 0
+                    : 0;
                 const prideMuted = prideBlocksCard(room, myUid, card);
                 const envyMuted = envySealBlocksHandIndex(room, myUid, me.hand, i);
                 const envyCovetedHere = Boolean(
@@ -4431,8 +4456,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     style={{ transformOrigin: 'bottom center' }}
                     animate={
                       selected
-                        ? { y: -30 + fan.y, rotate: fan.rotate, x: fan.x, zIndex: 55 }
-                        : { y: fan.y, rotate: fan.rotate, x: fan.x, zIndex: fan.baseZ }
+                        ? { y: -30 + fan.y, rotate: fan.rotate, x: fan.x + gapShift, zIndex: 55 }
+                        : { y: fan.y, rotate: fan.rotate, x: fan.x + gapShift, zIndex: fan.baseZ }
                     }
                     transition={{ type: 'tween', duration: 0.22, ease: 'easeOut' }}
                     layout={false}
@@ -4440,20 +4465,29 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     draggable={!me.confirmed}
                     onDragStart={(e) => {
                       if (me.confirmed) return;
+                      setHandDragFromIndex(i);
+                      setHandDragHoverIndex(i);
                       e.dataTransfer.effectAllowed = 'move';
                       e.dataTransfer.setData('text/plain', String(i));
                     }}
                     onDragOver={(e) => {
                       if (me.confirmed) return;
                       e.preventDefault();
+                      setHandDragHoverIndex(i);
                       e.dataTransfer.dropEffect = 'move';
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
                       if (me.confirmed) return;
                       const from = Number(e.dataTransfer.getData('text/plain'));
+                      setHandDragFromIndex(null);
+                      setHandDragHoverIndex(null);
                       if (!Number.isFinite(from)) return;
                       void reorderMyHandSlots(from, i);
+                    }}
+                    onDragEnd={() => {
+                      setHandDragFromIndex(null);
+                      setHandDragHoverIndex(null);
                     }}
                   >
                     {envyCovetedHere && (
@@ -4756,7 +4790,7 @@ export default function App() {
       </div>
 
       <footer className="fixed bottom-4 left-4 pointer-events-none opacity-20 text-[8px] font-black uppercase tracking-[0.4em]">
-         TACTICAL NEXUS v2.0.0 - PURE P2P NO-BACKEND MODE
+         Cardcatch - V0.8.5
       </footer>
     </div>
     </>

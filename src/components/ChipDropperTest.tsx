@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import {
   ACESFilmicToneMapping,
   AmbientLight,
@@ -18,10 +18,28 @@ const COIN_R = 3.8;
 const COIN_H = 1.6;
 const DROP_Y = 52;
 
+/** Advance physics this many × wall-clock time → snappier fall. */
+const SIM_SPEED = 2;
+
 type CoinEntry = { mesh: Mesh; body: Body };
 
-/** Dev-only physics chip test (transparent full-screen canvas, no boxed preview). */
-export const ChipDropperTest: React.FC = () => {
+export type ChipSimulationHandle = {
+  spawn: () => void;
+};
+
+type SimulationProps = {
+  /** Chip body colour */
+  chipColor: number;
+  chipEmissive: number;
+  /** Panel fills this region (fixed / absolute sizing by caller) */
+  className?: string;
+};
+
+/** One independent chip pile (own scene / world). */
+export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationProps>(function ChipSimulationCanvas(
+  { chipColor, chipEmissive, className },
+  ref,
+) {
   const rootRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<Scene | null>(null);
   const worldRef = useRef<World | null>(null);
@@ -51,8 +69,8 @@ export const ChipDropperTest: React.FC = () => {
       angularDamping: 0.22,
       position: new Vec3((Math.random() - 0.5) * 6.5, DROP_Y, (Math.random() - 0.5) * 4.5),
     });
-    body.velocity.set((Math.random() - 0.5) * 0.9, -0.55, (Math.random() - 0.5) * 0.65);
-    body.angularVelocity.set((Math.random() - 0.5) * 1.7, (Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.7);
+    body.velocity.set((Math.random() - 0.5) * 1.05, -0.9, (Math.random() - 0.5) * 0.75);
+    body.angularVelocity.set((Math.random() - 0.5) * 2.2, (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 2.2);
     world.addBody(body);
 
     const mesh = new Mesh(geom, mat);
@@ -68,6 +86,8 @@ export const ChipDropperTest: React.FC = () => {
     scene.add(mesh);
     coinsRef.current.push({ mesh, body });
   }, []);
+
+  useImperativeHandle(ref, () => ({ spawn: spawnCoin }), [spawnCoin]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -113,8 +133,8 @@ export const ChipDropperTest: React.FC = () => {
     geomRef.current = geom;
 
     const mat = new MeshStandardMaterial({
-      color: 0xef4444,
-      emissive: 0x3b0000,
+      color: chipColor,
+      emissive: chipEmissive,
       emissiveIntensity: 0.26,
       metalness: 0.48,
       roughness: 0.28,
@@ -155,7 +175,7 @@ export const ChipDropperTest: React.FC = () => {
       const now = performance.now() / 1000;
       let t = now - last;
       last = now;
-      t = Math.min(t, 0.095);
+      t = Math.min(t, 0.095) * SIM_SPEED;
       world.step(fixed, t, 5);
 
       for (const { mesh, body } of coinsRef.current) {
@@ -198,18 +218,43 @@ export const ChipDropperTest: React.FC = () => {
       geomRef.current = null;
       matRef.current = null;
     };
+  }, [chipColor, chipEmissive]);
+
+  return (
+    <div ref={rootRef} className={`pointer-events-none h-full min-h-[120px] w-full touch-none ${className ?? ''}`} aria-hidden />
+  );
+});
+
+/** Dev physics chip test: two viewports ±35vw from table centre, beneath round-resolution overlay (z-[300]). */
+export const ChipDropperTest: React.FC = () => {
+  const leftRef = useRef<ChipSimulationHandle | null>(null);
+  const rightRef = useRef<ChipSimulationHandle | null>(null);
+
+  const spawnBoth = useCallback(() => {
+    leftRef.current?.spawn();
+    rightRef.current?.spawn();
   }, []);
 
   return (
     <>
-      <div
-        ref={rootRef}
-        className="pointer-events-none fixed inset-0 z-[474]"
-        aria-hidden
-      />
+      {/* Below results / panic overlays (z-[300]+); above main table (z-[20]) */}
+      <div className="pointer-events-none fixed inset-0 z-[40]" aria-hidden>
+        <ChipSimulationCanvas
+          ref={leftRef}
+          chipColor={0xef4444}
+          chipEmissive={0x3b0000}
+          className="absolute top-0 bottom-0 left-[calc(50%-35vw)] w-[min(32vw,28rem)] -translate-x-1/2"
+        />
+        <ChipSimulationCanvas
+          ref={rightRef}
+          chipColor={0x3b82f6}
+          chipEmissive={0x000838}
+          className="absolute top-0 bottom-0 left-[calc(50%+35vw)] w-[min(32vw,28rem)] -translate-x-1/2"
+        />
+      </div>
       <button
         type="button"
-        onClick={spawnCoin}
+        onClick={spawnBoth}
         className="pointer-events-auto fixed top-[max(4.75rem,calc(env(safe-area-inset-top,0px)+4.25rem))] right-[max(1rem,env(safe-area-inset-right,0px)+0.5rem)] z-[480] rounded-lg border border-red-400/75 bg-red-500/90 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-red-950 shadow-[0_6px_18px_rgba(0,0,0,0.35)] hover:bg-red-400"
       >
         Drop chip

@@ -31,7 +31,11 @@ for (const s of SUITS) {
 /** Card Creator previews always use raster layout; table display mode is a per-player setting in-game. */
 function RasterCardArtPreview({ children }: { children: React.ReactNode }) {
   const ctx = useCardArt();
-  return <CardArtContext.Provider value={{ ...ctx, mode: 'raster' }}>{children}</CardArtContext.Provider>;
+  return (
+    <CardArtContext.Provider value={{ ...ctx, mode: 'raster' }}>
+      <div className="flex h-full w-full min-h-0">{children}</div>
+    </CardArtContext.Provider>
+  );
 }
 
 const EXTENDED_SUIT_CARDS: string[] = [];
@@ -794,7 +798,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <div className="flex flex-wrap gap-8">
                 <div className="w-[200px] shrink-0">
                   <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Preview</p>
-                  <div className="overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
+                  <div className="aspect-[24/37] w-full overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
                     <RasterCardArtPreview>
                       {Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
                         <PowerCardVisual cardId={previewPowerId} small matchHandCard revealed curseRackPeek />
@@ -1459,12 +1463,12 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <div className="flex flex-wrap gap-8">
                 <div className="w-[200px] shrink-0">
                   <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Preview ({selected})</p>
-                  <div className="overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
+                  <div className="aspect-[24/37] w-full overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
                     <RasterCardArtPreview>
                       {isAssembledRasterCardId(selected) ? (
                         <ScaledAssembledCardFace
                           card={selected}
-                          override={manifest[selected]}
+                          override={draft ?? manifest[selected] ?? undefined}
                           previewDefaults={draftDefaults}
                         />
                       ) : Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (

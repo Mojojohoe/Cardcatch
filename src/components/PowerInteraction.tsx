@@ -101,11 +101,6 @@ export const PowerDecisionModal: React.FC<{
   const isWheel = decision.powerCardId === 10;
   const isChoicePowerTap = decision.powerCardId === 1 || decision.powerCardId === 15;
 
-  /** Docked mode hides table blur — never dock an empty Priestess panel. */
-  useEffect(() => {
-    if (isPriestess && dockBottom) setDockBottom(false);
-  }, [isPriestess, dockBottom]);
-
   const eligibleSwap = priestessHand.filter((c) => c && c !== priestessLockedCard);
 
   const headerAccent = tableSuit ? SUIT_COLORS[tableSuit as string] ?? 'text-yellow-400' : 'text-yellow-400';
@@ -124,29 +119,29 @@ export const PowerDecisionModal: React.FC<{
           animate={{ y: 0, opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-          className={`relative z-10 mx-auto flex min-h-0 w-full max-w-lg flex-col overflow-y-auto rounded-t-3xl border border-white/20 bg-slate-950/97 p-5 shadow-[0_-20px_80px_rgba(0,0,0,0.55)] sm:rounded-[2rem] sm:border-2 sm:p-8 ${
+          className={`relative z-10 mx-auto flex min-h-0 w-full ${isPriestess ? 'max-w-[min(96vw,78rem)]' : 'max-w-lg'} flex-col overflow-y-auto rounded-t-3xl border border-white/20 bg-slate-950/97 p-5 shadow-[0_-20px_80px_rgba(0,0,0,0.55)] sm:rounded-[2rem] sm:border-2 sm:p-8 ${
             dockBottom
               ? compactPane
                 ? 'max-h-[4.75rem] sm:max-h-[5rem]'
                 : 'max-h-[5.25rem] sm:max-h-[5.5rem]'
-              : 'max-h-[min(92vh,52rem)]'
+              : isPriestess
+                ? 'max-h-[min(96vh,62rem)]'
+                : 'max-h-[min(92vh,52rem)]'
           }`}
         >
-          {!isPriestess && (
-            <div className="absolute right-3 top-3 z-40 sm:right-4 sm:top-4">
-              <button
-                type="button"
-                className="rounded-full bg-white/10 p-2 text-white hover:bg-white/18"
-                onClick={() => setDockBottom((d) => !d)}
-                title={dockBottom ? 'Expand panel' : 'Dock to collapse bar'}
-              >
-                {dockBottom ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </button>
-            </div>
-          )}
+          <div className="absolute right-3 top-3 z-40 sm:right-4 sm:top-4">
+            <button
+              type="button"
+              className="rounded-full bg-white/10 p-2 text-white hover:bg-white/18"
+              onClick={() => setDockBottom((d) => !d)}
+              title={dockBottom ? 'Expand panel' : 'Dock to collapse bar'}
+            >
+              {dockBottom ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </button>
+          </div>
 
           {!dockBottom && (
-            <div className={`mb-4 space-y-1 ${isPriestess ? 'pr-2' : 'pr-11'} text-center`}>
+            <div className="mb-4 space-y-1 pr-11 text-center">
               <h2
                 className={`flex flex-wrap items-center justify-center gap-x-2 text-base font-black uppercase tracking-[0.12em] sm:text-lg ${headerAccent}`}
               >
@@ -165,7 +160,7 @@ export const PowerDecisionModal: React.FC<{
             </div>
           )}
 
-          {dockBottom && !isPriestess && (
+          {dockBottom && (
             <button
               type="button"
               onClick={() => setDockBottom(false)}
@@ -173,7 +168,7 @@ export const PowerDecisionModal: React.FC<{
             >
               <PowerCardVisual cardId={decision.powerCardId} small />
               <span className="truncate text-[10px] font-black uppercase tracking-wide text-yellow-100">
-                {MAJOR_ARCANA[decision.powerCardId]?.name ?? `Power ${decision.powerCardId}`} — tap expand to choose effect
+                {MAJOR_ARCANA[decision.powerCardId]?.name ?? `Power ${decision.powerCardId}`} — tap expand to continue
               </span>
             </button>
           )}
@@ -182,8 +177,8 @@ export const PowerDecisionModal: React.FC<{
             <div className="mb-4 space-y-3 rounded-2xl border border-purple-500/25 bg-purple-950/40 p-4 text-center">
               {decision.priestessOpponentUsesPower ? (
                 <p className="text-[11px] font-bold normal-case italic text-purple-200">
-                  <span className="font-black text-purple-400">{decision.priestessOpponentName ?? 'Opponent'}</span> uses a
-                  power card — one of three shown powers is theirs.
+                  <span className="font-black text-purple-400">{decision.priestessOpponentName ?? 'Opponent'}</span> is
+                  using a power card — one of three shown powers is the one they are using.
                 </p>
               ) : (
                 <p className="text-[11px] font-bold normal-case italic text-purple-300/95">

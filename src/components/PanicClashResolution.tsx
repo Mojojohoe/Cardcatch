@@ -106,6 +106,10 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
   const [strikeKey, setStrikeKey] = useState(0);
   const initialPanic = frames[0]?.panicRemaining ?? panicSwordStrikeStrength(panicCardId);
   const initialOpponent = frames[0]?.opponentEffective ?? 0;
+  const f = frames[Math.min(frameIdx, Math.max(0, frames.length - 1))] ?? {
+    panicRemaining: 0,
+    opponentEffective: 0,
+  };
   const panicCardFx = reduceCardVisualRank(panicCardId, Math.max(0, initialPanic - f.panicRemaining));
   const opponentCardFx =
     oppCardId == null ? '' : reduceCardVisualRank(oppCardId, Math.max(0, initialOpponent - f.opponentEffective));
@@ -162,11 +166,6 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
       cancelled = true;
     };
   }, [oppCardId, frames.length, exchanges]);
-
-  const f = frames[Math.min(frameIdx, Math.max(0, frames.length - 1))] ?? {
-    panicRemaining: 0,
-    opponentEffective: 0,
-  };
 
   return (
     <motion.div
