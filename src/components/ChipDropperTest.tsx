@@ -44,6 +44,9 @@ const REST_ANGULAR_W2 = 0.0003;
 const REST_FLATNESS_MIN = 0.82;
 const REST_TIME_FLAT_S = 1.1;
 const REST_TIME_ANY_S = 2.6;
+const UPRIGHT_BIAS_TORQUE = 2.35;
+const UPRIGHT_BIAS_DAMP = 1.05;
+const NEAR_REST_LATERAL_DAMP = 0.86;
 const CHIP_GLTF_URL = `${import.meta.env.BASE_URL}assets/models/poker_chip.glb`;
 /** Source GLB is red; rotate from red hue toward requested seat color. */
 const SOURCE_TEXTURE_HUE = 0;
@@ -90,13 +93,14 @@ function prepareTintedChipTemplate(template: Object3D, chipColorHex: number, chi
   const hsl = { h: 0, s: 0, l: 0 };
   new Color(chipColorHex).getHSL(hsl);
   const hueDelta = hsl.h - SOURCE_TEXTURE_HUE;
+  const shouldHueShift = Math.abs(hueDelta) > 0.01;
   out.traverse((node) => {
     const mesh = node as Mesh;
     if (!mesh.isMesh) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const cloned = mats.map((m) => {
       const sm = (m as MeshStandardMaterial).clone();
-      patchMaterialHueRotate(sm, hueDelta);
+      if (shouldHueShift) patchMaterialHueRotate(sm, hueDelta);
       sm.emissive.setHex(chipEmissiveHex);
       sm.emissiveIntensity = 0.06;
       return sm;
@@ -185,8 +189,7 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     });
     body.quaternion.setFromAxisAngle(new Vec3(0, 1, 0), Math.random() * Math.PI * 2);
     body.velocity.set(0, -0.75, 0);
-    body.angularVelocity.set(0, (Math.random() - 0.5) * 0.08, 0);
-    body.angularFactor.set(0, 1, 0);
+    body.angularVelocity.set((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.2);
     body.allowSleep = true;
     body.sleepSpeedLimit = 0.03;
     body.sleepTimeLimit = 2.8;
@@ -346,6 +349,19 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
       world.step(fixed, t, 5);
 
       for (const { mesh, body } of coinsRef.current) {
+        // Soft stabilization: nudge toward flatter posture without hard axis-locking motion.
+        const qx = body.quaternion.x;
+        const qz = body.quaternion.z;
+        body.torque.x += -qx * UPRIGHT_BIAS_TORQUE - body.angularVelocity.x * UPRIGHT_BIAS_DAMP;
+        body.torque.z += -qz * UPRIGHT_BIAS_TORQUE - body.angularVelocity.z * UPRIGHT_BIAS_DAMP;
+
+        // Reduce long-run "ice skating" in tall stacks while preserving regular fall dynamics.
+        const nearRest = body.velocity.lengthSquared() < 0.045;
+        if (nearRest) {
+          body.velocity.x *= NEAR_REST_LATERAL_DAMP;
+          body.velocity.z *= NEAR_REST_LATERAL_DAMP;
+        }
+
         mesh.position.set(body.position.x, body.position.y, body.position.z);
         mesh.quaternion.set(
           body.quaternion.x,
@@ -434,11 +450,11 @@ export const ChipDropperTest: React.FC<{
     seenDropIdsRef.current.add(lastDrop.dropId);
     const mine = lastDrop.uid === myUid;
     if (mine) {
-      leftRef.current?.spawn();
+      rightRef.current?.spawn();
       selfCountRef.current += 1;
       setSelfCount(selfCountRef.current);
     } else {
-      rightRef.current?.spawn();
+      leftRef.current?.spawn();
       theirCountRef.current += 1;
       setTheirCount(theirCountRef.current);
     }
@@ -449,22 +465,22 @@ export const ChipDropperTest: React.FC<{
       {/* Below results / panic overlays (z-[300]+); above main table (z-[20]) */}
       <div className="pointer-events-none fixed inset-0 z-[40]" aria-hidden>
         <div
-          className={`absolute top-1/2 left-[calc(50%-35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${myPalette.border} ${myPalette.fill} shadow-[inset_0_0_0_1px_rgba(248,113,113,0.25)]`}
+          className={`absolute top-[44%] left-[calc(50%-30vw)] flex h-[min(46vh,29rem)] w-[min(27vw,23rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${oppPalette.border} ${oppPalette.fill} shadow-[inset_0_0_0_1px_rgba(248,113,113,0.25)]`}
+          title="Their token catchment"
+        >
+          <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
+            Their tokens: {theirCount}
+          </div>
+          <ChipSimulationCanvas ref={leftRef} chipColor={oppPalette.chipColor} chipEmissive={oppPalette.chipEmissive} className="min-h-0 flex-1" />
+        </div>
+        <div
+          className={`absolute top-1/2 left-[calc(50%+35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${myPalette.border} ${myPalette.fill} shadow-[inset_0_0_0_1px_rgba(96,165,250,0.25)]`}
           title="Your token catchment"
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
             Your tokens: {selfCount}
           </div>
-          <ChipSimulationCanvas ref={leftRef} chipColor={myPalette.chipColor} chipEmissive={myPalette.chipEmissive} className="min-h-0 flex-1" />
-        </div>
-        <div
-          className={`absolute top-[58%] left-[calc(50%+29vw)] flex h-[min(48vh,30rem)] w-[min(27vw,23rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${oppPalette.border} ${oppPalette.fill} shadow-[inset_0_0_0_1px_rgba(96,165,250,0.25)]`}
-          title="Opponent token catchment"
-        >
-          <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
-            Their tokens: {theirCount}
-          </div>
-          <ChipSimulationCanvas ref={rightRef} chipColor={oppPalette.chipColor} chipEmissive={oppPalette.chipEmissive} className="min-h-0 flex-1" />
+          <ChipSimulationCanvas ref={rightRef} chipColor={myPalette.chipColor} chipEmissive={myPalette.chipEmissive} className="min-h-0 flex-1" />
         </div>
       </div>
       <button
