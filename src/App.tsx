@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { usePowerTooltipPosition } from './hooks/usePowerTooltipPosition';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -87,6 +87,8 @@ import { DesperationWheel, TargetSuitWheel } from './components/GameWheels';
 import { RoomChat } from './components/RoomChat';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { DiceBoxTestOverlay } from './components/DiceBoxTestOverlay';
+import { ChipDropperTest } from './components/ChipDropperTest';
+import { PanicClashResolution } from './components/PanicClashResolution';
 import { SuitGlyph } from './components/SuitGlyphs';
 import { SuitRasterOrGlyph } from './components/SuitRasterOrGlyph';
 import { DualTableTrumpCard, DualTrumpTableLabel } from './components/DualTableTrumpCard';
@@ -853,7 +855,26 @@ const DevPowerMenu: React.FC<{
           <X className="w-6 h-6" />
         </button>
       </div>
-      
+
+      <div className="mb-5 rounded-2xl border border-violet-500/40 bg-violet-950/20 p-4 space-y-3">
+        <p className="text-[10px] font-black uppercase tracking-widest text-violet-300">Card art</p>
+        <p className="text-[10px] text-slate-400 leading-snug">
+          Full-screen card creator (#card-creator). Author raster faces / export bundles for{' '}
+          <span className="font-mono text-slate-300">public/</span>.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            window.location.hash = '#card-creator';
+            onClose();
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-600/55 bg-violet-900/50 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-violet-50 transition-colors hover:border-violet-400/75 hover:bg-violet-800/65"
+        >
+          <Layers className="h-4 w-4 shrink-0" strokeWidth={2} />
+          Open card creator
+        </button>
+      </div>
+
       {onActivateCurseOnTable && onClearActiveCurses && (
         <div className="mb-5 rounded-2xl border border-amber-500/40 bg-amber-950/25 p-4 space-y-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Curses · table zone</p>
@@ -2532,6 +2553,15 @@ function wipeDualReconnectSnapshots() {
   }
 }
 
+/** Bottom-strip panic dice: not usable until `results` (strip only shows during playing / powering). */
+const PANIC_DICE_STRIP_HOVER_HELP =
+  "Panic dice can be used after a round has resolved to remove value from the opponent's cards. Panic dice can only be used once.";
+
+const PANIC_DICE_STRIP_CLICK_HELP =
+  "Panic dice can be used after the round has resolved. Panic dice will roll and create a card based on the rolled value. That value will be subtracted from the opponent's roll. The round is then re-evaluated. Panic dice are one-use only.";
+
+const PANIC_DICE_USED_HOVER = 'You have used your Panic Dice this game.';
+
 /** UI time to show “deck empty / dealing bones” before the full-screen FAMINE callout */
 const FAMINE_BONE_DEAL_UI_MS = 6400;
 
@@ -2563,6 +2593,14 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [famineBannerPhase, setFamineBannerPhase] = useState<FamineBannerPhase>('idle');
   const [hudDiceRoll, setHudDiceRoll] = useState<DiceTestRollPayload | null>(null);
   const [panicDiceConfirmOpen, setPanicDiceConfirmOpen] = useState(false);
+  const [panicDiceStripExplainOpen, setPanicDiceStripExplainOpen] = useState(false);
+  const [panicDiceStripHover, setPanicDiceStripHover] = useState(false);
+  const [panicDiceResultsHover, setPanicDiceResultsHover] = useState(false);
+  const [panicClashOpen, setPanicClashOpen] = useState(false);
+  /** Avoid scheduling duplicate timers (React Strict dev double-mount clears the first timeout). */
+  const panicClashPlayedRollIdsRef = useRef<Set<string>>(new Set());
+  const handHudLayoutRef = useRef<HTMLDivElement>(null);
+  const [handHudNeedsStack, setHandHudNeedsStack] = useState(false);
   const handRowRef = useRef<HTMLDivElement>(null);
   const [handRowW, setHandRowW] = useState(400);
   const [handFanLayout, setHandFanLayout] = useState<HandFanBreakpoint>('compact');
@@ -2772,6 +2810,25 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   }, []);
 
   useEffect(() => {
+    if (room?.status !== 'results') setPanicClashOpen(false);
+    if (room?.status === 'playing') panicClashPlayedRollIdsRef.current.clear();
+  }, [room?.status]);
+
+  useEffect(() => {
+    const fx = room?.lastOutcome?.panicFx;
+    if (!fx || room?.status !== 'results') return;
+    if (panicClashPlayedRollIdsRef.current.has(fx.diceRollId)) return;
+    /** After dice HUD fade (~4.7s) — show scripted panic exchange before recap. */
+    const delayMs = 4600;
+    const tid = window.setTimeout(() => {
+      if (panicClashPlayedRollIdsRef.current.has(fx.diceRollId)) return;
+      panicClashPlayedRollIdsRef.current.add(fx.diceRollId);
+      setPanicClashOpen(true);
+    }, delayMs);
+    return () => window.clearTimeout(tid);
+  }, [room?.lastOutcome?.panicFx?.diceRollId, room?.status]);
+
+  useEffect(() => {
     const mq = typeof window !== 'undefined' ? window.matchMedia('(min-width: 640px)') : null;
     if (!mq) return;
     const apply = () => setHandFanLayout(mq.matches ? 'wide' : 'compact');
@@ -2934,6 +2991,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       setLoading(false);
     }
   }, []);
+
+  const dismissPanicClash = useCallback(() => setPanicClashOpen(false), []);
 
   const handleDraftSelect = async (powerId: number) => {
     setLoading(true);
@@ -3218,32 +3277,56 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     powerCount > 0 ? powerCount * powerCardWidth - Math.max(0, powerCount - 1) * powerOverlap : 0;
   const powerClearancePx = powerCount > 0 ? Math.min(220, fanOverflowPx) : 0;
   const handPowerGapPx = (handFanLayout === 'wide' ? 40 : 16) + Math.min(220, fanOverflowPx);
-  const handCenterShiftPx =
-    powerCount > 0 && handFanLayout === 'wide'
-      ? -Math.round((powerBlockWidth + handPowerGapPx + powerClearancePx) / 2)
-      : 0;
-
-  /** Mirror powers column footprint so flex-1 hand stays horizontally centered between sides. */
-  const powersColumnFootprintPx =
-    powerCount > 0 ? Math.round(powerBlockWidth + powerClearancePx) : 0;
 
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
 
-  const panicDiceHandHud =
+  const panicDiceStripVisible =
     room.settings.enablePanicDice &&
     panicDiceSeatAllowed(room, myUid) &&
-    !me.panicDiceUsed &&
     (room.status === 'playing' || room.status === 'powering');
 
-  const panicDiceResultsHud =
+  const panicDiceStripInteractive = panicDiceStripVisible && !me.panicDiceUsed;
+
+  const panicDiceResultsVisible =
     room.status === 'results' &&
     Boolean(room.lastOutcome) &&
     room.settings.enablePanicDice &&
     panicDiceSeatAllowed(room, myUid) &&
-    !me.panicDiceUsed &&
     !me.readyForNextRound &&
     !showResolutionSequence;
+
+  const panicDiceResultsInteractive = panicDiceResultsVisible && !me.panicDiceUsed;
+
+  const panicStripHoverText = me.panicDiceUsed ? PANIC_DICE_USED_HOVER : PANIC_DICE_STRIP_HOVER_HELP;
+  const panicStripFootnote = me.panicDiceUsed ? 'Used this game' : 'Locked until results';
+
+  useLayoutEffect(() => {
+    const el = handHudLayoutRef.current;
+    if (!el) return;
+    const measure = () => {
+      const cw = el.clientWidth;
+      const panicReserve = panicDiceStripVisible ? Math.max(132, Math.round(powerBlockWidth * 0.35) + 108) : 0;
+      const powerReserve =
+        powerCount > 0 ? Math.round(powerBlockWidth + Math.min(48, powerClearancePx)) : 0;
+      const gapReserve =
+        ((powerCount > 0 ? 1 : 0) + (panicDiceStripVisible ? 1 : 0)) * Math.max(12, Math.min(handPowerGapPx, 48)) + 20;
+      const need = powerReserve + fanWidthPx + panicReserve + gapReserve;
+      setHandHudNeedsStack(need > cw + 2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [
+    powerCount,
+    powerBlockWidth,
+    powerClearancePx,
+    handPowerGapPx,
+    fanWidthPx,
+    panicDiceStripVisible,
+    handFanLayout,
+  ]);
 
   const myPendingDecision = room.pendingPowerDecisions?.[myUid] || null;
   const opponentPendingDecision = opponentUid ? room.pendingPowerDecisions?.[opponentUid] || null : null;
@@ -3324,6 +3407,34 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
       <DiceBoxTestOverlay roll={hudDiceRoll} />
+      {import.meta.env.DEV ? <ChipDropperTest /> : null}
+
+      {panicDiceStripExplainOpen && (
+        <div
+          className="fixed inset-0 z-[458] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Panic dice information"
+          onClick={() => setPanicDiceStripExplainOpen(false)}
+        >
+          <div
+            className="max-w-md rounded-2xl border border-amber-900/55 bg-slate-950 p-6 shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[11px] font-black uppercase tracking-widest text-amber-400">Panic dice</p>
+            <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-100">
+              {PANIC_DICE_STRIP_CLICK_HELP}
+            </p>
+            <button
+              type="button"
+              className="mt-5 rounded-xl border border-slate-600 px-5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200 hover:bg-slate-800"
+              onClick={() => setPanicDiceStripExplainOpen(false)}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
 
       {panicDiceConfirmOpen && (
         <div
@@ -3969,6 +4080,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/98 z-[300] flex flex-col items-center justify-start overflow-hidden"
         >
+          {panicClashOpen && room.lastOutcome?.panicFx && (
+            <PanicClashResolution room={room} onComplete={dismissPanicClash} />
+          )}
           <AnimatePresence mode="wait">
             {showResolutionSequence ? (
               <motion.div
@@ -4048,27 +4162,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           </div>
                         </motion.div>
                       )}
-                      {room.lastOutcome?.panicFx && room.lastOutcome.panicFx.opponentUid === uid && (
-                        <motion.div
-                          className="pointer-events-none absolute top-12 left-1/2 z-[41] flex w-[10rem] -translate-x-1/2 justify-center sm:top-[3.35rem] sm:w-[11rem]"
-                          initial={{ y: -4, opacity: 1 }}
-                          animate={{ y: [0, -9, 0], opacity: 1 }}
-                          transition={{
-                            y: { repeat: Infinity, duration: 1.08, ease: 'easeInOut' },
-                          }}
-                        >
-                          <div className="origin-top scale-[0.6] drop-shadow-[0_12px_28px_rgba(0,0,0,0.65)] sm:scale-[0.66]">
-                            <CardVisual
-                              card={room.lastOutcome.panicFx!.panicCardId}
-                              panicBladeFace
-                              revealed
-                              noAnimate
-                              presentation="none"
-                              small
-                            />
-                          </div>
-                        </motion.div>
-                      )}
                       <CardVisual
                         card={room.lastOutcome!.cardsPlayed[uid]}
                         revealed
@@ -4087,23 +4180,52 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            </div>
                          )}
                       </div>
-                      {uid === myUid && panicDiceResultsHud && (
-                        <button
-                          type="button"
-                          onClick={() => setPanicDiceConfirmOpen(true)}
-                          title="Panic dice can be used to influence a round outcome after the round has been resolved."
-                          className="group mt-3 outline-none transition-transform hover:scale-[1.05] active:scale-95"
-                        >
-                          <img
-                            src={cardArtAssetUrl('PanicDice.png')}
-                            alt=""
-                            draggable={false}
-                            className="relative h-[3.5rem] w-auto max-w-[5rem] object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_18px_rgba(251,191,36,0.45)]"
-                          />
-                          <span className="pointer-events-none block text-center text-[7px] font-black uppercase tracking-widest text-amber-400/95">
-                            Use dice
-                          </span>
-                        </button>
+                      {uid === myUid && panicDiceResultsVisible && (
+                        <div className="relative mt-3 flex flex-col items-center">
+                          {panicDiceResultsInteractive ? (
+                            <button
+                              type="button"
+                              onClick={() => setPanicDiceConfirmOpen(true)}
+                              title="Use panic dice once per game after the round is resolved."
+                              className="group outline-none transition-transform hover:scale-[1.05] active:scale-95"
+                            >
+                              <img
+                                src={cardArtAssetUrl('PanicDice.png')}
+                                alt=""
+                                draggable={false}
+                                className="relative h-[3.5rem] w-auto max-w-[5rem] object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_18px_rgba(251,191,36,0.45)]"
+                              />
+                              <span className="pointer-events-none block text-center text-[7px] font-black uppercase tracking-widest text-amber-400/95">
+                                Use dice
+                              </span>
+                            </button>
+                          ) : (
+                            <>
+                              <div
+                                role="presentation"
+                                className="cursor-not-allowed outline-none select-none"
+                                onMouseEnter={() => setPanicDiceResultsHover(true)}
+                                onMouseLeave={() => setPanicDiceResultsHover(false)}
+                                aria-label={PANIC_DICE_USED_HOVER}
+                              >
+                                <img
+                                  src={cardArtAssetUrl('PanicDice.png')}
+                                  alt=""
+                                  draggable={false}
+                                  className="pointer-events-none relative h-[3.5rem] w-auto max-w-[5rem] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]"
+                                />
+                              </div>
+                              <span className="pointer-events-none mt-0.5 block text-center text-[7px] font-black uppercase tracking-widest text-slate-500">
+                                Dice used
+                              </span>
+                              {panicDiceResultsHover ? (
+                                <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-[340] max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-slate-600/65 bg-emerald-950/98 px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-emerald-50 shadow-xl backdrop-blur-sm">
+                                  {PANIC_DICE_USED_HOVER}
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}
@@ -4193,46 +4315,52 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
              {me.confirmed && <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">Locked in — waiting</span>}
            </div>
         </div>
-        <div
-          className={`flex w-full flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible px-1 sm:items-end sm:justify-center ${
-            (room.status === 'playing' || room.status === 'powering') && me.powerCards.length ? '' : ''
-          }`}
-        >
+        <div className="flex w-full flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible px-1">
           <div
-            className="mx-auto flex w-full max-w-[min(100%,56rem)] flex-col items-stretch gap-4 overflow-x-visible overflow-y-visible sm:flex-row sm:items-end sm:justify-center"
-            style={{
-              columnGap: `${handPowerGapPx}px`,
-              transform: handCenterShiftPx !== 0 ? `translateX(${handCenterShiftPx}px)` : undefined,
-            }}
+            ref={handHudLayoutRef}
+            className={`mx-auto w-full max-w-[min(100%,72rem)] overflow-x-visible overflow-y-visible px-1 ${
+              handHudNeedsStack
+                ? 'flex flex-col items-center gap-y-7'
+                : 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-x-[clamp(0.75rem,2.8vw,2.75rem)]'
+            }`}
           >
-          {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 && (
+            {/* Column 1 (grid) / stacked block 1 — powers */}
             <div
-              className="relative z-[14] flex w-full shrink-0 flex-col items-center overflow-visible pt-10 pb-4 sm:w-auto sm:max-w-none sm:shrink-0 sm:items-end sm:pb-2 sm:pt-8"
-              style={powerClearancePx > 0 ? { marginRight: `${powerClearancePx}px` } : undefined}
+              className={`relative z-[14] min-h-0 min-w-0 overflow-visible pb-3 pt-8 ${
+                handHudNeedsStack
+                  ? 'order-1 flex w-full justify-center pb-4 pt-10'
+                  : 'flex justify-end'
+              }`}
             >
-              <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
-                Your powers
-              </span>
-              <div className="flex w-full max-w-full flex-nowrap items-end justify-center overflow-visible px-1 pb-2 pt-1 -space-x-4 pl-1 sm:w-max sm:justify-end sm:-space-x-6 sm:pl-0">
-                {me.powerCards.map((pId, i) => (
-                  <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
-                    <PowerCardVisual
-                      cardId={pId}
-                      matchHandCard
-                      selected={selectedPowerCard === pId}
-                      onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
-                      disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
-                    />
+              {(room.status === 'playing' || room.status === 'powering') && me.powerCards.length > 0 ? (
+                <div
+                  className={`flex shrink-0 flex-col items-center overflow-visible ${
+                    handHudNeedsStack ? 'max-w-full' : 'items-end'
+                  }`}
+                >
+                  <span className="mb-1 text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-right">
+                    Your powers
+                  </span>
+                  <div className="-space-x-4 flex max-w-full flex-nowrap items-end justify-center overflow-visible px-1 pb-2 pt-1 pl-1 sm:w-max sm:-space-x-6 sm:justify-end sm:pl-0">
+                    {me.powerCards.map((pId, i) => (
+                      <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
+                        <PowerCardVisual
+                          cardId={pId}
+                          matchHandCard
+                          selected={selectedPowerCard === pId}
+                          onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
+                          disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : null}
             </div>
-          )}
+          {/* Column 2 / stacked block 3 — hand always centered */}
           <div
-            className={`relative z-[12] flex min-h-[13rem] min-w-0 flex-1 flex-col justify-end overflow-visible sm:min-h-[12rem] ${
-              (room.status === 'playing' || room.status === 'powering') && me.powerCards.length
-                ? 'sm:min-w-0 sm:flex-1 sm:max-w-none'
-                : 'w-full'
+            className={`relative z-[12] flex min-h-[13rem] min-w-0 flex-col justify-end overflow-visible sm:min-h-[12rem] ${
+              handHudNeedsStack ? 'order-3 w-full max-w-full min-w-[min(100%,24rem)]' : 'justify-self-center'
             }`}
           >
             <div
@@ -4337,33 +4465,112 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               })}
             </div>
           </div>
-          {panicDiceHandHud && (
-            <div
-              className="relative z-[13] flex shrink-0 flex-col items-center justify-end pb-4 pt-10 sm:items-start sm:pb-2 sm:pt-8"
-              style={{
-                minWidth: powersColumnFootprintPx > 0 ? `${powersColumnFootprintPx}px` : undefined,
-                marginLeft:
-                  powerClearancePx > 0 && powerCount > 0 ? `${powerClearancePx}px` : undefined,
-              }}
-            >
-              <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
+          {/* Column 3 (grid) / stacked block 2 — panic (informational until results); empty cell keeps hand centered */}
+          {!handHudNeedsStack ? (
+            <div className="relative z-[13] flex min-h-0 min-w-0 flex-col justify-end self-end pb-3 pt-8">
+              {panicDiceStripVisible ? (
+                <>
+                  <span className="mb-1 text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
+                    Panic Dice
+                  </span>
+                  <div className="relative flex flex-col items-center sm:items-start">
+                    {panicDiceStripInteractive ? (
+                      <button
+                        type="button"
+                        onMouseEnter={() => setPanicDiceStripHover(true)}
+                        onMouseLeave={() => setPanicDiceStripHover(false)}
+                        onFocus={() => setPanicDiceStripHover(true)}
+                        onBlur={() => setPanicDiceStripHover(false)}
+                        onClick={() => setPanicDiceStripExplainOpen(true)}
+                        className="group relative cursor-help outline-none transition-transform hover:scale-[1.03] active:scale-95 [&:focus-visible]:ring-2 [&:focus-visible]:ring-amber-400/80"
+                        aria-label="Panic dice — not usable until round results"
+                      >
+                        <img
+                          src={cardArtAssetUrl('PanicDice.png')}
+                          alt=""
+                          draggable={false}
+                          className="relative mx-auto h-[9.5rem] w-auto max-w-[min(92vw,12rem)] opacity-85 object-contain saturate-[0.92] contrast-[1.03] grayscale-[0.12] transition-[filter,opacity] group-hover:opacity-95 group-hover:grayscale-[0.05] drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)]"
+                        />
+                      </button>
+                    ) : (
+                      <div
+                        role="presentation"
+                        className="cursor-not-allowed select-none outline-none"
+                        aria-label={PANIC_DICE_USED_HOVER}
+                        onMouseEnter={() => setPanicDiceStripHover(true)}
+                        onMouseLeave={() => setPanicDiceStripHover(false)}
+                      >
+                        <img
+                          src={cardArtAssetUrl('PanicDice.png')}
+                          alt=""
+                          draggable={false}
+                          className="pointer-events-none relative mx-auto h-[9.5rem] w-auto max-w-[min(92vw,12rem)] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
+                        />
+                      </div>
+                    )}
+                    {panicDiceStripHover ? (
+                      <div className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-[60] w-[min(20rem,calc(100vw-8rem))] max-w-[min(20rem,calc(100vw-3rem))] -translate-x-1/2 rounded-xl border border-amber-700/55 bg-emerald-950/97 px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-emerald-50 shadow-xl backdrop-blur-sm sm:left-0 sm:w-[min(22rem,calc(100vw-11rem))] sm:translate-x-0">
+                        {panicStripHoverText}
+                      </div>
+                    ) : null}
+                  </div>
+                  <span className="pointer-events-none mt-1 text-center text-[7px] font-black uppercase tracking-widest text-slate-500 sm:text-left">
+                    {panicStripFootnote}
+                  </span>
+                </>
+              ) : null}
+            </div>
+          ) : panicDiceStripVisible ? (
+            <div className="relative z-[13] order-2 flex w-full flex-col items-center justify-end pb-4 pt-8">
+              <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90">
                 Panic Dice
               </span>
-              <button
-                type="button"
-                onClick={() => setPanicDiceConfirmOpen(true)}
-                title="Panic dice can be used to influence a round outcome after the round has been resolved."
-                className="group outline-none transition-transform hover:scale-[1.05] active:scale-95"
-              >
-                <img
-                  src={cardArtAssetUrl('PanicDice.png')}
-                  alt=""
-                  draggable={false}
-                  className="relative h-[9.5rem] w-auto max-w-[12rem] object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.5)]"
-                />
-              </button>
+              <div className="relative flex flex-col items-center">
+                {panicDiceStripInteractive ? (
+                  <button
+                    type="button"
+                    onMouseEnter={() => setPanicDiceStripHover(true)}
+                    onMouseLeave={() => setPanicDiceStripHover(false)}
+                    onFocus={() => setPanicDiceStripHover(true)}
+                    onBlur={() => setPanicDiceStripHover(false)}
+                    onClick={() => setPanicDiceStripExplainOpen(true)}
+                    className="group relative cursor-help outline-none transition-transform hover:scale-[1.03] active:scale-95 [&:focus-visible]:ring-2 [&:focus-visible]:ring-amber-400/80"
+                    aria-label="Panic dice — not usable until round results"
+                  >
+                    <img
+                      src={cardArtAssetUrl('PanicDice.png')}
+                      alt=""
+                      draggable={false}
+                      className="relative mx-auto h-[9.5rem] w-auto max-w-[min(92vw,12rem)] opacity-85 object-contain saturate-[0.92] contrast-[1.03] grayscale-[0.12] transition-[filter,opacity] group-hover:opacity-95 group-hover:grayscale-[0.05] drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)]"
+                    />
+                  </button>
+                ) : (
+                  <div
+                    role="presentation"
+                    className="cursor-not-allowed select-none outline-none"
+                    aria-label={PANIC_DICE_USED_HOVER}
+                    onMouseEnter={() => setPanicDiceStripHover(true)}
+                    onMouseLeave={() => setPanicDiceStripHover(false)}
+                  >
+                    <img
+                      src={cardArtAssetUrl('PanicDice.png')}
+                      alt=""
+                      draggable={false}
+                      className="pointer-events-none relative mx-auto h-[9.5rem] w-auto max-w-[min(92vw,12rem)] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
+                    />
+                  </div>
+                )}
+                {panicDiceStripHover ? (
+                  <div className="pointer-events-none absolute bottom-full left-1/2 z-[60] mb-3 max-w-[min(22rem,calc(100vw-2.5rem))] -translate-x-1/2 rounded-xl border border-amber-700/55 bg-emerald-950/97 px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-emerald-50 shadow-xl backdrop-blur-sm">
+                    {panicStripHoverText}
+                  </div>
+                ) : null}
+              </div>
+              <span className="pointer-events-none mt-1 text-center text-[7px] font-black uppercase tracking-widest text-slate-500">
+                {panicStripFootnote}
+              </span>
             </div>
-          )}
+          ) : null}
         </div>
         </div>
 

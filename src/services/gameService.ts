@@ -735,6 +735,50 @@ export function computePanicCombatEffects(args: {
   return { exchanges, panicDestroyed, opponentDestroyed, extraOpponentPenalty };
 }
 
+/** Wrath magnitude applied to opponent clash stamina during panic reroll (frozen tableau). */
+export function panicOpponentWrathPenaltyFromOutcome(
+  outcome: NonNullable<RoomData['lastOutcome']>,
+  opponentUid: string,
+  opponentCardId: string,
+): number {
+  const wf = outcome.wrathFx;
+  if (!wf || wf.targetUid !== opponentUid || !wf.minionCard) return 0;
+  const pc = parseCard(opponentCardId);
+  if (pc.isJoker || opponentCardId === GROVEL_CARD_ID) return 0;
+  return getWrathMagnitude(wf.minionCard);
+}
+
+export type PanicExchangeFrame = { panicRemaining: number; opponentEffective: number };
+
+/** One snapshot after each simultaneous −1 panic / opponent stamina tick (aligned with {@link computePanicCombatEffects}). */
+export function buildPanicExchangeFrames(args: {
+  panicCardId: string;
+  opponentCardId: string;
+  opponentWrathPenalty: number;
+  greedTaxActive: boolean;
+}): { frames: PanicExchangeFrame[]; exchanges: number } {
+  let panicPow = panicSwordStrikeStrength(args.panicCardId);
+  const oppPc = parseCard(args.opponentCardId);
+  const frames: PanicExchangeFrame[] = [];
+  if (panicPow <= 0 || args.opponentCardId === GROVEL_CARD_ID || oppPc.isJoker) {
+    const raw = getCardValue(args.opponentCardId, false, args.greedTaxActive);
+    const eff = Math.max(0, raw - args.opponentWrathPenalty);
+    frames.push({ panicRemaining: Math.max(0, panicPow), opponentEffective: eff });
+    return { frames, exchanges: 0 };
+  }
+  const raw = getCardValue(args.opponentCardId, false, args.greedTaxActive);
+  let eff = Math.max(0, raw - args.opponentWrathPenalty);
+  let exchanges = 0;
+  frames.push({ panicRemaining: panicPow, opponentEffective: eff });
+  while (panicPow > 0 && eff > 0) {
+    panicPow -= 1;
+    eff -= 1;
+    exchanges += 1;
+    frames.push({ panicRemaining: panicPow, opponentEffective: eff });
+  }
+  return { frames, exchanges };
+}
+
 /** Replay trick winner using frozen outcome cards (+ Justice summons) with appended clash penalties — host is always `calculateOutcome`'s historical p1. */
 export function resolveFrozenTrickWinnerForPanic(params: {
   roomData: Pick<RoomData, 'settings' | 'activeCurses'>;
