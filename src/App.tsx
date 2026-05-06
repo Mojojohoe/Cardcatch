@@ -110,6 +110,7 @@ import { desperationLadderLabel } from './utils/desperationUi';
 import { resolutionLogLineClass } from './utils/resolutionLogColors';
 import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
+import { sanitizeRoomDataForClient } from './settings/sanitizeRoomData';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
 import { computeHandFanSqueeze, estimateHandFanWidthPx, playerHandFanMotion, type HandFanBreakpoint } from './playerHandFan';
@@ -2541,6 +2542,9 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [playerName, setPlayerName] = useState(isDual ? `Tester ${instanceId.slice(-1)}` : '');
   const [roomCode, setRoomCode] = useState('');
   const [room, setRoom] = useState<RoomData | null>(null);
+  const ingestRoomState = useCallback((state: RoomData) => {
+    setRoom(sanitizeRoomDataForClient(state));
+  }, []);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2647,14 +2651,14 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
               playerName: snap.playerName,
             },
             (st) => {
-              if (alive) setRoom(st);
+              if (alive) ingestRoomState(st);
             },
           );
         } else {
           await serviceRef.current.resumeDualGuest(
             { roomId: snap.roomId, myUid: snap.myUid, playerName: snap.playerName },
             (st) => {
-              if (alive) setRoom(st);
+              if (alive) ingestRoomState(st);
             },
           );
         }
@@ -2849,7 +2853,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     wipeDualReconnectSnapshots();
     try {
       const id = await serviceRef.current.createRoom(playerName, (state) => {
-        setRoom(state);
+        ingestRoomState(state);
       });
       setRoomId(id);
       window.location.hash = id;
@@ -2867,7 +2871,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     wipeDualReconnectSnapshots();
     try {
       await serviceRef.current.joinRoom(roomCode, playerName, (state) => {
-        setRoom(state);
+        ingestRoomState(state);
       });
       setRoomId(roomCode);
       window.location.hash = roomCode;

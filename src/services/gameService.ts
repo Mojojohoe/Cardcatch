@@ -47,6 +47,7 @@ import {
   loadPersistedLobbySettings,
   persistLobbyDefaults,
 } from '../settings/normalizeGameSettings';
+import { sanitizeRoomDataForClient } from '../settings/sanitizeRoomData';
 import { panicDiceSeatAllowed } from './panicDiceSeat';
 
 export const createDeck = (disableJokers: boolean): string[] => {
@@ -1408,12 +1409,8 @@ export class GameService {
       }
     } else {
       if (event.type === 'STATE_UPDATE') {
-        const st = event.state;
-        /** Guests must not trust raw P2P payloads — missing `settings.tiers` etc. whitescreens the lobby/results UI. */
-        this.state = {
-          ...st,
-          settings: normalizeGameSettings(st.settings ?? {}),
-        };
+        /** Full snapshot sanitize: missing `deck` / `hand` / `tiers` after P2P sync whitescreens the table UI. */
+        this.state = sanitizeRoomDataForClient(event.state);
         this.onStateChange?.(this.state);
       } else if (event.type === 'ROLL_DICE_TEST_BROADCAST') {
         this.onDiceTestRoll?.({

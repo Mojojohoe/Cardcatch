@@ -248,7 +248,8 @@ export const DisplayCardArtModeOverride: React.FC<{
   highVisibilityMode: boolean;
   children: React.ReactNode;
 }> = ({ highVisibilityMode, children }) => {
-  const base = useCardArt();
+  const base = useOptionalCardArt();
+  if (!base) return <>{children}</>;
   const value = useMemo(
     (): CardArtCtx =>
       highVisibilityMode ? { ...base, mode: 'vector' } : base,
