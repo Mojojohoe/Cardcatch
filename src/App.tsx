@@ -3222,7 +3222,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     powerCount > 0 && handFanLayout === 'wide'
       ? -Math.round((powerBlockWidth + handPowerGapPx + powerClearancePx) / 2)
       : 0;
-  
+
+  /** Mirror powers column footprint so flex-1 hand stays horizontally centered between sides. */
+  const powersColumnFootprintPx =
+    powerCount > 0 ? Math.round(powerBlockWidth + powerClearancePx) : 0;
+
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
 
@@ -4334,7 +4338,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           </div>
           {panicDiceHandHud && (
-            <div className="relative z-[13] flex shrink-0 flex-col items-center justify-end pb-6 sm:w-[5.5rem] sm:pb-3">
+            <div
+              className="relative z-[13] flex shrink-0 flex-col items-center justify-end pb-4 pt-10 sm:items-start sm:pb-2 sm:pt-8"
+              style={{
+                minWidth: powersColumnFootprintPx > 0 ? `${powersColumnFootprintPx}px` : undefined,
+                marginLeft:
+                  powerClearancePx > 0 && powerCount > 0 ? `${powerClearancePx}px` : undefined,
+              }}
+            >
+              <span className="mb-1 w-full text-center text-[8px] font-black uppercase tracking-wider text-emerald-500/90 sm:text-left">
+                Panic Dice
+              </span>
               <button
                 type="button"
                 onClick={() => setPanicDiceConfirmOpen(true)}
@@ -4345,12 +4359,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   src={cardArtAssetUrl('PanicDice.png')}
                   alt=""
                   draggable={false}
-                  className="relative h-[4.75rem] w-auto max-w-[6rem] object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.5)]"
+                  className="relative h-[9.5rem] w-auto max-w-[12rem] object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.5)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.5)]"
                 />
               </button>
-              <span className="pointer-events-none mt-1 hidden text-[7px] font-black uppercase tracking-wider text-amber-200/85 sm:block">
-                Panic
-              </span>
             </div>
           )}
         </div>
