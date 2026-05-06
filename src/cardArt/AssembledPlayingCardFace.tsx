@@ -61,6 +61,7 @@ import {
   mergedBackgroundCaption,
   resolvedFaceTextOpacity,
   resolveFaceBackgroundCandidates,
+  resolveSuitIconRasterScale,
   resolveNotifierScale,
   resolvePipScale,
   resolvePipSlots,
@@ -537,7 +538,8 @@ export const AssembledPlayingCardFace: React.FC<Props> = ({ card, override, defa
   const symmetricCorners = ct.symmetricCorners !== false;
 
   const cornerFontPx = Math.round(CARD_ART_WIDTH * 0.085 * textScaleMul);
-  const cornerGlyphPx = CARD_ART_WIDTH * 0.12 * notifierScale;
+  const suitIconMul = resolveSuitIconRasterScale(suit, defaults);
+  const cornerGlyphPx = CARD_ART_WIDTH * 0.12 * notifierScale * suitIconMul;
   const notifierStackPx = Math.round(cornerFontPx * 0.92);
 
   const bgOnly = bgOnlyEarly;
@@ -1006,7 +1008,8 @@ function PipInterior({
   // Uniform pip raster size for every rank (2–10). Count-based shrinking made 10s visibly smaller than 2s;
   // density is already handled by the grid in pipLayouts / Card Creator.
   const baseMax = PIP_FRAC * 1.2;
-  const maxSide = baseMax * pipScale;
+  const suitIconMul = resolveSuitIconRasterScale(suit, defaults);
+  const maxSide = baseMax * pipScale * suitIconMul;
 
   return (
     <>

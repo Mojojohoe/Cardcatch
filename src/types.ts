@@ -21,6 +21,16 @@ export type Suit =
 export const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const;
 export type Value = (typeof VALUES)[number];
 
+/**
+ * Panic dice “blade” ranks for `Swords-*` IDs (numeric only; wrath agents use letters).
+ * Includes `1` below `2` so clash animation can tick down past a deuce — not used in the standard 52.
+ */
+export const PANIC_BLADE_RANK_VALUES = ['1', ...VALUES] as const;
+
+export function isPanicBladeNumericValue(value: string): boolean {
+  return (PANIC_BLADE_RANK_VALUES as readonly string[]).includes(value);
+}
+
 export interface PowerCard {
   id: number;
   name: string;

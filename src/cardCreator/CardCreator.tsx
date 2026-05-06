@@ -52,7 +52,7 @@ for (const s of ['Hearts', 'Diamonds', 'Clubs', 'Spades', 'Stars', 'Moons', 'Fro
   }
 }
 
-const PANIC_SWORD_CARDS = (['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q'] as const).map(
+const PANIC_SWORD_CARDS = (['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q'] as const).map(
   (r) => `Swords-${r}`,
 );
 const SPECIAL_PLAYING = [
@@ -84,8 +84,8 @@ const APPLY_SUIT_OPTIONS = [
   'Swords',
 ] as const;
 
-/** Ranks 2…A and God of Hearts (G) for shared layouts + scale ranges. */
-const SHARED_RANK_OPTIONS = [...VALUES, 'G'].filter((v) => !['J', 'Q', 'K'].includes(v));
+/** Ranks 1 (panic swords), 2…A and God of Hearts (G) for shared layouts + scale ranges. */
+const SHARED_RANK_OPTIONS = ['1', ...VALUES, 'G'].filter((v) => !['J', 'Q', 'K'].includes(v));
 
 const RANK_RANGE_OPTIONS = [...VALUES, 'G'];
 const CENTRE_BLEND_MODES = [
@@ -1589,6 +1589,52 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                           </label>
                         ),
                       )}
+                      <p className="pt-3 text-[10px] font-black uppercase text-slate-500">Suit icon scale</p>
+                      <p className="text-[10px] text-slate-500">
+                        Multiplier on corner + pip suit rasters per suit (1 = default). Clamped roughly 0.25–4.
+                      </p>
+                      {([
+                        ['Hearts', 'Diamonds', 'Clubs', 'Spades'],
+                        ['Stars', 'Moons', 'Frogs', 'Coins', 'Bones', 'Crowns', 'Grovels', 'Swords', 'Joker'],
+                      ] as const).map((group, gi) => (
+                        <div key={gi} className={gi ? 'space-y-2 pt-2' : 'space-y-2'}>
+                          {group.map((suit) => (
+                            <label key={`icon-scale-${suit}`} className="flex items-center gap-3 text-[11px]">
+                              <span className="w-[4.75rem] shrink-0 font-bold text-slate-300">{suit}</span>
+                              <input
+                                type="number"
+                                step={0.05}
+                                min={0.25}
+                                max={4}
+                                value={
+                                  draftDefaults.suitIconScale?.[suit] != null &&
+                                  Number.isFinite(draftDefaults.suitIconScale[suit])
+                                    ? draftDefaults.suitIconScale[suit]
+                                    : ''
+                                }
+                                onChange={(e) => {
+                                  const raw = e.target.value.trim();
+                                  setDraftDefaults((prev) => {
+                                    const next = { ...prev, suitIconScale: { ...prev.suitIconScale } };
+                                    if (!raw.length) {
+                                      delete next.suitIconScale?.[suit];
+                                      if (next.suitIconScale && Object.keys(next.suitIconScale).length === 0)
+                                        delete next.suitIconScale;
+                                      return next;
+                                    }
+                                    const n = Number(raw);
+                                    if (!Number.isFinite(n)) return prev;
+                                    next.suitIconScale![suit] = Math.min(4, Math.max(0.25, n));
+                                    return next;
+                                  });
+                                }}
+                                placeholder="1"
+                                className="min-w-[5.5rem] rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      ))}
                       <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-slate-400">
                         <input
                           type="checkbox"

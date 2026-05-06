@@ -44,7 +44,9 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
        * Assume the slot matches the playing-card footprint aspect until we get a real height.
        */
       const h = hRaw > 0.5 ? hRaw : w * SLOT_H_OVER_W;
-      setScale(Math.min(w / CARD_ART_WIDTH, h / CARD_ART_HEIGHT));
+      /** Fit inside slot but never scale below native art size (1:1 with 256×374 design canvas). */
+      const fit = Math.min(w / CARD_ART_WIDTH, h / CARD_ART_HEIGHT);
+      setScale(Math.min(1, fit));
     };
 
     measure();
@@ -70,7 +72,7 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
   return (
     <div
       ref={wrapRef}
-      className={`relative h-full w-full min-h-0 overflow-hidden rounded-[inherit] ${className ?? ''}`}
+      className={`relative h-full w-full min-h-0 overflow-visible rounded-[inherit] ${className ?? ''}`}
     >
       <div
         className="absolute left-1/2 top-1/2"

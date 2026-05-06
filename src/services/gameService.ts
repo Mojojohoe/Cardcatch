@@ -5,6 +5,7 @@ import {
   Suit,
   SUITS,
   VALUES,
+  isPanicBladeNumericValue,
   GameSettings,
   PlayerRole,
   MAJOR_ARCANA,
@@ -146,10 +147,9 @@ export const getCardValue = (cardStr: string, lustHeartRules = false, greedTax =
   if (cardStr.startsWith('Joker')) return 20; // Beat Ace (14)
   const [suit, value] = cardStr.split('-');
   if (suit === 'Grovels') return 0;
-  /** Wrath agents use letter values (not in VALUES); panic blades use Values ranks only. */
+  /** Wrath agents use letter values (not in VALUES); panic blades use numeric ranks incl. `1`. */
   if (suit === 'Swords') {
-    if ((VALUES as readonly string[]).includes(value))
-      return standardPlayingCardRankValue(suit, value, greedTax);
+    if (isPanicBladeNumericValue(value)) return standardPlayingCardRankValue(suit, value, greedTax);
     return 0;
   }
   if (suit === 'Crowns' && value === 'E') return 17;
@@ -208,7 +208,7 @@ export function tooltipPrintedStrengthLabel(cardStr: string): string {
   if (p.isJoker) return 'N/A';
   if (p.suit === 'Grovels') return '0';
   if (p.suit === 'Swords') {
-    if ((VALUES as readonly string[]).includes(p.value))
+    if (isPanicBladeNumericValue(p.value))
       return String(standardPlayingCardRankValue(p.suit, p.value, false));
     return 'N/A';
   }
@@ -222,7 +222,7 @@ export function plainCardLabelForLustEmpower(cardStr: string): string {
   if (p.isJoker) return 'Joker';
   if (p.suit === 'Grovels') return 'Grovel';
   if (p.suit === 'Swords') {
-    if ((VALUES as readonly string[]).includes(p.value)) return `${p.value} of Swords`;
+    if (isPanicBladeNumericValue(p.value)) return `${p.value} of Swords`;
     return describeWrathMinionTitle(cardStr);
   }
   if (p.suit === 'Crowns') return `${displaySuitCardValue(p.suit, p.value)} of Crowns`;
@@ -502,7 +502,7 @@ export const describeCardPlain = (cardStr: string): string => {
   const p = parseCard(cardStr);
   if (p.isJoker) return 'a Joker';
   if (p.suit === 'Swords') {
-    if ((VALUES as readonly string[]).includes(p.value)) {
+    if (isPanicBladeNumericValue(p.value)) {
       const rk = RANK_WORDS[p.value] ?? p.value;
       return `the ${rk} of Swords`;
     }
@@ -528,7 +528,7 @@ export function compactCardLabel(cardStr: string): string {
   if (p.suit === 'Crowns') return `${displaySuitCardValue(p.suit, p.value)} of Crowns`;
   if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) return 'God of Hearts';
   if (p.suit === 'Swords') {
-    if ((VALUES as readonly string[]).includes(p.value)) return `${p.value} of Swords`;
+    if (isPanicBladeNumericValue(p.value)) return `${p.value} of Swords`;
     return describeWrathMinionTitle(cardStr);
   }
   const rk = RANK_WORDS[p.value] ?? p.value;
@@ -693,7 +693,7 @@ export function panicDiceTotalToCardId(total: number): string {
 
 export function panicSwordStrikeStrength(cardId: string): number {
   const p = parseCard(cardId);
-  if (!p.isJoker && p.suit === 'Swords' && (VALUES as readonly string[]).includes(p.value)) {
+  if (!p.isJoker && p.suit === 'Swords' && isPanicBladeNumericValue(p.value)) {
     return standardPlayingCardRankValue(p.suit, p.value, false);
   }
   return 0;

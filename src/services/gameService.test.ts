@@ -12,6 +12,7 @@ import {
   lustBumpHeartIfApplicable,
   lustHeartUpgradeSteps,
   parseCard,
+  panicSwordStrikeStrength,
   tooltipPrintedStrengthLabel,
   pickEnvyCovetedForRound,
   pickSlothDreamResult,
@@ -104,6 +105,11 @@ test('Pride barrier blocks target suit at or above ceiling; Grovel exempt', () =
   assert.equal(isCardBlockedByPride('Diamonds-A', ceiling, false, false), false);
   assert.equal(handHasLegalPridePlay(['Hearts-J', 'Diamonds-2'], ceiling, false, false), true);
   assert.equal(handHasLegalPridePlay(['Hearts-J', 'Hearts-Q'], ceiling, false, false), false);
+});
+
+test('Panic blade Swords-1 has clash value 1 (for stamina animation floor)', () => {
+  assert.equal(getCardValue('Swords-1', false, false), 1);
+  assert.equal(panicSwordStrikeStrength('Swords-1'), 1);
 });
 
 test('Wrath clash penalties reduce marked side rank; Jokers ignore penalties', () => {

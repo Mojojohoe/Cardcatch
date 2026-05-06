@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RoomData } from '../types';
+import { VALUES, isPanicBladeNumericValue, PANIC_BLADE_RANK_VALUES } from '../types';
 import {
   buildPanicExchangeFrames,
   parseCard,
@@ -58,19 +59,32 @@ const LAYOUT_SWITCH_MS = 420;
 /** Simultaneous −1 panic vs opponent stamina, every beat. */
 const EXCHANGE_STEP_MS = 600;
 const OUTRO_PAUSE_MS = 900;
-const DESCENDING_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', 'G', 'S', 'E'] as const;
+/** Ascending ladder (weakest → strongest); visual “down” walks toward index 0. */
+function rankLadderForVisualReduce(p: { suit: string; value: string; isJoker: boolean }): readonly string[] | null {
+  if (p.isJoker) return null;
+  if (p.suit === 'Swords' && isPanicBladeNumericValue(p.value)) return PANIC_BLADE_RANK_VALUES;
+  return VALUES as readonly string[];
+}
 
 function reduceCardVisualRank(cardId: string, downBy: number): string {
   if (downBy <= 0) return cardId;
   const p = parseCard(cardId);
   if (p.isJoker) return cardId;
-  const idx = DESCENDING_RANKS.indexOf(p.value as (typeof DESCENDING_RANKS)[number]);
+  const ladder = rankLadderForVisualReduce(p);
+  if (!ladder?.length) return cardId;
+  const idx = ladder.indexOf(p.value);
   if (idx <= 0) return cardId;
   const nextIdx = Math.max(0, idx - downBy);
-  return `${p.suit}-${DESCENDING_RANKS[nextIdx]}`;
+  return `${p.suit}-${ladder[nextIdx]}`;
 }
 
-export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => void }> = ({
+export type PanicClashDismissReason = 'aborted' | 'complete';
+
+export const PanicClashResolution: React.FC<{
+  room: RoomData;
+  /** `complete` after the scripted exchange + outro; `aborted` when there is nothing to animate (immediate dismiss). */
+  onComplete: (reason: PanicClashDismissReason) => void;
+}> = ({
   room,
   onComplete,
 }) => {
@@ -116,7 +130,7 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
 
   useEffect(() => {
     if (!oppCardId || frames.length === 0) {
-      onCompleteRef.current();
+      onCompleteRef.current('aborted');
       return;
     }
     let cancelled = false;
@@ -158,7 +172,7 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
       setPhase('done');
       await sleep(OUTRO_PAUSE_MS);
       if (cancelled) return;
-      onCompleteRef.current();
+      onCompleteRef.current('complete');
     };
 
     void run();
@@ -215,7 +229,12 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
             animate={{ y: 0, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 320, damping: 26 }}
           >
-            <CardVisual card={panicCardFx} revealed noAnimate presentation="none" lustHeartRulesActive={false} />
+            <div className="relative rounded-xl shadow-[0_22px_50px_rgba(127,29,29,0.45)]">
+              <AnimatePresence mode="wait">
+                {showCut ? <PanicStrikeCut key={`panic-cut-${strikeKey}`} /> : null}
+              </AnimatePresence>
+              <CardVisual card={panicCardFx} revealed noAnimate presentation="none" lustHeartRulesActive={false} />
+            </div>
             <StatBadge tone="panic" label="Panic" value={f.panicRemaining} />
           </motion.div>
 
@@ -223,7 +242,7 @@ export const PanicClashResolution: React.FC<{ room: RoomData; onComplete: () => 
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{opponentName}</span>
             <div className="relative rounded-xl shadow-[0_22px_50px_rgba(0,0,0,0.55)]">
               <AnimatePresence mode="wait">
-                {showCut ? <PanicStrikeCut key={`strike-${strikeKey}`} /> : null}
+                {showCut ? <PanicStrikeCut key={`opp-cut-${strikeKey}`} /> : null}
               </AnimatePresence>
               <CardVisual
                 card={opponentCardFx}

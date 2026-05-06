@@ -8,6 +8,13 @@ import type {
 } from './types';
 
 /** Effective opacity for assembled / vector face typography; card override wins. */
+/** Scale for raster suit markers in corners / pip grids (defaults 1). */
+export function resolveSuitIconRasterScale(suit: string, defaults?: CardArtGlobalDefaults): number {
+  const raw = defaults?.suitIconScale?.[suit];
+  if (raw == null || !Number.isFinite(Number(raw))) return 1;
+  return Math.min(4, Math.max(0.25, Number(raw)));
+}
+
 export function resolvedFaceTextOpacity(
   override?: CardArtOverride,
   defaults?: CardArtGlobalDefaults,

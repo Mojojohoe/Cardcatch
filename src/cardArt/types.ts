@@ -116,6 +116,8 @@ export type CardArtGlobalDefaults = {
    * Prefer explicit filenames with extension (e.g. `SuitSpades.png`) to avoid fallback probing.
    */
   suitIconFile?: Partial<Record<string, string>>;
+  /** Per-suit scale for corner suit rasters & pip suit rasters vs base layout (default 1). */
+  suitIconScale?: Partial<Record<string, number>>;
   /** Corner rank, court rank fallback, and background-only caption text — CSS colours per suit name. */
   suitFaceTextColor?: Partial<Record<string, string>>;
   /**

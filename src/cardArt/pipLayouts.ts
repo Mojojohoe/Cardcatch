@@ -45,6 +45,8 @@ export const DEFAULT_PIP_GRIDS: Record<string, PipGridCell[]> = {
     N(0.32, 0.83),
     N(0.52, 0.83),
   ],
+  /** Lowest panic-blade clash value (`Swords-1`); centre pip same footprint as Ace. */
+  '1': [N(0.5, 0.5)],
   '10': [
     N(0.28, 0.16),
     N(0.42, 0.16),

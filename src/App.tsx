@@ -88,7 +88,7 @@ import { RoomChat } from './components/RoomChat';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { DiceBoxTestOverlay } from './components/DiceBoxTestOverlay';
 import { ChipDropperTest } from './components/ChipDropperTest';
-import { PanicClashResolution } from './components/PanicClashResolution';
+import { PanicClashResolution, type PanicClashDismissReason } from './components/PanicClashResolution';
 import { SuitGlyph } from './components/SuitGlyphs';
 import { SuitRasterOrGlyph } from './components/SuitRasterOrGlyph';
 import { DualTableTrumpCard, DualTrumpTableLabel } from './components/DualTableTrumpCard';
@@ -2586,6 +2586,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [isWheelSpinning, setIsWheelSpinning] = useState(false);
   const [isDevMenuOpen, setIsDevMenuOpen] = useState(false);
   const [showResolutionSequence, setShowResolutionSequence] = useState(false);
+  /** Bumps when panic clash finishes so {@link ResolutionSequence} remounts and replays with post-panic outcome. */
+  const [resolutionReplayNonce, setResolutionReplayNonce] = useState(0);
   const [seenIntel, setSeenIntel] = useState<PlayerData['secretIntel']>(null);
   const lastTurnRef = useRef(0);
   const cardSelectionTurnRef = useRef<number | null>(null);
@@ -2994,7 +2996,15 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     }
   }, []);
 
-  const dismissPanicClash = useCallback(() => setPanicClashOpen(false), []);
+  const dismissPanicClash = useCallback(
+    (reason: PanicClashDismissReason) => {
+      setPanicClashOpen(false);
+      if (reason !== 'complete' || room?.status !== 'results') return;
+      setResolutionReplayNonce((n) => n + 1);
+      setShowResolutionSequence(true);
+    },
+    [room?.status],
+  );
 
   /** Must run before any conditional return — same rule as other table hooks (React #310). */
   useLayoutEffect(() => {
@@ -4127,10 +4137,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 transition={{ duration: 0.8 }}
                 className="w-full h-full"
               >
-                <ResolutionSequence 
-                  room={room} 
-                  myUid={myUid} 
-                  onComplete={() => setShowResolutionSequence(false)} 
+                <ResolutionSequence
+                  key={`rs-${room.currentTurn}-${resolutionReplayNonce}`}
+                  room={room}
+                  myUid={myUid}
+                  onComplete={() => setShowResolutionSequence(false)}
                 />
               </motion.div>
             ) : (
