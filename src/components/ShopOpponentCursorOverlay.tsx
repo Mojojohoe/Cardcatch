@@ -26,7 +26,7 @@ export function ShopOpponentCursorOverlay({ nx, ny, opponentRole, visible }: Pro
   if (!visible) return null;
   const src = gloveForRole(opponentRole);
   return (
-    <div className="pointer-events-none fixed inset-0 z-[190]" aria-hidden>
+    <div className="pointer-events-none fixed inset-0 z-[540]" aria-hidden>
       <img
         src={src}
         alt=""

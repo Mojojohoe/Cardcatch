@@ -2723,13 +2723,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     const browsers = Array.isArray(room?.cardShopBrowsersUids) ? room.cardShopBrowsersUids : [];
     if (browsers.includes(myUid)) {
       cashShopPresencePendingRef.current = false;
-      return;
     }
-    if (cashShopPresencePendingRef.current) return;
-    if (browsers.length > 0 || room?.status === 'playing' || room?.status === 'results' || room?.status === 'powering') {
-      setCashShopOpen(false);
-    }
-  }, [room?.cardShopBrowsersUids, room?.status, cashShopOpen, myUid]);
+  }, [room?.cardShopBrowsersUids, cashShopOpen, myUid]);
 
   useEffect(() => {
     if (!room) return;
@@ -2942,6 +2937,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     }
   };
 
+  const activePowerCardId = selectedPowerCard ?? room?.players?.[myUid]?.currentPowerCard ?? null;
+
   const handleTogglePowerCard = (powerId: number) => {
     if (
       room &&
@@ -2951,7 +2948,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     ) {
       return;
     }
-    if (selectedPowerCard === powerId) {
+    if (activePowerCardId === powerId) {
       setSelectedPowerCard(null);
       serviceRef.current.selectPowerCard(null);
     } else {
@@ -3229,7 +3226,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       tableShopBrowsers.includes(myUid) &&
       tableShopBrowsers.includes(opponent.uid) &&
       room.shopRemoteCursor &&
-      room.shopRemoteCursor.uid === opponent.uid,
+      room.shopRemoteCursor.uid !== myUid,
   );
 
   const panicDiceStripVisible =
@@ -3244,8 +3241,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     Boolean(room.lastOutcome) &&
     room.settings.enablePanicDice &&
     panicDiceSeatAllowed(room, myUid) &&
-    !me.readyForNextRound &&
-    !showResolutionSequence;
+    !me.readyForNextRound;
 
   const panicDiceResultsInteractive = panicDiceResultsVisible && !me.panicDiceUsed;
   const panicDiceResultsUsedVisible =
@@ -3379,8 +3375,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         )}
 
       {(() => {
-        const hudDockPhases =
-          room.status === 'playing' || room.status === 'powering' || room.status === 'results';
+        const hudDockPhases = room.status === 'playing' || room.status === 'powering';
         const showDockCashBtn =
           room.settings.enablePokerChips && Boolean(room.cardShop) && hudDockPhases;
         const showDockPlayBtn =
@@ -3549,6 +3544,29 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         />
       )}
 
+      {room.settings.enableDesperation &&
+        (room.status === 'playing' || room.status === 'powering' || room.status === 'results') && (
+          <div className="mb-2 flex w-full justify-center px-1">
+            {room.settings.hostRole === 'Preydator' && opponent ? (
+              <div className="flex w-full max-w-[min(100%,34rem)] items-stretch justify-center gap-2 rounded-xl border border-purple-800/55 bg-purple-950/55 px-2 py-1.5 shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
+                {[me, opponent].map((p) => (
+                  <div key={`tier-top-${p.uid}`} className="min-w-0 flex-1 rounded-lg border border-purple-700/40 bg-purple-900/35 px-2 py-1 text-center">
+                    <span className="block truncate text-[9px] font-black uppercase tracking-wide text-purple-200/95">
+                      {p.name}: {desperationLadderLabel(room.settings.tiers, p.desperationTier) ?? 'Off ladder'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : desperationSpinAllowed(room, myUid, me) ? (
+              <div className="mx-auto flex w-full max-w-md min-h-[2.3rem] flex-col items-center justify-center rounded-xl border border-purple-800/55 bg-purple-950/55 px-4 py-1.5 text-center shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
+                <span className="max-w-full text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
+                  {me.name}: {desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? 'Off ladder'}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        )}
+
       {/* Opponent desperation strip: top HUD center (napkin div7). */}
       {/* HUD: room / role · phase strip (center) · dev & rules */}
       <div className="mb-3 grid w-full shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 [@media(max-height:1100px)]:mb-1">
@@ -3581,18 +3599,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               <span className="block truncate text-[8px] font-black uppercase tracking-wider text-amber-200/85">
                 Famine — bones replace draws
               </span>
-            )}
-          {(room.status === 'playing' || room.status === 'powering') &&
-            opponent &&
-            room.settings.enableDesperation &&
-            opponentDesperationUiRelevant(room, opponent) && (
-              <div className="mt-1 flex w-full justify-center">
-                <OpponentDesperationTopStrip
-                  opponent={opponent}
-                  room={room}
-                  className="max-w-[min(100%,20rem)]"
-                />
-              </div>
             )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 justify-self-end sm:gap-4">
@@ -3677,7 +3683,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {/* Table grid: opp row · deck column share one rail — no overlapping absolutes */}
-      <div className="relative z-[20] isolate flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-visible overflow-y-auto overscroll-y-contain sm:gap-3">
+      <div className="relative z-[20] isolate flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-visible overflow-y-scroll overscroll-y-contain sm:gap-3">
           {myWheelDecisionSpinning && (
             <div className="pointer-events-none absolute inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/45 px-2 backdrop-blur-[2px]">
               <span className="text-center text-[9px] font-black uppercase tracking-widest text-amber-300">
@@ -4203,7 +4209,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 </div>
 
                 <div className="flex items-center justify-center gap-6 sm:gap-16 w-full py-4">
-                  {[room.hostUid, Object.keys(room.players).find(id => id !== room.hostUid)!].map(uid => (
+                  {[room.hostUid, Object.keys(room.players).find(id => id !== room.hostUid)!].map((uid, seatIdx) => (
                     <div key={uid} className="flex flex-col items-center gap-3 relative scale-100 sm:scale-110 origin-top">
                       <div className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-slate-900 border border-slate-700 mb-1 ${room.players[uid].role === 'Predator' ? 'text-red-400' : (room.players[uid].role === 'Preydator' ? 'text-purple-400' : 'text-blue-400')}`}>
                         {room.players[uid].name}
@@ -4235,9 +4241,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         noAnimate
                         clashGhost={Boolean(room.lastOutcome.clashDestroyedByPenalty?.[uid])}
                       />
-                      <div className="flex gap-1 h-8 sm:h-9">
+                      <div className="pointer-events-none absolute top-1/2 z-30 -translate-y-1/2">
                          {room.lastOutcome?.powerCardIdsPlayed?.[uid] != null && (
-                           <div className="scale-[0.88] origin-top group relative sm:scale-95">
+                           <div
+                             className={`scale-[0.8] origin-top group relative sm:scale-[0.88] ${
+                               seatIdx === 0 ? 'translate-x-[3.8rem] sm:translate-x-[4.2rem]' : '-translate-x-[3.8rem] sm:-translate-x-[4.2rem]'
+                             }`}
+                           >
                              <PowerCardVisual
                                cardId={room.lastOutcome!.powerCardIdsPlayed[uid]!}
                                small
@@ -4253,7 +4263,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 <div className="flex flex-col items-center gap-6 w-full max-w-md">
                    <div className="h-px w-full bg-linear-to-r from-transparent via-slate-800 to-transparent" />
                    
-                   <p className="text-white text-base sm:text-xl font-black italic text-center tracking-tight leading-snug">
+                   <p className="text-white text-sm sm:text-lg font-black italic text-center tracking-tight leading-snug">
                      {room.lastOutcome.message}
                    </p>
 
@@ -4269,17 +4279,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      ))}
                    </div>
                    
-                   <div className="mt-2 flex flex-wrap items-center justify-center gap-4 sm:gap-6">
+                   <div className="mt-2 flex flex-nowrap items-center justify-center gap-3 sm:gap-5">
                      <button 
                       onClick={handleNextRound}
                       disabled={loading || me.readyForNextRound}
-                      className="group relative bg-yellow-400 text-black px-16 sm:px-24 py-4 sm:py-5 rounded-full font-black uppercase text-sm sm:text-base shadow-[0_0_50px_rgba(250,204,21,0.2)] hover:shadow-[0_0_80px_rgba(250,204,21,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      className="group relative bg-yellow-400 text-black px-12 sm:px-20 py-4 sm:py-5 rounded-full font-black uppercase text-sm sm:text-base shadow-[0_0_50px_rgba(250,204,21,0.2)] hover:shadow-[0_0_80px_rgba(250,204,21,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
                      >
                        <span className="relative z-10">{me.readyForNextRound ? 'WAITING FOR OTHER...' : 'READY FOR NEXT ROUND'}</span>
                        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity rounded-full" />
                      </button>
                      {(panicDiceResultsVisible || panicDiceResultsUsedVisible) && (
-                       <div className="relative flex flex-col items-center">
+                      <div className="relative flex shrink-0 flex-col items-center">
                          {panicDiceResultsInteractive ? (
                            <button
                              type="button"
@@ -4291,7 +4301,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                src={cardArtAssetUrl('PanicDice.png')}
                                alt=""
                                draggable={false}
-                               className="relative h-[5.25rem] w-auto max-w-[7rem] sm:h-[5.85rem] sm:max-w-[7.75rem] object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_18px_rgba(251,191,36,0.45)]"
+                                className="relative h-[4.4rem] w-auto max-w-[5.8rem] sm:h-[5rem] sm:max-w-[6.5rem] object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_18px_rgba(251,191,36,0.45)]"
                              />
                              <span className="pointer-events-none block text-center text-[7px] font-black uppercase tracking-widest text-amber-400/95">
                                Use dice
@@ -4310,7 +4320,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                                  src={cardArtAssetUrl('PanicDice.png')}
                                  alt=""
                                  draggable={false}
-                                 className="pointer-events-none relative h-[5.25rem] w-auto max-w-[7rem] sm:h-[5.85rem] sm:max-w-[7.75rem] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]"
+                                className="pointer-events-none relative h-[4.4rem] w-auto max-w-[5.8rem] sm:h-[5rem] sm:max-w-[6.5rem] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]"
                                />
                              </div>
                              <span className="pointer-events-none mt-0.5 block text-center text-[7px] font-black uppercase tracking-widest text-slate-500">
@@ -4400,13 +4410,21 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   <div className="-space-x-4 flex w-max max-w-none min-w-0 flex-nowrap items-end justify-center overflow-visible px-2 pb-2 pt-1 sm:-space-x-6 sm:justify-end sm:pr-2 sm:pl-1">
                     {me.powerCards.map((pId, i) => (
                       <div key={`bottom-pow-${pId}-${i}`} className="relative shrink-0" style={{ zIndex: 8 + i }}>
-                        <PowerCardVisual
-                          cardId={pId}
-                          matchHandCard
-                          selected={selectedPowerCard === pId}
-                          onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
-                          disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
-                        />
+                        <div
+                          className={`rounded-xl transition-[filter,box-shadow] ${
+                            activePowerCardId === pId
+                              ? 'shadow-[0_0_30px_rgba(250,204,21,0.42)] drop-shadow-[0_0_14px_rgba(250,204,21,0.5)] saturate-110'
+                              : ''
+                          }`}
+                        >
+                          <PowerCardVisual
+                            cardId={pId}
+                            matchHandCard
+                            selected={activePowerCardId === pId}
+                            onClick={() => !me.confirmed && handleTogglePowerCard(pId)}
+                            disabled={me.confirmed || (curseSelectionLocked && isCurseCardId(pId))}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -4666,18 +4684,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         </div>
         </div>
 
-        {(room.status === 'playing' || room.status === 'powering') &&
-          room.settings.enableDesperation &&
-          desperationSpinAllowed(room, myUid, me) && (
-            <div className="mx-auto mt-3 flex w-full max-w-md min-h-[2.5rem] flex-col items-center justify-center rounded-xl border border-purple-800/55 bg-purple-950/55 px-4 py-2 text-center shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
-              <span className="max-w-full text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
-                Desperation:{' '}
-                {me.desperationTier >= 0
-                  ? desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? `step ${me.desperationTier}`
-                  : 'Off ladder until first in-match spin'}
-              </span>
-            </div>
-          )}
       </div>
 
       {/* Win Modal Mini */}

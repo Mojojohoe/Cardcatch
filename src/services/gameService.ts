@@ -1296,6 +1296,7 @@ export class GameService {
   private myUid: string = '';
   private powerResolutionTimer: ReturnType<typeof setTimeout> | null = null;
   private powerShowdownClearTimer: ReturnType<typeof setTimeout> | null = null;
+  private rescueHostRebindInFlight = false;
   /** Host: debounce shop cursor broadcasts (~14 Hz flush of latest coords). */
   private shopCursorFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private shopCursorPending: { uid: string; nx: number; ny: number } | null = null;
@@ -1562,8 +1563,119 @@ export class GameService {
 
     conn.on('close', () => {
       console.log('Connection closed');
-      // Handle player disconnected
+      if (this.connection === conn) this.connection = null;
+      if (this.isHost) {
+        if (this.state?.settings.enablePokerChips) {
+          this.clearShopCursorPipeline();
+          this.state = {
+            ...this.state,
+            cardShopBrowsersUids: [],
+            shopBrowsingUid: null,
+            shopRemoteCursor: null,
+            updatedAt: Date.now(),
+          };
+          this.broadcastState();
+        }
+        return;
+      }
+      void this.promoteGuestToRescueHost();
     });
+  }
+
+  /**
+   * Guest contingency: if the host disappears, rebind this client as host on the same room id so the match can continue.
+   * Falls back to local host-authority mode even if room-id rebind fails.
+   */
+  private async promoteGuestToRescueHost() {
+    if (this.isHost || this.rescueHostRebindInFlight || !this.state) return;
+    this.rescueHostRebindInFlight = true;
+    const roomId = this.state.code;
+
+    const adoptLocalHostState = () => {
+      this.isHost = true;
+      if (!this.state) return;
+      this.state = {
+        ...this.state,
+        hostUid: this.myUid,
+        cardShopBrowsersUids: [],
+        shopBrowsingUid: null,
+        shopRemoteCursor: null,
+        updatedAt: Date.now(),
+      };
+      this.onStateChange?.(this.state);
+    };
+
+    try {
+      this.clearShopCursorPipeline();
+      if (this.connection) {
+        try {
+          this.connection.close();
+        } catch {
+          /* noop */
+        }
+      }
+      this.connection = null;
+      if (this.peer) {
+        try {
+          this.peer.destroy();
+        } catch {
+          /* noop */
+        }
+      }
+      this.peer = null;
+
+      if (!roomId) {
+        adoptLocalHostState();
+        return;
+      }
+
+      await new Promise<void>((r) => setTimeout(r, 120));
+      this.isHost = true;
+      this.state = {
+        ...this.state,
+        hostUid: this.myUid,
+        cardShopBrowsersUids: [],
+        shopBrowsingUid: null,
+        shopRemoteCursor: null,
+        updatedAt: Date.now(),
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        try {
+          this.peer = new Peer(roomId);
+        } catch (err) {
+          reject(err);
+          return;
+        }
+        const timeout = setTimeout(() => reject(new Error('Rescue host rebind timeout')), 9000);
+        this.peer!.on('open', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        this.peer!.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+        this.peer!.on('connection', (nextConn) => {
+          if (!this.isHost) {
+            nextConn.close();
+            return;
+          }
+          if (this.connection && (this.connection as DataConnection & { open?: boolean }).open) {
+            nextConn.close();
+            return;
+          }
+          this.connection = nextConn;
+          this.setupConnection(nextConn);
+        });
+      });
+
+      this.broadcastState();
+    } catch {
+      adoptLocalHostState();
+    } finally {
+      this.rescueHostRebindInFlight = false;
+    }
   }
 
   private handleEvent(event: GameEvent) {
@@ -2365,6 +2477,22 @@ export class GameService {
     if (this.isHost) {
       this.processMove(this.myUid, cardId);
     } else {
+      const me = this.state?.players?.[this.myUid];
+      if (this.state && me && !me.confirmed && me.hand.includes(cardId)) {
+        this.state = {
+          ...this.state,
+          players: {
+            ...this.state.players,
+            [this.myUid]: {
+              ...me,
+              currentMove: cardId,
+              confirmed: true,
+            },
+          },
+          updatedAt: Date.now(),
+        };
+        this.onStateChange?.(this.state);
+      }
       this.sendEvent({ type: 'PLAY_CARD', uid: this.myUid, cardId });
     }
   }
@@ -2465,6 +2593,25 @@ export class GameService {
     if (this.isHost) {
       this.handlePlayPowerCard(this.myUid, powerCardId);
     } else {
+      const me = this.state?.players?.[this.myUid];
+      if (
+        this.state &&
+        me &&
+        (powerCardId === null || me.powerCards.includes(powerCardId))
+      ) {
+        this.state = {
+          ...this.state,
+          players: {
+            ...this.state.players,
+            [this.myUid]: {
+              ...me,
+              currentPowerCard: powerCardId,
+            },
+          },
+          updatedAt: Date.now(),
+        };
+        this.onStateChange?.(this.state);
+      }
       this.sendEvent({ type: 'PLAY_POWER_CARD', uid: this.myUid, powerCardId });
     }
   }

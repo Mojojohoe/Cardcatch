@@ -1,7 +1,7 @@
 {
   "kind": "cardcatch-card-art-pack",
   "version": 1,
-  "exportedAt": "2026-05-05T22:00:36.044Z",
+  "exportedAt": "2026-05-07T03:17:17.823Z",
   "mode": "raster",
   "manifest": {
     "Joker-1": {
@@ -633,15 +633,15 @@
       }
     },
     "Frogs-G": {
-      "centrePictureFile": "Face-Frog-God",
+      "centrePictureFile": "Face-Frog-God.gif",
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "normal",
       "centrePictureOffsetPct": {
         "y": -23
       }
     },
     "Stars-G": {
-      "centrePictureFile": "Face-God",
+      "centrePictureFile": "Face-God.gif",
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
@@ -649,7 +649,7 @@
       }
     },
     "Hearts-G": {
-      "centrePictureFile": "Face-God",
+      "centrePictureFile": "Face-God.gif",
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
@@ -657,7 +657,7 @@
       }
     },
     "Diamonds-G": {
-      "centrePictureFile": "Face-God",
+      "centrePictureFile": "Face-God.gif",
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
@@ -665,23 +665,23 @@
       }
     },
     "Clubs-G": {
-      "centrePictureFile": "Face-God",
+      "centrePictureFile": "Face-God.gif",
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
         "y": -14.25
       }
     },
     "Spades-G": {
-      "centrePictureFile": "Face-God",
+      "centrePictureFile": "Face-God.gif",
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
         "y": -14.25
       }
     },
     "Moons-G": {
-      "centrePictureFile": "Face-God",
+      "centrePictureFile": "Face-God.gif",
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
@@ -689,7 +689,7 @@
       }
     },
     "Coins-G": {
-      "centrePictureFile": "Face-God",
+      "centrePictureFile": "Face-God.gif",
       "centrePictureMirrorDual": true,
       "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
@@ -697,9 +697,9 @@
       }
     },
     "Bones-G": {
-      "centrePictureFile": "Face-God",
+      "centrePictureFile": "Face-God.gif",
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
         "y": -14.25
       }
@@ -707,7 +707,7 @@
     "Swords-T": {
       "centrePictureFile": "Face-Thug",
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
         "x": -0.25,
         "y": -13.5
@@ -717,7 +717,7 @@
       "centrePictureFile": "Face-Bandit",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
         "x": 0.5,
         "y": -13.5
@@ -727,7 +727,7 @@
       "centrePictureFile": "Face-Highwayman",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
         "y": -13.5
       }
@@ -736,7 +736,7 @@
       "centrePictureFile": "Face-Champion",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
         "x": 0.5,
         "y": -16.25
@@ -746,7 +746,7 @@
       "centrePictureFile": "Face-Warlord",
       "centrePictureScale": 0.95,
       "centrePictureMirrorDual": true,
-      "centrePictureBlendMode": "color-burn",
+      "centrePictureBlendMode": "hard-light",
       "centrePictureOffsetPct": {
         "y": -12
       }
@@ -792,6 +792,41 @@
       "centrePictureFile": "SuitStarAce",
       "centrePictureScale": 1.3,
       "centrePictureBlendMode": "difference"
+    },
+    "Swords-J": {
+      "centrePictureFile": "Face-Jack",
+      "centrePictureScale": 0.9,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureMirrorGroupOffsetPct": {
+        "y": -1.75
+      },
+      "centrePictureOffsetPct": {
+        "x": 0.25,
+        "y": -12.5
+      }
+    },
+    "Swords-Q": {
+      "centrePictureFile": "Face-Queen",
+      "centrePictureScale": 0.95,
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureMirrorGroupOffsetPct": {
+        "x": 0,
+        "y": 0
+      },
+      "centrePictureOffsetPct": {
+        "x": -0.5,
+        "y": -14.5
+      }
+    },
+    "Crowns-G": {
+      "centrePictureFile": "Face-God.gif",
+      "centrePictureMirrorDual": true,
+      "centrePictureBlendMode": "hard-light",
+      "centrePictureOffsetPct": {
+        "y": -14.25
+      }
     }
   },
   "defaults": {
@@ -1120,6 +1155,22 @@
         "to": "G",
         "scale": 0.85
       }
-    ]
+    ],
+    "suitIconFile": {
+      "Hearts": "SuitHearts.png",
+      "Diamonds": "SuitDiamonds.png",
+      "Clubs": "SuitClubs.png",
+      "Spades": "SuitSpades.png",
+      "Stars": "SuitStars.png",
+      "Moons": "SuitMoons.png",
+      "Frogs": "SuitFrogs.png",
+      "Coins": "SuitCoins.png",
+      "Bones": "SuitBones.png",
+      "Crowns": "SuitCrowns.png",
+      "Swords": "SuitSwords.png"
+    },
+    "suitFaceTextColor": {
+      "Swords": "#ada4a1"
+    }
   }
 }

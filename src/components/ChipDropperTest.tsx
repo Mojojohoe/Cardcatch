@@ -485,8 +485,8 @@ export const ChipDropperTest: React.FC<{
 
   return (
     <>
-      {/* Below results / panic overlays (z-[300]+); above main table (z-[20]) */}
-      <div className="fixed inset-0 z-[40] pointer-events-none">
+      {/* Keep below hover/help overlays so tooltips remain readable on small screens. */}
+      <div className="fixed inset-0 z-[26] pointer-events-none">
         <HoldDelayTooltip
           caption={opponentTokensHoldCaption}
           className="pointer-events-auto absolute top-[35%] left-[calc(50%-18vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
