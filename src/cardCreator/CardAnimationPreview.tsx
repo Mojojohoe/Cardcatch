@@ -27,26 +27,26 @@ const TearHalf: React.FC<TearHalfProps> = ({ cardId, side, loopTick }) => {
   return (
     <motion.div
       key={`tear-${side}-${cardId}-${loopTick}`}
-      className={`absolute top-1/2 h-[16rem] w-[6rem] -translate-y-1/2 overflow-hidden ${isLeft ? 'left-1/2 -translate-x-full' : 'left-1/2'}`}
+      className="absolute inset-0 overflow-hidden"
       initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
       animate={{
-        x: isLeft ? -58 : 58,
+        x: isLeft ? -52 : 52,
         y: 72,
-        rotate: isLeft ? -24 : 24,
+        rotate: isLeft ? -19 : 19,
         opacity: [1, 1, 0.05],
       }}
       transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
       style={{
         clipPath: isLeft
-          ? 'polygon(0% 0%, 84% 0%, 80% 12%, 86% 23%, 78% 37%, 88% 51%, 79% 67%, 86% 82%, 81% 100%, 0% 100%)'
-          : 'polygon(18% 0%, 100% 0%, 100% 100%, 16% 100%, 21% 86%, 13% 72%, 22% 56%, 14% 42%, 20% 28%, 12% 13%)',
+          ? 'polygon(0% 0%, 53% 0%, 49% 12%, 55% 24%, 47% 38%, 56% 50%, 48% 64%, 54% 79%, 50% 100%, 0% 100%)'
+          : 'polygon(47% 0%, 100% 0%, 100% 100%, 50% 100%, 54% 82%, 46% 66%, 53% 50%, 45% 34%, 51% 17%)',
       }}
     >
-      <div className={`absolute top-1/2 -translate-y-1/2 ${isLeft ? '-left-[1.45rem]' : '-left-[4.55rem]'}`}>
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
         <CardVisual card={cardId} revealed noAnimate />
       </div>
       <div
-        className={`pointer-events-none absolute inset-y-0 ${isLeft ? 'right-0' : 'left-0'} w-[2px] bg-white/85 shadow-[0_0_12px_rgba(255,255,255,0.65)]`}
+        className="pointer-events-none absolute inset-y-[10%] left-1/2 w-[2px] -translate-x-1/2 bg-white/85 shadow-[0_0_12px_rgba(255,255,255,0.65)]"
       />
     </motion.div>
   );
@@ -224,7 +224,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
                 <CardVisual card={cardId} revealed noAnimate />
               </motion.div>
             ) : animationId === 'tear' ? (
-              <div key={`tear-wrap-${cardId}-${loopTick}`} className="relative h-[18rem] w-[16rem]">
+              <div key={`tear-wrap-${cardId}-${loopTick}`} className="relative h-[18rem] w-[18rem]">
                 <TearHalf cardId={cardId} side="left" loopTick={loopTick} />
                 <TearHalf cardId={cardId} side="right" loopTick={loopTick} />
                 <motion.div

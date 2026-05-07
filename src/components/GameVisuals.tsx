@@ -465,7 +465,6 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       cardArt &&
       cardArt.mode === 'raster' &&
       revealed &&
-      resolutionMorph !== 'transform' &&
       (hasCustomRasterFace || isAssembledRasterCardId(card)),
   );
   const playEmpowerWiggle = (resolutionWiggleTick ?? 0) > 0 && resolutionMorph !== 'transform';
