@@ -61,6 +61,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
   const [animationId, setAnimationId] = useState<PreviewAnimationId>('deckPull');
   const [loopTick, setLoopTick] = useState(0);
   const [transformCard, setTransformCard] = useState(cardId);
+  const [transformPhase, setTransformPhase] = useState<'transform_out' | 'transform_in' | null>(null);
 
   const selectedAnim = useMemo(
     () => ANIMATION_DEFS.find((a) => a.id === animationId) ?? ANIMATION_DEFS[0],
@@ -79,10 +80,18 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
   useEffect(() => {
     if (animationId !== 'transformFlip') return undefined;
     setTransformCard(cardId);
+    setTransformPhase('transform_out');
     const swapAt = window.setTimeout(() => {
       setTransformCard(transformTarget);
-    }, Math.max(220, Math.floor(selectedAnim.durationMs * 0.5)));
-    return () => window.clearTimeout(swapAt);
+      setTransformPhase('transform_in');
+    }, 560);
+    const doneAt = window.setTimeout(() => {
+      setTransformPhase(null);
+    }, 1120);
+    return () => {
+      window.clearTimeout(swapAt);
+      window.clearTimeout(doneAt);
+    };
   }, [animationId, cardId, transformTarget, loopTick, selectedAnim.durationMs]);
 
   const iconForAnimation = (id: PreviewAnimationId) => {
@@ -245,7 +254,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
                 revealed
                 presentation={animationId === 'deckPull' ? 'deckPull' : 'default'}
                 presentationPace="slow"
-                resolutionMorph={animationId === 'transformFlip' ? 'transform' : null}
+                resolutionMorph={animationId === 'transformFlip' ? transformPhase : null}
                 resolutionMorphTick={animationId === 'transformFlip' ? loopTick + 1 : 0}
                 resolutionWiggleTick={animationId === 'upgradeWiggle' ? loopTick + 1 : 0}
                 noAnimate={!useEntranceMotion}

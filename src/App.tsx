@@ -1181,7 +1181,7 @@ const ResolutionSequence: React.FC<{
   const [resolutionFx, setResolutionFx] = useState<ResolutionFx>(null);
   const [lustHeartBurst, setLustHeartBurst] = useState(false);
   /** Per-seat resolution morph on the played card (`transform` = identity flip only). */
-  const [resolutionCardMorph, setResolutionCardMorph] = useState<Record<string, 'transform'>>({});
+  const [resolutionCardMorph, setResolutionCardMorph] = useState<Record<string, 'transform_out' | 'transform_in'>>({});
   const [resolutionCardMorphTick, setResolutionCardMorphTick] = useState<Record<string, number>>({});
   /** Bumped after each empower step so `CardVisual` replays a short wiggle without dropping artwork mode. */
   const [resolutionEmpowerWiggleTick, setResolutionEmpowerWiggleTick] = useState<Record<string, number>>({});
@@ -1420,12 +1420,15 @@ const ResolutionSequence: React.FC<{
             break;
           case 'TRANSFORM':
             if (event.uid && event.cardId && event.fromCardId && event.fromCardId !== event.cardId) {
-              setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'transform' }));
+              setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'transform_out' }));
               setResolutionCardMorphTick((m) => ({ ...m, [event.uid!]: (m[event.uid!] ?? 0) + 1 }));
-              /** Warm-up pulse + flip: swap exactly at the flat edge midpoint (x≈0). */
+              /** Phase A: warm-up pulse then rotate to side-on edge (`rotateY=-90`). */
               await new Promise((r) => setTimeout(r, 560));
         if (!active) return;
+              /** Midpoint handoff: card is edge-on, so swap to destination face now. */
               setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.cardId! }));
+              /** Phase B: new face starts edge-on (`rotateY=90`) and unfolds to front. */
+              setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'transform_in' }));
               await new Promise((r) => setTimeout(r, 560));
               if (!active) return;
               setResolutionCardMorph((m) => {

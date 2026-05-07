@@ -371,7 +371,7 @@ export interface CardVisualProps {
   /** Envy: playable coveted card glows green. */
   envyCovetedGlow?: boolean;
   /** Round-resolution: identity flip (Strength-style transform) only. */
-  resolutionMorph?: 'transform' | null;
+  resolutionMorph?: 'transform_out' | 'transform_in' | null;
   /** Optional cycle id so transform pulses/flips can replay without remounting card shell. */
   resolutionMorphTick?: number;
   /** Resolution empower / Lust surge: incremented to replay a short wiggle without swapping to vector art. */
@@ -470,7 +470,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       revealed &&
       (hasCustomRasterFace || isAssembledRasterCardId(card)),
   );
-  const playEmpowerWiggle = (resolutionWiggleTick ?? 0) > 0 && resolutionMorph !== 'transform';
+  const transformMorphActive = resolutionMorph === 'transform_out' || resolutionMorph === 'transform_in';
+  const playEmpowerWiggle = (resolutionWiggleTick ?? 0) > 0 && !transformMorphActive;
   const faceTextOpacity = useMemo(
     () => resolvedFaceTextOpacity(cardArtOverride, cardArt?.defaults),
     [cardArtOverride, cardArt?.defaults],
@@ -670,7 +671,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           ...(assembledAlphaOutlineStyle ?? {}),
           ...(panicBackdropStyle ?? {}),
           transformPerspective:
-            presentation === 'deckPull' || resolutionMorph === 'transform'
+            presentation === 'deckPull' || transformMorphActive
               ? 900
               : undefined,
         }}
@@ -681,7 +682,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         className={`
           ${faceWrap} ${useAssembledFace ? '' : 'shadow-xl'} flex flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-lg
           transition-[box-shadow] outline-none will-change-transform
-          ${presentation === 'deckPull' || resolutionMorph === 'transform' ? 'perspective-[900px] origin-bottom' : ''}
+          ${presentation === 'deckPull' || transformMorphActive ? 'perspective-[900px] origin-bottom' : ''}
           ${useAssembledFace ? 'bg-transparent' : panicVec ? 'bg-transparent' : isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
           ${useAssembledFace ? (selected ? 'shadow-lg' : '') : selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : panicVec ? 'border-red-900/90 shadow-[0_14px_40px_rgba(0,0,0,0.55)]' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
           ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
@@ -690,7 +691,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
         `}
       >
-      {resolutionMorph === 'transform' && (
+      {resolutionMorph === 'transform_out' && (
         <div className="pointer-events-none absolute inset-[-7px] z-[5]">
           {[0, 1, 2].map((i) => (
             <motion.div
@@ -716,32 +717,39 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       )}
       <motion.div
         key={
-          resolutionMorph === 'transform'
-            ? `${cardArt?.mode ?? 'vec'}-transform-${resolutionMorphTick}`
+          transformMorphActive
+            ? `${cardArt?.mode ?? 'vec'}-${resolutionMorph}-${resolutionMorphTick}`
             : `${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}-${resolutionWiggleTick}`
         }
         className={`relative z-[1] flex flex-1 flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : PC_FACE_MINH}`}
         style={{ transformStyle: 'preserve-3d' }}
+        initial={
+          resolutionMorph === 'transform_in'
+            ? { rotateY: 90, scaleY: 0.82, filter: 'brightness(1.2)' }
+            : false
+        }
         animate={
-          resolutionMorph === 'transform'
+          resolutionMorph === 'transform_out'
             ? {
-                rotateY: [0, 0, -90, -90, 0],
-                scaleY: [1, 1, 0.82, 0.82, 1],
-                filter: [
-                  'brightness(1)',
-                  'brightness(1)',
-                  'brightness(1.2)',
-                  'brightness(1.2)',
-                  'brightness(1)',
-                ],
+                rotateY: [0, 0, -90],
+                scaleY: [1, 1, 0.82],
+                filter: ['brightness(1)', 'brightness(1)', 'brightness(1.2)'],
               }
+            : resolutionMorph === 'transform_in'
+              ? {
+                  rotateY: [90, 0],
+                  scaleY: [0.82, 1],
+                  filter: ['brightness(1.2)', 'brightness(1)'],
+                }
             : playEmpowerWiggle
               ? { rotate: [0, -9, 8, -7, 5, 0], x: [0, -5, 4, -3, 2, 0] }
               : {}
         }
         transition={
-          resolutionMorph === 'transform'
-            ? { duration: 1.12, times: [0, 0.18, 0.49, 0.51, 1], ease: [0.22, 1, 0.36, 1] }
+          resolutionMorph === 'transform_out'
+            ? { duration: 0.56, times: [0, 0.36, 1], ease: [0.22, 1, 0.36, 1] }
+            : resolutionMorph === 'transform_in'
+              ? { duration: 0.56, ease: [0.22, 1, 0.36, 1] }
             : playEmpowerWiggle
               ? { duration: 0.38, ease: [0.22, 1, 0.36, 1] }
               : { duration: 0 }
