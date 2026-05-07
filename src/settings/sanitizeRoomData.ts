@@ -157,6 +157,16 @@ export function sanitizeRoomDataForClient(room: RoomData): RoomData {
   const availableSuits: Suit[] =
     Array.isArray(room.availableSuits) && room.availableSuits.length > 0 ? [...room.availableSuits] : [...SUITS];
 
+  const bowlToastRaw = (room as { sacrificialBowlToast?: unknown }).sacrificialBowlToast;
+  let sacrificialBowlToast: RoomData['sacrificialBowlToast'] = null;
+  if (bowlToastRaw && typeof bowlToastRaw === 'object') {
+    const u = (bowlToastRaw as { uid?: unknown }).uid;
+    const at = (bowlToastRaw as { at?: unknown }).at;
+    if (typeof u === 'string' && u.length > 0 && typeof at === 'number' && Number.isFinite(at)) {
+      sacrificialBowlToast = { uid: u, at };
+    }
+  }
+
   return {
     ...room,
     settings,
@@ -173,5 +183,6 @@ export function sanitizeRoomDataForClient(room: RoomData): RoomData {
     shopBrowsingUid: null,
     shopRemoteCursor: sanitizeShopRemoteCursor(room.shopRemoteCursor),
     pendingCardShopPurchases: sanitizePendingCardShopPurchases(room.pendingCardShopPurchases),
+    sacrificialBowlToast,
   };
 }

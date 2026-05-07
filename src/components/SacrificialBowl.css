@@ -1,0 +1,43 @@
+/* Fire layer — adapted from design spec (blur + contrast stack). */
+.sacrificial-bowl-ui {
+  --sb-fire-size: 180px;
+  --sb-burn-size: 36px;
+}
+
+.sacrificial-bowl-ui--expanded {
+  --sb-fire-size: 500px;
+  --sb-burn-size: 100px;
+}
+
+.sacrificial-bowl-fire {
+  position: relative;
+  width: var(--sb-fire-size);
+  height: var(--sb-fire-size);
+  pointer-events: none;
+  background: #ff9900;
+  filter: blur(20px) contrast(30);
+  border: calc(var(--sb-fire-size) / 2) solid #000;
+  border-bottom-color: transparent;
+  border-radius: 40%;
+  box-sizing: border-box;
+  transform: scale(0.4, 1);
+}
+
+.sacrificial-bowl-burn {
+  position: absolute;
+  top: var(--sb-fire-size);
+  left: calc(-1 * var(--sb-burn-size) / 2);
+  width: var(--sb-burn-size);
+  height: var(--sb-burn-size);
+  background: #000;
+  border-radius: 100%;
+}
+
+@keyframes sacrificial-bowl-burning {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(calc(-1 * (var(--sb-fire-size) + var(--sb-burn-size))));
+  }
+}

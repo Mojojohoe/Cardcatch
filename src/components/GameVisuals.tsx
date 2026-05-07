@@ -43,7 +43,7 @@ import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide
 import { useOptionalCardArt } from '../cardArt/cardArtContext';
 import { cardArtAssetUrl } from '../cardArt/paths';
 import { isShopPackPlaceholder } from '../shopPack';
-import { ornateGreenFrameStyle } from '../ui/ornateFrame';
+import { ornateGreenTooltipRasterStyle } from '../ui/ornateFrame';
 import {
   shippedBundledPowerBackUrl,
   shippedBundledPowerFaceUrl,
@@ -851,8 +851,16 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           createPortal(
             <div
               ref={popRef}
-              style={{ ...tooltipStyle, ...ornateGreenFrameStyle(true) }}
-              className="max-w-[16rem] px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px]"
+              style={
+                cardArt?.mode === 'raster'
+                  ? { ...tooltipStyle, ...ornateGreenTooltipRasterStyle() }
+                  : tooltipStyle
+              }
+              className={
+                cardArt?.mode === 'raster'
+                  ? 'max-w-[16rem] px-4 pb-5 pl-[1.05rem] pr-4 pt-4 text-left text-[11px] font-semibold leading-snug text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px]'
+                  : 'max-w-[16rem] rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px]'
+              }
             >
               {detailTooltip && tipOpen ? detailTooltip : holdCaption}
             </div>,
@@ -911,6 +919,7 @@ export const PowerCardVisual: React.FC<{
   const [tipOpen, setTipOpen] = useState(false);
   const tooltipHudOpen = tipOpen && Boolean(tip) && (curseRackPeek || !disabled || destroyed);
   const tooltipStyle = usePowerTooltipPosition(tooltipHudOpen, rootRef, popRef);
+  const rasterArtOrnateTooltips = cardArtPower?.mode === 'raster';
 
   const dimClass = panel
     ? `${PC_PWR_PANEL} text-[10px] p-2.5 pt-3 justify-start gap-2`
@@ -986,6 +995,40 @@ export const PowerCardVisual: React.FC<{
         : small
           ? PC_PWR_FALLBACK_SM
           : PC_PWR_FALLBACK_LG;
+    /** Art mode: face-down curse cards use raster back art instead of SVG placeholder. */
+    const curseRasterBackUrl =
+      curseDef && cardArtPower?.mode === 'raster' ? cardArtAssetUrl('CardCurseBack.png') : null;
+
+    const curseRasterShellBase = `${backW} rounded-lg shadow-lg relative overflow-hidden border-2 border-red-900/65 ${selected ? 'ring-4 ring-yellow-400' : ''} ${disabled ? 'opacity-75 saturate-[0.72] brightness-95 cursor-not-allowed' : staticBackdrop ? 'cursor-default select-none' : 'cursor-pointer'}`;
+    if (curseRasterBackUrl) {
+      if (staticBackdrop) {
+        return (
+          <div role="presentation" className={curseRasterShellBase}>
+            <img
+              src={curseRasterBackUrl}
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
+        );
+      }
+      return (
+        <motion.div
+          whileHover={!disabled ? { y: -6, rotateY: 10 } : {}}
+          onClick={onClick}
+          className={`${curseRasterShellBase} perspective-1000 flex items-center justify-center`}
+        >
+          <img
+            src={curseRasterBackUrl}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          />
+        </motion.div>
+      );
+    }
+
     const backCurse = curseDef
       ? 'bg-zinc-950 border-2 border-red-900/70 bg-[radial-gradient(circle_at_center,#450a0a_1px,transparent_1px)] bg-[size:9px_9px]'
       : 'bg-slate-300 border-2 border-slate-400 bg-[radial-gradient(circle_at_center,#94a3b8_1px,transparent_1px)] bg-[size:10px_10px]';
@@ -1125,12 +1168,14 @@ export const PowerCardVisual: React.FC<{
           createPortal(
             <div
               ref={popRef}
-              style={{ ...tooltipStyle, ...ornateGreenFrameStyle(true) }}
-              className={`px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+              style={{ ...tooltipStyle, ...ornateGreenTooltipRasterStyle() }}
+              className={`max-w-[min(18rem,calc(100vw-2rem))] px-[1.125rem] pb-5 pt-4 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
               aria-hidden={!tipOpen}
             >
-              <div className="flex gap-3 items-start text-left">
-                <div className={`shrink-0 rounded-lg p-2 border ${curseDef ? 'bg-black border-red-900' : 'bg-slate-900 border-slate-700'}`}>
+              <div className="flex items-start gap-4 text-left">
+                <div
+                  className={`ml-0.5 mt-0.5 shrink-0 rounded-lg border p-2 ${curseDef ? 'bg-black border-red-900' : 'border-slate-700 bg-slate-900'}`}
+                >
                   {curseDef ? (
                     <CursePowerIcon
                       curseId={cardId}
@@ -1146,13 +1191,13 @@ export const PowerCardVisual: React.FC<{
                 </div>
                 <div className="min-w-0 flex-1 pt-0.5">
                   <p
-                    className={`font-black text-[11px] uppercase tracking-wide border-b pb-1 mb-1.5 ${
-                      curseDef ? 'text-red-400 border-red-600/30' : 'text-yellow-400/95 border-yellow-500/25'
+                    className={`mb-1.5 border-b pb-1 text-[11px] font-black uppercase tracking-wide ${
+                      curseDef ? 'text-red-400 border-red-600/30' : 'border-yellow-500/25 text-yellow-400/95'
                     }`}
                   >
                     {curseDef ? curseDef.name : card!.name}
                   </p>
-                  <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{description}</p>
+                  <p className="text-sm font-medium leading-snug text-slate-100 normal-case">{description}</p>
                 </div>
               </div>
             </div>,
@@ -1261,39 +1306,77 @@ export const PowerCardVisual: React.FC<{
       {(curseRackPeek || !disabled || destroyed) &&
         typeof document !== 'undefined' &&
         createPortal(
-          <div
-            ref={popRef}
-            style={{ ...tooltipStyle, ...ornateGreenFrameStyle(true) }}
-            className={`px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
-            aria-hidden={!tipOpen}
-          >
-            <div className="flex gap-3 items-start text-left">
-              <div className={`shrink-0 rounded-lg p-2 border ${curseDef ? 'bg-black border-red-900' : 'bg-slate-900 border-slate-700'}`}>
-                {curseDef ? (
-                  <CursePowerIcon
-                    curseId={cardId}
-                    className={`h-[26px] w-[26px] ${cursePowerIconClass(cardId)}`}
-                  />
-                ) : (
-                  <MajorArcanaIconGlyph
-                    iconName={card!.icon}
-                    className="text-yellow-400"
-                    size={panel ? 24 : small ? 20 : 26}
-                  />
-                )}
-              </div>
-              <div className="min-w-0 flex-1 pt-0.5">
-                <p
-                  className={`font-black text-[11px] uppercase tracking-wide border-b pb-1 mb-1.5 ${
-                    curseDef ? 'text-red-400 border-red-600/30' : 'text-yellow-400/95 border-yellow-500/25'
-                  }`}
+          rasterArtOrnateTooltips ? (
+            <div
+              ref={popRef}
+              style={{ ...tooltipStyle, ...ornateGreenTooltipRasterStyle() }}
+              className={`max-w-[min(18rem,calc(100vw-2rem))] px-[1.125rem] pb-5 pt-4 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+              aria-hidden={!tipOpen}
+            >
+              <div className="flex items-start gap-4 text-left">
+                <div
+                  className={`ml-0.5 mt-0.5 shrink-0 rounded-lg border p-2 ${curseDef ? 'bg-black border-red-900' : 'border-slate-700 bg-slate-900'}`}
                 >
-                  {curseDef ? curseDef.name : card!.name}
-                </p>
-                <p className="text-sm leading-snug text-slate-100 font-medium normal-case">{description}</p>
+                  {curseDef ? (
+                    <CursePowerIcon
+                      curseId={cardId}
+                      className={`h-[26px] w-[26px] ${cursePowerIconClass(cardId)}`}
+                    />
+                  ) : (
+                    <MajorArcanaIconGlyph
+                      iconName={card!.icon}
+                      className="text-yellow-400"
+                      size={panel ? 24 : small ? 20 : 26}
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p
+                    className={`mb-1.5 border-b pb-1 text-[11px] font-black uppercase tracking-wide ${
+                      curseDef ? 'text-red-400 border-red-600/30' : 'border-yellow-500/25 text-yellow-400/95'
+                    }`}
+                  >
+                    {curseDef ? curseDef.name : card!.name}
+                  </p>
+                  <p className="text-sm font-medium leading-snug text-slate-100 normal-case">{description}</p>
+                </div>
               </div>
             </div>
-          </div>,
+          ) : (
+            <div
+              ref={popRef}
+              style={tooltipStyle}
+              className={`max-w-[16rem] rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+              aria-hidden={!tipOpen}
+            >
+              <div className="flex items-start gap-3 text-left">
+                <div className={`shrink-0 rounded-lg border p-2 ${curseDef ? 'bg-black border-red-900' : 'border-slate-700 bg-slate-900'}`}>
+                  {curseDef ? (
+                    <CursePowerIcon
+                      curseId={cardId}
+                      className={`h-[26px] w-[26px] ${cursePowerIconClass(cardId)}`}
+                    />
+                  ) : (
+                    <MajorArcanaIconGlyph
+                      iconName={card!.icon}
+                      className="text-yellow-400"
+                      size={panel ? 24 : small ? 20 : 26}
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p
+                    className={`mb-1.5 border-b pb-1 text-[11px] font-black uppercase tracking-wide ${
+                      curseDef ? 'text-red-400 border-red-600/30' : 'border-yellow-500/25 text-yellow-400/95'
+                    }`}
+                  >
+                    {curseDef ? curseDef.name : card!.name}
+                  </p>
+                  <p className="text-sm font-medium leading-snug text-slate-100 normal-case">{description}</p>
+                </div>
+              </div>
+            </div>
+          ),
           document.body,
         )}
       {destroyed && small && (

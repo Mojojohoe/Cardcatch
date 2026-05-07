@@ -120,15 +120,24 @@ import { sanitizeRoomDataForClient } from './settings/sanitizeRoomData';
 import { useLayoutScaleBump } from './hooks/useLayoutScaleBump';
 import { useGameSessionResilience } from './hooks/useGameSessionResilience';
 import { useShopCursorBroadcast } from './hooks/useShopCursorBroadcast';
-import { HoldDelayTooltip, HUD_INSTANT_TOOLTIP_PANEL_CLASS } from './components/HoldDelayTooltip';
+import {
+  HoldDelayTooltip,
+  HUD_HOLD_TOOLTIP_RASTER_PANEL_CLASS,
+  HUD_INSTANT_TOOLTIP_PANEL_CLASS,
+} from './components/HoldDelayTooltip';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
 import { playerHandFanMotion, computeHandFanSqueeze } from './playerHandFan';
 import { CARD_ART_HEIGHT, CARD_ART_WIDTH } from './cardArt/AssembledPlayingCardFace';
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
-import { DisplayCardArtModeOverride, mergeCardArtWithRoom, useOptionalCardArt } from './cardArt/cardArtContext';
+import {
+  DisplayCardArtModeOverride,
+  mergeCardArtWithRoom,
+  useOptionalCardArt,
+} from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
 import { isShopPackPlaceholder } from './shopPack';
+import { SacrificialBowl } from './components/SacrificialBowl';
 import { panicDiceSeatAllowed } from './services/panicDiceSeat';
 import { warmCardArtImages } from './cardArt/preload';
 import { shippedPlayingCardBackRasterUrl } from './cardArt/shippedRasterFallbacks';
@@ -137,7 +146,7 @@ import { CardAnimationPreview } from './cardCreator/CardAnimationPreview';
 import { PlayerSettingsMenu } from './components/PlayerSettingsMenu';
 import { usePlayerDisplayPreferences } from './playerDisplayPreferences';
 import { playSfx } from './audio/sfx';
-import { ornateGreenFrameStyle, ornatePurpleFrameStyle } from './ui/ornateFrame';
+import { ornateGreenTooltipRasterStyle, ornatePurplePanelRasterStyle } from './ui/ornateFrame';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -2196,13 +2205,19 @@ const DraftingPhase: React.FC<{
   draftSets: number[][], 
   currentSetIdx: number, 
   onSelect: (powerId: number) => void,
-  myPowerCards: number[] 
-}> = ({ draftSets, currentSetIdx, onSelect, myPowerCards }) => {
+  myPowerCards: number[];
+  /** True when display mode is raster / art — lighter full-screen scrim so ornate gold frames read clearly. */
+  rasterHud: boolean;
+}> = ({ draftSets, currentSetIdx, onSelect, myPowerCards, rasterHud }) => {
   const currentSet = draftSets[currentSetIdx] || [];
   const hasSelectedThisTurn = myPowerCards.length > currentSetIdx;
 
   return (
-    <div className="absolute inset-0 z-[150] flex flex-col items-center justify-center p-4 bg-emerald-950/95 backdrop-blur-3xl overflow-y-auto">
+    <div
+      className={`absolute inset-0 z-[150] flex flex-col items-center justify-center overflow-y-auto p-4 ${
+        rasterHud ? 'bg-black/55 backdrop-blur-md' : 'bg-emerald-950/95 backdrop-blur-3xl'
+      }`}
+    >
       <div className="w-full max-w-6xl flex flex-col items-center gap-8 py-10">
         <div className="text-center space-y-2">
           <motion.h2 
@@ -2262,6 +2277,8 @@ const OpponentDesperationTopStrip: React.FC<{ opponent: PlayerData; room: RoomDa
   room,
   className = '',
 }) => {
+  const cardArt = useOptionalCardArt();
+  const rasterOrnate = Boolean(cardArt?.mode === 'raster');
   if (!opponentDesperationUiRelevant(room, opponent)) return null;
   const oppLadderLabel =
     opponent.desperationTier >= 0
@@ -2270,8 +2287,12 @@ const OpponentDesperationTopStrip: React.FC<{ opponent: PlayerData; room: RoomDa
   return (
     <HoldDelayTooltip caption={HUD_HOLD_OPPONENT_DESPERATION_CAPTION} className={`z-[28] w-full max-w-full shrink-0 ${className}`}>
     <div
-      style={ornatePurpleFrameStyle(true)}
-      className="w-full max-w-full py-1.5"
+      style={rasterOrnate ? ornatePurplePanelRasterStyle() : undefined}
+      className={
+        rasterOrnate
+          ? 'w-full max-w-full py-2'
+          : 'w-full max-w-full rounded-lg border border-purple-800/65 bg-purple-950/93 py-1.5 shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]'
+      }
     >
       <div className="flex w-full max-w-full items-start gap-1.5 px-2">
         <Skull
@@ -2417,6 +2438,9 @@ const HUD_HOLD_OPPONENT_TOKENS_CAPTION =
 const HUD_HOLD_TARGET_SUIT_CAPTION =
   'This is the target suit for this round. This suit trumps all other suits. A 2 of the target suit will trump an Ace of a non-target suit.';
 
+const HUD_HOLD_SACRIFICIAL_BOWL_CAPTION =
+  'The Sacrificial Bowl gives you one free draw from the deck for every two cards you burn. Drag a card to the bowl to burn it.';
+
 const HUD_HOLD_OPPONENT_DESPERATION_CAPTION =
   'The current Desperation tier for the opponent. If they lose the game, this is the effect they will suffer.';
 
@@ -2468,6 +2492,12 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const panicClashPlayedRollIdsRef = useRef<Set<string>>(new Set());
   const [handDragFromIndex, setHandDragFromIndex] = useState<number | null>(null);
   const [handDragHoverIndex, setHandDragHoverIndex] = useState<number | null>(null);
+  const [sacrificialBowlFocused, setSacrificialBowlFocused] = useState(false);
+  const [sacrificialBowlCatchHover, setSacrificialBowlCatchHover] = useState(false);
+  const [sacrificeBurnAnimCard, setSacrificeBurnAnimCard] = useState<string | null>(null);
+  const [sacrificeOpponentBanner, setSacrificeOpponentBanner] = useState<string | null>(null);
+  const sacrificialBowlDropRef = useRef<HTMLDivElement>(null);
+  const lastSacrificeToastAtRef = useRef<number | null>(null);
   const handHudLayoutRef = useRef<HTMLDivElement>(null);
   const [handHudNeedsStack, setHandHudNeedsStack] = useState(false);
   const handRowRef = useRef<HTMLDivElement>(null);
@@ -2837,6 +2867,46 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     if (!room || room.status === 'waiting') return;
     void import('@3d-dice/dice-box-threejs');
   }, [room?.status]);
+
+  /** Sacrificial Bowl: expand + hit-test while dragging a hand card for burn. */
+  useEffect(() => {
+    if (handDragFromIndex === null) {
+      setSacrificialBowlFocused(false);
+      setSacrificialBowlCatchHover(false);
+      return;
+    }
+    const onDrag = (e: DragEvent) => {
+      if (e.clientY === 0 && e.clientX === 0) return;
+      const yRatio = e.clientY / Math.max(1, window.innerHeight);
+      setSacrificialBowlFocused(yRatio < 0.44);
+      const el = sacrificialBowlDropRef.current;
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const pad = 12;
+        const over =
+          e.clientX >= r.left - pad &&
+          e.clientX <= r.right + pad &&
+          e.clientY >= r.top - pad &&
+          e.clientY <= r.bottom + pad;
+        setSacrificialBowlCatchHover(over);
+      }
+    };
+    document.addEventListener('drag', onDrag);
+    return () => document.removeEventListener('drag', onDrag);
+  }, [handDragFromIndex]);
+
+  /** Opponent-only banner when the other player burns a card. */
+  useEffect(() => {
+    if (!room || room.status === 'waiting') return;
+    const t = room.sacrificialBowlToast;
+    if (!t || t.uid === myUid) return;
+    if (lastSacrificeToastAtRef.current === t.at) return;
+    lastSacrificeToastAtRef.current = t.at;
+    const name = room.players[t.uid]?.name ?? 'Player';
+    setSacrificeOpponentBanner(`${name} sacrificed a card`);
+    const timer = window.setTimeout(() => setSacrificeOpponentBanner(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [room, myUid]);
 
   const handleCreateRoom = async () => {
     if (!playerName) { setError('Please enter your name'); return; }
@@ -3288,6 +3358,38 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
 
+  const handleSacrificialBowlDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+  const handleSacrificialBowlDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (me.confirmed || room.status !== 'playing') return;
+    const idx = Number(e.dataTransfer.getData('text/plain'));
+    const card = me.hand[idx];
+    if (!Number.isFinite(idx) || idx < 0 || idx >= me.hand.length) {
+      setHandDragFromIndex(null);
+      setHandDragHoverIndex(null);
+      setSacrificialBowlFocused(false);
+      setSacrificialBowlCatchHover(false);
+      return;
+    }
+    if (!card || card === GROVEL_CARD_ID || isShopPackPlaceholder(card)) {
+      setHandDragFromIndex(null);
+      setHandDragHoverIndex(null);
+      setSacrificialBowlFocused(false);
+      setSacrificialBowlCatchHover(false);
+      return;
+    }
+    setSacrificeBurnAnimCard(card);
+    setHandDragFromIndex(null);
+    setHandDragHoverIndex(null);
+    setSacrificialBowlFocused(false);
+    setSacrificialBowlCatchHover(false);
+    void serviceRef.current.burnSacrificialBowlCard(idx);
+    window.setTimeout(() => setSacrificeBurnAnimCard(null), 1000);
+  };
+
   const tableShopBrowsers = Array.isArray(room.cardShopBrowsersUids) ? room.cardShopBrowsersUids : [];
   const showOpponentShopCursor = Boolean(
     room.settings.enablePokerChips &&
@@ -3409,6 +3511,62 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
       <DiceBoxTestOverlay roll={hudDiceRoll} />
+
+      {sacrificeOpponentBanner && (
+        <div className="pointer-events-none fixed left-1/2 top-[4.25rem] z-[447] max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-full border border-amber-700/50 bg-slate-950/95 px-5 py-2 text-center text-[10px] font-black uppercase tracking-widest text-amber-200 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-sm sm:top-[4.5rem] sm:text-[11px]">
+          {sacrificeOpponentBanner}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {sacrificialBowlFocused && room.status === 'playing' && !me.confirmed && (
+          <motion.div
+            key="sacrificial-bowl-focus"
+            className="fixed inset-0 z-[446] flex flex-col items-center justify-center bg-black/72 px-4 backdrop-blur-[2px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+          >
+            <p className="pointer-events-none mb-4 max-w-sm text-center text-[10px] font-black uppercase tracking-widest text-stone-300/95">
+              Release over the flame to sacrifice
+            </p>
+            <div
+              onDragOver={handleSacrificialBowlDragOver}
+              onDrop={handleSacrificialBowlDrop}
+              className="flex flex-col items-center"
+            >
+              <SacrificialBowl
+                ref={sacrificialBowlDropRef}
+                rasterMode={displayCardArt?.mode === 'raster'}
+                expanded
+                catchGlow={sacrificialBowlCatchHover}
+                burnsRemaining={me.sacrificialBowlBurnsRemaining ?? 2}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {sacrificeBurnAnimCard && (
+          <motion.div
+            key={`sacrifice-burn-${sacrificeBurnAnimCard}`}
+            className="pointer-events-none fixed inset-0 z-[448] flex items-start justify-center pt-[12vh] sm:pt-[16vh]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="relative h-[14rem] w-[14rem] sm:h-[16rem] sm:w-[16rem]">
+              <ResolutionTearOverlay>
+                <div className="scale-[0.52] sm:scale-[0.56]">
+                  <CardVisual card={sacrificeBurnAnimCard} revealed noAnimate presentation="none" />
+                </div>
+              </ResolutionTearOverlay>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {room.settings.enablePokerChips &&
         (room.status === 'playing' || room.status === 'powering' || room.status === 'results') && (
           <>
@@ -3612,6 +3770,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           currentSetIdx={room.draftTurn} 
           onSelect={handleDraftSelect}
           myPowerCards={me.powerCards}
+          rasterHud={displayCardArt?.mode === 'raster'}
         />
       )}
 
@@ -3634,8 +3793,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           <div className="mb-2 flex w-full justify-center px-1">
             {room.settings.hostRole === 'Preydator' && opponent ? (
               <div
-                style={ornatePurpleFrameStyle(true)}
-                className="flex w-full max-w-[min(100%,34rem)] items-stretch justify-center gap-2 px-2 py-1.5"
+                style={displayCardArt?.mode === 'raster' ? ornatePurplePanelRasterStyle() : undefined}
+                className={`flex w-full max-w-[min(100%,34rem)] items-stretch justify-center gap-2 px-2 py-1.5 ${
+                  displayCardArt?.mode === 'raster'
+                    ? ''
+                    : 'rounded-xl border border-purple-800/55 bg-purple-950/55 shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]'
+                }`}
               >
                 {[me, opponent].map((p) => (
                   <div key={`tier-top-${p.uid}`} className="min-w-0 flex-1 rounded-lg border border-purple-700/40 bg-purple-900/35 px-2 py-1 text-center">
@@ -3647,8 +3810,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               </div>
             ) : desperationSpinAllowed(room, myUid, me) ? (
               <div
-                style={ornatePurpleFrameStyle(true)}
-                className="mx-auto flex w-full max-w-md min-h-[2.3rem] flex-col items-center justify-center px-4 py-1.5 text-center"
+                style={displayCardArt?.mode === 'raster' ? ornatePurplePanelRasterStyle() : undefined}
+                className={`mx-auto flex w-full max-w-md min-h-[2.3rem] flex-col items-center justify-center px-4 py-1.5 text-center ${
+                  displayCardArt?.mode === 'raster'
+                    ? ''
+                    : 'rounded-xl border border-purple-800/55 bg-purple-950/55 shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]'
+                }`}
               >
                 <span className="max-w-full text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
                   {me.name}: {desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? 'Off ladder'}
@@ -3865,7 +4032,29 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               </aside>
 
               <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:w-full sm:max-w-[min(100%,min(94vw,44rem))] md:max-w-[min(100%,min(92vw,52rem))] xl:max-w-[min(100%,min(92vw,64rem))] sm:px-3">
-                <div className="relative z-10 flex w-full min-w-0 flex-col items-center">
+                <div className="relative z-10 flex w-full min-w-0 flex-row flex-wrap items-start justify-center gap-x-3 gap-y-2 sm:gap-x-5">
+                  {room.status === 'playing' && !me.confirmed && opponent && !sacrificialBowlFocused ? (
+                    <HoldDelayTooltip
+                      caption={HUD_HOLD_SACRIFICIAL_BOWL_CAPTION}
+                      className="pointer-events-auto shrink-0 self-center sm:self-start"
+                      style={displayCardArt?.mode === 'raster' ? ornateGreenTooltipRasterStyle() : undefined}
+                    >
+                      <div
+                        onDragOver={handleSacrificialBowlDragOver}
+                        onDrop={handleSacrificialBowlDrop}
+                        className="flex flex-col items-center"
+                      >
+                        <SacrificialBowl
+                          ref={sacrificialBowlDropRef}
+                          rasterMode={displayCardArt?.mode === 'raster'}
+                          expanded={false}
+                          catchGlow={sacrificialBowlCatchHover}
+                          burnsRemaining={me.sacrificialBowlBurnsRemaining ?? 2}
+                        />
+                      </div>
+                    </HoldDelayTooltip>
+                  ) : null}
+                  <div className="relative flex min-w-0 flex-1 flex-col items-center">
                {!(
                  room.status === 'powering' &&
                  me.currentMove &&
@@ -4002,6 +4191,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                {room.tyrantCrownPending != null && room.settings.enableCurseCards && (
                  <TyrantCrownTablePiece crownTotal={room.tyrantCrownPending.crownTotal} />
                )}
+                  </div>
                 </div>
               </div>
 
@@ -4247,8 +4437,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                              </span>
                              {panicDiceResultsHover ? (
                                <div
-                                style={ornateGreenFrameStyle(true)}
-                                 className={`pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-[340] max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 ${HUD_INSTANT_TOOLTIP_PANEL_CLASS}`}
+                                 style={displayCardArt?.mode === 'raster' ? ornateGreenTooltipRasterStyle() : undefined}
+                                 className={`pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-[340] max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 ${
+                                   displayCardArt?.mode === 'raster'
+                                     ? HUD_HOLD_TOOLTIP_RASTER_PANEL_CLASS
+                                     : HUD_INSTANT_TOOLTIP_PANEL_CLASS
+                                 }`}
                                >
                                  {PANIC_DICE_USED_HOVER}
                                </div>
@@ -4540,8 +4734,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     )}
                     {panicDiceStripHover ? (
                       <div
-                        style={ornateGreenFrameStyle(true)}
-                        className={`pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-[60] max-w-[min(20rem,calc(100vw-3rem))] -translate-x-1/2 sm:left-0 sm:max-w-[min(22rem,calc(100vw-11rem))] sm:translate-x-0 ${HUD_INSTANT_TOOLTIP_PANEL_CLASS}`}
+                        style={displayCardArt?.mode === 'raster' ? ornateGreenTooltipRasterStyle() : undefined}
+                        className={`pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-[60] max-w-[min(20rem,calc(100vw-3rem))] -translate-x-1/2 sm:left-0 sm:max-w-[min(22rem,calc(100vw-11rem))] sm:translate-x-0 ${
+                          displayCardArt?.mode === 'raster'
+                            ? HUD_HOLD_TOOLTIP_RASTER_PANEL_CLASS
+                            : HUD_INSTANT_TOOLTIP_PANEL_CLASS
+                        }`}
                       >
                         {panicStripHoverText}
                       </div>
@@ -4595,8 +4793,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 )}
                 {panicDiceStripHover ? (
                   <div
-                    style={ornateGreenFrameStyle(true)}
-                    className={`pointer-events-none absolute bottom-full left-1/2 z-[60] mb-3 max-w-[min(22rem,calc(100vw-2.5rem))] -translate-x-1/2 ${HUD_INSTANT_TOOLTIP_PANEL_CLASS}`}
+                    style={displayCardArt?.mode === 'raster' ? ornateGreenTooltipRasterStyle() : undefined}
+                    className={`pointer-events-none absolute bottom-full left-1/2 z-[60] mb-3 max-w-[min(22rem,calc(100vw-2.5rem))] -translate-x-1/2 ${
+                      displayCardArt?.mode === 'raster'
+                        ? HUD_HOLD_TOOLTIP_RASTER_PANEL_CLASS
+                        : HUD_INSTANT_TOOLTIP_PANEL_CLASS
+                    }`}
                   >
                     {panicStripHoverText}
                   </div>

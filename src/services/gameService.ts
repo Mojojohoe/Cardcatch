@@ -1253,7 +1253,8 @@ type GameEvent =
   | { type: 'CARD_SHOP_BUY'; uid: string; slotId: string }
   | { type: 'SHOP_CURSOR'; uid: string; nx: number; ny: number }
   /** Guest asks host to push a full snapshot (tab focus, network recovery, periodic safety). */
-  | { type: 'REQUEST_STATE_SYNC'; uid: string };
+  | { type: 'REQUEST_STATE_SYNC'; uid: string }
+  | { type: 'SACRIFICIAL_BOWL_BURN'; uid: string; handIndex: number };
 
 export type DicePresentation = 'hudBottom' | 'resolutionPage';
 
@@ -1481,6 +1482,7 @@ export class GameService {
           desperationOffset: 0,
           panicDiceUsed: false,
           tokenBalance: 0,
+          sacrificialBowlBurnsRemaining: 2,
         }
       },
       currentTurn: 1,
@@ -1787,6 +1789,10 @@ export class GameService {
         if (remoteUid && event.uid === remoteUid && this.state) {
           this.broadcastState();
         }
+      } else if (event.type === 'SACRIFICIAL_BOWL_BURN') {
+        if (remoteUid && event.uid === remoteUid) {
+          this.processSacrificialBowlBurn(remoteUid, event.handIndex);
+        }
       }
     } else {
       if (event.type === 'STATE_UPDATE') {
@@ -1877,6 +1883,7 @@ export class GameService {
           desperationOffset: 0,
           panicDiceUsed: false,
           tokenBalance: 0,
+          sacrificialBowlBurnsRemaining: 2,
         }
       },
       updatedAt: Date.now()
@@ -1979,6 +1986,7 @@ export class GameService {
             settings.enableDesperation && (settings.hostRole !== 'Predator') ? desperationOpenTier : 0,
           panicDiceUsed: false,
           tokenBalance: 0,
+          sacrificialBowlBurnsRemaining: 2,
         },
         [guestUid]: {
           ...this.state.players[guestUid],
@@ -1988,6 +1996,7 @@ export class GameService {
             settings.enableDesperation && guestRole !== 'Predator' ? desperationOpenTier : 0,
           panicDiceUsed: false,
           tokenBalance: 0,
+          sacrificialBowlBurnsRemaining: 2,
         }
       },
       status: settings.disablePowerCards ? 'playing' : 'drafting',
@@ -2135,6 +2144,59 @@ export class GameService {
       ...this.state,
       players: updatedPlayers,
       ...(nextEnvyCovet !== this.state.envyCovet ? { envyCovet: nextEnvyCovet } : {}),
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
+  private processSacrificialBowlBurn(uid: string, handIndex: number) {
+    if (!this.state || !this.state.players[uid]) return;
+    if (this.state.status !== 'playing') return;
+    const player = this.state.players[uid];
+    if (player.confirmed) return;
+    const hand = player.hand;
+    if (handIndex < 0 || handIndex >= hand.length) return;
+    const burnedId = hand[handIndex];
+    if (!burnedId || burnedId === GROVEL_CARD_ID || isShopPackPlaceholder(burnedId)) return;
+
+    const nextHand = [...hand];
+    nextHand.splice(handIndex, 1);
+
+    let burns = player.sacrificialBowlBurnsRemaining ?? 2;
+    burns -= 1;
+
+    let deck = [...this.state.deck];
+    if (burns === 0) {
+      const reward = deck.length > 0 ? deck.shift()! : GROVEL_CARD_ID;
+      nextHand.push(reward);
+      burns = 2;
+    }
+
+    let nextEnvyCovet = this.state.envyCovet;
+    const ec = nextEnvyCovet;
+    if (ec && ec.uid === uid) {
+      if (ec.handIndex === handIndex && ec.cardId === burnedId) {
+        nextEnvyCovet = null;
+      } else if (handIndex < ec.handIndex) {
+        nextEnvyCovet = { ...ec, handIndex: ec.handIndex - 1 };
+      }
+    }
+
+    const updatedPlayers = {
+      ...this.state.players,
+      [uid]: {
+        ...player,
+        hand: nextHand,
+        sacrificialBowlBurnsRemaining: burns,
+      },
+    };
+
+    this.state = {
+      ...this.state,
+      players: updatedPlayers,
+      deck,
+      ...(nextEnvyCovet !== this.state.envyCovet ? { envyCovet: nextEnvyCovet } : {}),
+      sacrificialBowlToast: { uid, at: Date.now() },
       updatedAt: Date.now(),
     };
     this.broadcastState();
@@ -2528,6 +2590,15 @@ export class GameService {
       this.processReorderHand(this.myUid, newHandOrder);
     } else {
       this.sendEvent({ type: 'REORDER_HAND', uid: this.myUid, hand: newHandOrder });
+    }
+  }
+
+  /** Burn a hand card into the Sacrificial Bowl (host-authoritative). */
+  async burnSacrificialBowlCard(handIndex: number) {
+    if (this.isHost) {
+      this.processSacrificialBowlBurn(this.myUid, handIndex);
+    } else {
+      this.sendEvent({ type: 'SACRIFICIAL_BOWL_BURN', uid: this.myUid, handIndex });
     }
   }
 

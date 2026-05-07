@@ -6,33 +6,44 @@ function assetUrl(path: string): string {
   return `${normalizedBase}${path.replace(/^\/+/, '')}`;
 }
 
-export function ornatePurpleFrameStyle(compact = false): CSSProperties {
-  return {
-    color: '#f8fafc',
-    background: 'conic-gradient(#1b2f4a 0 0), #4c1d95',
-    backgroundClip: 'padding-box, border-box',
-    border: compact ? '4px double #7f5a0d' : '6px double #7f5a0d',
-    borderImageSource: `url("${assetUrl('assets/images/border.png')}")`,
-    borderImageSlice: '120 100 140 fill',
-    borderImageRepeat: 'repeat stretch',
-    borderImageWidth: compact ? '88px 72px 96px' : '120px 100px 140px',
-    borderImageOutset: compact ? '18px 16px 24px 14px' : '36px 30px 58px 28px',
-    borderRadius: compact ? '24px' : '44px',
-  };
-}
+/** 9-slice source regions — must match the shipped border PNG artwork. */
+const ORNATE_SLICE = '120 100 140 fill';
 
-export function ornateGreenFrameStyle(compact = false): CSSProperties {
+/**
+ * Golden tooltip / popup frame for **raster (art) mode only**.
+ * Uses `round` tiling so tall/wide panels keep corner scale consistent; middles repeat instead of stretching.
+ */
+export function ornateGreenTooltipRasterStyle(): CSSProperties {
+  const w = 18;
   return {
     color: '#ecfdf5',
-    background: 'conic-gradient(#11372c 0 0), #064e3b',
-    backgroundClip: 'padding-box, border-box',
-    border: compact ? '3px double #8f6b21' : '4px double #8f6b21',
+    background: '#081210',
+    backgroundClip: 'padding-box',
+    border: `${w}px solid transparent`,
     borderImageSource: `url("${assetUrl('assets/images/border-gold.png')}")`,
-    borderImageSlice: '120 100 140 fill',
-    borderImageRepeat: 'repeat stretch',
-    borderImageWidth: compact ? '58px 52px 66px' : '72px 62px 82px',
-    borderImageOutset: compact ? '10px 8px 14px 8px' : '14px 12px 18px 10px',
-    borderRadius: compact ? '16px' : '22px',
+    borderImageSlice: ORNATE_SLICE,
+    borderImageRepeat: 'round',
+    borderImageWidth: `${w}px`,
+    borderImageOutset: 0,
+    borderRadius: 18,
   };
 }
 
+/**
+ * Purple panel frame (desperation HUD, wheel shell) for **raster mode only**.
+ */
+export function ornatePurplePanelRasterStyle(): CSSProperties {
+  const w = 20;
+  return {
+    color: '#f8fafc',
+    background: '#1a1030',
+    backgroundClip: 'padding-box',
+    border: `${w}px solid transparent`,
+    borderImageSource: `url("${assetUrl('assets/images/border.png')}")`,
+    borderImageSlice: ORNATE_SLICE,
+    borderImageRepeat: 'round',
+    borderImageWidth: `${w}px`,
+    borderImageOutset: 0,
+    borderRadius: 22,
+  };
+}

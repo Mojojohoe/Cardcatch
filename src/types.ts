@@ -213,6 +213,11 @@ export interface PlayerData {
   panicDiceUsed?: boolean;
   /** Poker Chips / shop: running token balance (gains, drops, purchases). */
   tokenBalance?: number;
+  /**
+   * Sacrificial Bowl: burns remaining until the next free deck draw (starts at 2, resets to 2 after draw).
+   * Omitted in older saves — UI treats as 2.
+   */
+  sacrificialBowlBurnsRemaining?: number;
 }
 
 export interface PendingPowerDecision {
@@ -407,6 +412,10 @@ export interface RoomData {
   shopRemoteCursor?: ShopRemoteCursorState | null;
   /** Deferred shop deliveries (Coin Flip conflict mode); host-authoritative. */
   pendingCardShopPurchases?: PendingCardShopPurchase[] | null;
+  /**
+   * Host bumps `at` when a player completes a bowl burn so peers can toast without scanning hand diffs.
+   */
+  sacrificialBowlToast?: { uid: string; at: number } | null;
   lastOutcome?: {
     targetSuit: Suit;
     winnerUid: string | 'draw';
