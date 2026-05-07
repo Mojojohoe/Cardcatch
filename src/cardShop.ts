@@ -1,4 +1,4 @@
-import { CURSES, CURSE_IDS } from './curses';
+import { CURSES, CURSE_GREED, CURSE_GREEN_EYED_MONSTER, CURSE_IDS } from './curses';
 import type { CardShopOffer, CardShopSlot, CardShopState } from './types';
 import { MAJOR_ARCANA } from './types';
 import { VALUES } from './types';
@@ -76,7 +76,9 @@ export function slotChargeTokens(slot: CardShopSlot): number {
 function rollDiscountOffer(): CardShopOffer {
   const r = Math.random();
   if (r < 0.28) {
-    const pool = shuffle([...CURSE_IDS]);
+    const pool = shuffle(
+      CURSE_IDS.filter((id) => id !== CURSE_GREED && id !== CURSE_GREEN_EYED_MONSTER),
+    );
     return { type: 'curse', curseId: pool[0]! };
   }
   if (r < 0.52) {

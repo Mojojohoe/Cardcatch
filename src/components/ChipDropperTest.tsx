@@ -29,8 +29,8 @@ import { HoldDelayTooltip } from './HoldDelayTooltip';
 const COIN_R = 5.16;
 const COIN_H = 1.48;
 const DROP_Y = 52;
-const CONTAINER_HALF_X = 22;
-const CONTAINER_HALF_Z = 13;
+const CONTAINER_HALF_X = 20.5;
+const CONTAINER_HALF_Z = 12;
 const CONTAINER_WALL_THICK = 0.56;
 const CONTAINER_WALL_HEIGHT_Y = 90;
 /** Lower the felt so stacks sit deeper in frame. */
@@ -375,12 +375,24 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
       t = Math.min(t, 0.095) * SIM_SPEED;
       world.step(fixed, t, 5);
 
+      const ixClamp = Math.max(8, CONTAINER_HALF_X - PLAY_MARGIN_X_SHRINK) - COIN_R * 0.85;
+      const izClamp = CONTAINER_HALF_Z - COIN_R * 0.92;
+
       for (const { mesh, body } of coinsRef.current) {
         // Soft stabilization: nudge toward flatter posture without hard axis-locking motion.
         const qx = body.quaternion.x;
         const qz = body.quaternion.z;
         body.torque.x += -qx * UPRIGHT_BIAS_TORQUE - body.angularVelocity.x * UPRIGHT_BIAS_DAMP;
         body.torque.z += -qz * UPRIGHT_BIAS_TORQUE - body.angularVelocity.z * UPRIGHT_BIAS_DAMP;
+
+        const px = body.position.x;
+        const pz = body.position.z;
+        if (px > ixClamp || px < -ixClamp || pz > izClamp + FRONT_WALL_Z_EXTRA * 0.35 || pz < -izClamp) {
+          body.position.x = Math.max(-ixClamp, Math.min(ixClamp, px));
+          body.position.z = Math.max(-izClamp, Math.min(izClamp + FRONT_WALL_Z_EXTRA * 0.35, pz));
+          body.velocity.x *= 0.22;
+          body.velocity.z *= 0.22;
+        }
 
         // Reduce long-run "ice skating" in tall stacks while preserving regular fall dynamics.
         const nearRest = body.velocity.lengthSquared() < 0.045;
@@ -489,7 +501,7 @@ export const ChipDropperTest: React.FC<{
       <div className="fixed inset-0 z-[26] pointer-events-none">
         <HoldDelayTooltip
           caption={opponentTokensHoldCaption}
-          className="pointer-events-auto absolute top-[35%] left-[calc(50%-18vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
+          className="pointer-events-auto absolute top-1/2 left-[calc(50%-28vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
           style={{ filter: tokenHueFilter(opponent?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">

@@ -154,6 +154,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         const coinLegends = roll.coinFlipLegends;
         const pre = roll.notation?.trim() ?? '';
         const isSilverCoinRoll = Boolean(coinLegends) || pre.startsWith('1dc');
+        const pipFallbackNotation = ds.length <= 1 ? '1dpip' : '2dpip';
 
         let notation: string;
         if (
@@ -170,19 +171,20 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
               : ds.length === 1 && typeof ds[0] === 'number'
                 ? `@${ds[0]}`
                 : '';
-          const baseNotation = ds.length <= 1 ? '1dpip' : '2dpip';
           notation =
-            ds.length <= 1 && forced ? `1dpip${forced}` : ds.length >= 2 && forced ? `2dpip${forced}` : baseNotation;
+            ds.length <= 1 && forced ? `1dpip${forced}` : ds.length >= 2 && forced ? `2dpip${forced}` : pipFallbackNotation;
         }
         let animated = false;
         try {
           animated = await runDiceAnimation(diceRef.current!, notation);
           if (!animated) {
-            animated = await runDiceAnimation(diceRef.current!, baseNotation);
+            const retryNotation = isSilverCoinRoll ? notation : pipFallbackNotation;
+            animated = await runDiceAnimation(diceRef.current!, retryNotation);
           }
         } catch {
           try {
-            animated = await runDiceAnimation(diceRef.current!, baseNotation);
+            const retryNotation = isSilverCoinRoll ? notation : pipFallbackNotation;
+            animated = await runDiceAnimation(diceRef.current!, retryNotation);
           } catch {
             animated = false;
           }

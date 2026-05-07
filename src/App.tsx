@@ -119,6 +119,7 @@ import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import { sanitizeRoomDataForClient } from './settings/sanitizeRoomData';
 import { useLayoutScaleBump } from './hooks/useLayoutScaleBump';
+import { useGameSessionResilience } from './hooks/useGameSessionResilience';
 import { useShopCursorBroadcast } from './hooks/useShopCursorBroadcast';
 import { HoldDelayTooltip, HUD_INSTANT_TOOLTIP_PANEL_CLASS } from './components/HoldDelayTooltip';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
@@ -358,6 +359,34 @@ const InsightModal: React.FC<{
   );
 };
 
+/** Compact playing-card tile matching TOKEN / DRAW hologram boxes (vector corners, not shrunk CardVisual). */
+const AcquiredCardMiniTile: React.FC<{ cardId: string }> = ({ cardId }) => {
+  const pc = parseCard(cardId);
+  const rankText = pc.isJoker
+    ? 'J'
+    : pc.suit && pc.value
+      ? displaySuitCardValue(pc.suit, pc.value)
+      : '?';
+  const suitKey = pc.isJoker ? 'Joker' : pc.suit || 'Stars';
+  const cornerCls = `${SUIT_COLORS[suitKey as Suit] ?? 'text-slate-900'}`;
+
+  return (
+    <div className="flex h-16 w-12 sm:h-24 sm:w-16 flex-col items-center justify-center gap-0.5 rounded-lg border border-blue-400/45 bg-blue-900/25 px-0.5 pb-1 pt-1 shadow-[0_0_22px_rgba(59,130,246,0.18)] backdrop-blur-sm">
+      <div className="relative flex h-[2.55rem] w-[1.8rem] flex-col rounded-[3px] border-[1.5px] border-slate-300/95 bg-white shadow-md sm:h-[3rem] sm:w-[2.15rem]">
+        <div className={`flex flex-1 flex-col items-start px-[2px] pt-[2px] ${cornerCls}`}>
+          <span className="max-w-[1.65rem] truncate text-[5px] font-black leading-none sm:text-[6px]">{rankText}</span>
+          <SuitGlyph suit={suitKey} className="mt-px h-2 w-2 shrink-0 sm:h-2.5 sm:w-2.5" />
+        </div>
+        <div className={`mt-auto flex rotate-180 flex-col items-start self-end px-[2px] pb-[2px] ${cornerCls}`}>
+          <span className="max-w-[1.65rem] truncate text-[5px] font-black leading-none sm:text-[6px]">{rankText}</span>
+          <SuitGlyph suit={suitKey} className="mt-px h-2 w-2 shrink-0 sm:h-2.5 sm:w-2.5" />
+        </div>
+      </div>
+      <span className="text-[6px] font-black uppercase tracking-tighter text-blue-100 sm:text-[7px]">CARD</span>
+    </div>
+  );
+};
+
 const AcquiredAssets: React.FC<{
   gains: { type: 'card' | 'power' | 'draw' | 'token', id: string | number | 'new-card' | 'world-curse' }[];
   side: 'left' | 'right';
@@ -393,21 +422,8 @@ const AcquiredAssets: React.FC<{
             }
             className="relative"
           >
-            {gain.type === 'card' && (
-              <div className="scale-[0.4] sm:scale-[0.6] origin-center">
-                {deliberate ? (
-                  <CardVisual
-                    card={gain.id as string}
-                    revealed
-                    presentation="deckPull"
-                    deckPullSide={side === 'left' ? 'left' : 'right'}
-                    delay={i * 0.06}
-                    presentationPace="slow"
-                  />
-                ) : (
-                <CardVisual card={gain.id as string} revealed />
-                )}
-              </div>
+            {gain.type === 'card' && typeof gain.id === 'string' && (
+              <AcquiredCardMiniTile cardId={gain.id} />
             )}
             {gain.type === 'power' && (
               <div className="scale-65 sm:scale-90 origin-center">
@@ -1064,6 +1080,22 @@ function resolutionColumnMotion(fx: ResolutionFx, uid: string) {
 
 const HUD_TABLE_ACTION_BTN =
   'rounded-xl border-2 border-amber-500/85 bg-amber-400/95 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-emerald-950 shadow-[0_8px_26px_rgba(0,0,0,0.38)] transition-[filter,transform] hover:brightness-105 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-35 sm:px-8 sm:py-3 sm:text-[11px]';
+
+/** Power/curse card under the playing card: same footprint as suit (`PC_HAND`), peeking from left/right with a 30° tilt. */
+const PowerTuckedUnderSuit: React.FC<{
+  side: 'left' | 'right';
+  children: React.ReactNode;
+}> = ({ side, children }) => (
+  <div
+    className={`pointer-events-auto absolute left-1/2 top-1/2 z-0 h-[10.8rem] w-[7.2rem] -translate-y-1/2 ${
+      side === 'left'
+        ? '-translate-x-[calc(50%+1.35rem)] rotate-[30deg]'
+        : '-translate-x-[calc(50%-1.35rem)] -rotate-[30deg]'
+    }`}
+  >
+    {children}
+  </div>
+);
 
 const ResolutionSequence: React.FC<{
   room: RoomData;
@@ -1841,6 +1873,51 @@ const ResolutionSequence: React.FC<{
                     />
                   </div>
                 )}
+                <div className="relative inline-block shrink-0">
+                  {outcome.powerCardIdsPlayed[uid] !== null && (
+                    <PowerTuckedUnderSuit side={idx === 0 ? 'left' : 'right'}>
+                      <div className="relative h-full w-full">
+                        <motion.div
+                          animate={
+                            towerScorch[uid]
+                              ? {
+                                  scale: [1, 1.08, 0.92],
+                                  filter: [
+                                    'brightness(1) grayscale(0)',
+                                    'brightness(1.35) sepia(0.35)',
+                                    'brightness(0.75) grayscale(1)',
+                                  ],
+                                }
+                              : { scale: 1, filter: 'brightness(1) grayscale(0)' }
+                          }
+                          transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+                          className={`overflow-visible rounded-xl shadow-[0_14px_32px_rgba(0,0,0,0.42)] ${
+                            outcome.powerCardIdsPlayed[uid] === 15 ? 'ring-2 ring-red-500 animate-pulse' : ''
+                          }`}
+                        >
+                          <PowerCardVisual
+                            cardId={outcome.powerCardIdsPlayed[uid]!}
+                            matchHandCard
+                            destroyed={Boolean(
+                              towerScorch[uid] ||
+                                (isDone && outcome.powerCardTowerBlocked?.[uid])
+                            )}
+                          />
+                        </motion.div>
+                        <AnimatePresence>
+                          {devilStolen[uid] !== undefined && (
+                            <motion.div
+                              initial={{ scale: 0, x: -5, opacity: 0 }}
+                              animate={{ scale: 0.5, x: -12, opacity: 1 }}
+                              className="absolute -right-0.5 -top-0.5 z-[2] rounded-full border border-red-500 bg-slate-900 p-0.5 shadow-2xl"
+                            >
+                              <PowerCardVisual cardId={devilStolen[uid]} small />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </PowerTuckedUnderSuit>
+                  )}
                 <motion.div 
                   className="relative z-10 rounded-xl shadow-[0_0_32px_rgba(250,204,21,0.18)] overflow-visible"
                   animate={resolutionColumnMotion(resolutionFx, uid)}
@@ -2026,51 +2103,8 @@ const ResolutionSequence: React.FC<{
                       </motion.div>
                     )}
                   </AnimatePresence>
-                  <div
-                    className={`absolute z-20 scale-[0.78] sm:scale-[0.82] ${idx === 0 ? 'left-full top-[36%] -translate-x-1/2 translate-y-1' : 'right-full top-[36%] translate-x-1/2 translate-y-1'}`}
-                  >
-                    {outcome.powerCardIdsPlayed[uid] !== null && (
-                      <div className="relative">
-                        <motion.div
-                          animate={
-                            towerScorch[uid]
-                              ? {
-                                  scale: [1, 1.08, 0.92],
-                                  filter: [
-                                    'brightness(1) grayscale(0)',
-                                    'brightness(1.35) sepia(0.35)',
-                                    'brightness(0.75) grayscale(1)',
-                                  ],
-                                }
-                              : { scale: 1, filter: 'brightness(1) grayscale(0)' }
-                          }
-                          transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
-                          className={`p-1 rounded-full bg-black border border-slate-700 shadow-xl overflow-visible scale-[0.82] origin-top-right sm:scale-90 ${outcome.powerCardIdsPlayed[uid] === 15 ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
-                        >
-                          <PowerCardVisual
-                            cardId={outcome.powerCardIdsPlayed[uid]!}
-                            small
-                            destroyed={Boolean(
-                              towerScorch[uid] ||
-                                (isDone && outcome.powerCardTowerBlocked?.[uid])
-                            )}
-                          />
-                        </motion.div>
-                        <AnimatePresence>
-                          {devilStolen[uid] !== undefined && (
-                            <motion.div 
-                              initial={{ scale: 0, x: -5, opacity: 0 }}
-                              animate={{ scale: 0.5, x: -15, opacity: 1 }}
-                              className="absolute top-0 right-0 p-1 rounded-full bg-slate-900 border border-red-500 shadow-2xl overflow-hidden"
-                            >
-                              <PowerCardVisual cardId={devilStolen[uid]} small />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
-                  </div>
                 </motion.div>
+                </div>
                 {idx === 1 && summoned[uid] && (
                   <div className="origin-center scale-[0.82] sm:scale-[0.9]">
                     <CardVisual
@@ -2106,7 +2140,7 @@ const ResolutionSequence: React.FC<{
         ))}
       </div>
 
-      <div className="mt-3 flex w-full max-w-xl flex-none flex-col items-center">
+      <div className="mt-10 flex w-full max-w-xl flex-none flex-col items-center sm:mt-14">
         <div className="relative flex min-h-[52px] w-full flex-col items-center justify-center overflow-visible">
           <AnimatePresence mode="popLayout">
             {visibleEvents
@@ -2422,6 +2456,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   /** True until `cardShopBrowsersUids` echoes us — avoids closing the modal during the async open race. */
   const cashShopPresencePendingRef = useRef(false);
   const layoutScaleBump = useLayoutScaleBump();
+  useGameSessionResilience(serviceRef, room);
   const [panicDiceConfirmOpen, setPanicDiceConfirmOpen] = useState(false);
   const [panicDiceStripExplainOpen, setPanicDiceStripExplainOpen] = useState(false);
   const [panicDiceStripHover, setPanicDiceStripHover] = useState(false);
@@ -3378,17 +3413,43 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         const hudDockPhases = room.status === 'playing' || room.status === 'powering';
         const showDockCashBtn =
           room.settings.enablePokerChips && Boolean(room.cardShop) && hudDockPhases;
-        const showDockPlayBtn =
-          room.status === 'playing' &&
-          selectedCardIndex !== null &&
-          !me.confirmed;
+        const showDockPlayBtn = room.status === 'playing';
         if (!showDockCashBtn && !showDockPlayBtn) return null;
+        const selectedCard = selectedCardIndex !== null ? me.hand[selectedCardIndex] ?? null : null;
+        const playBlocked =
+          !selectedCard ||
+          (selectedCard != null &&
+            (prideBlocksCard(room, myUid, selectedCard) ||
+              envySealBlocksHandIndex(room, myUid, me.hand, selectedCardIndex!)));
+        const playActionLocked = loading || me.confirmed || playBlocked;
+        const playMuted =
+          me.confirmed || !selectedCard || playBlocked || loading;
+        const playReadyStyle =
+          !playMuted && selectedCard
+            ? 'rounded-xl border-2 border-amber-500/90 bg-amber-400/95 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-emerald-950 shadow-[0_8px_26px_rgba(0,0,0,0.38)] transition-[filter,transform] hover:brightness-105 active:scale-[0.98] sm:px-8 sm:py-3 sm:text-[11px]'
+            : 'rounded-xl border-2 border-slate-600/80 bg-slate-800/90 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 shadow-none transition-[filter,transform] sm:px-8 sm:py-3 sm:text-[11px]';
+        let playLabel = 'Play card';
+        if (me.confirmed) playLabel = 'Waiting for opponent';
+        else if (selectedCard && selectedPowerCard !== null) {
+          playLabel = isCurseCardId(selectedPowerCard) ? 'Play card & curse' : 'Play card & power';
+        }
         return (
           <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[486] flex justify-center px-3 pb-[env(safe-area-inset-bottom,0px)] sm:bottom-6">
-            <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <div className="pointer-events-auto relative flex h-[3.5rem] w-full max-w-[min(100vw-1.5rem,52rem)] items-center justify-center sm:h-[3.9rem]">
+              {showDockPlayBtn ? (
+                <button
+                  type="button"
+                  onClick={() => void handlePlayCard()}
+                  disabled={playActionLocked}
+                  className={`${playReadyStyle} disabled:pointer-events-none disabled:opacity-50`}
+                >
+                  {playLabel}
+                </button>
+              ) : null}
               {showDockCashBtn ? (
                 <button
                   type="button"
+                  disabled={me.confirmed}
                   onMouseEnter={() => setCashShopBtnHover(true)}
                   onMouseLeave={() => setCashShopBtnHover(false)}
                   onFocus={() => setCashShopBtnHover(true)}
@@ -3398,24 +3459,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     setCashShopOpen(true);
                     void serviceRef.current.setCardShopOpen(true);
                   }}
-                  className={HUD_TABLE_ACTION_BTN}
+                  className={`${HUD_TABLE_ACTION_BTN} absolute right-0 top-1/2 -translate-y-1/2 disabled:pointer-events-none disabled:opacity-40 disabled:grayscale`}
                 >
                   Cash Chips
-                </button>
-              ) : null}
-              {showDockPlayBtn ? (
-                <button
-                  type="button"
-                  onClick={() => void handlePlayCard()}
-                  disabled={
-                    loading ||
-                    (me.hand[selectedCardIndex!] != null &&
-                      (prideBlocksCard(room, myUid, me.hand[selectedCardIndex!]) ||
-                        envySealBlocksHandIndex(room, myUid, me.hand, selectedCardIndex!)))
-                  }
-                  className={HUD_TABLE_ACTION_BTN}
-                >
-                  Play card
                 </button>
               ) : null}
             </div>
@@ -3683,7 +3729,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       {/* Table grid: opp row · deck column share one rail — no overlapping absolutes */}
-      <div className="relative z-[20] isolate flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-visible overflow-y-scroll overscroll-y-contain sm:gap-3">
+      <div className="relative z-[20] isolate flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-visible overflow-y-auto overscroll-y-contain sm:gap-3">
           {myWheelDecisionSpinning && (
             <div className="pointer-events-none absolute inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/45 px-2 backdrop-blur-[2px]">
               <span className="text-center text-[9px] font-black uppercase tracking-widest text-amber-300">
@@ -4234,27 +4280,27 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           </div>
                         </motion.div>
                       )}
-                      <CardVisual
-                        card={room.lastOutcome!.cardsPlayed[uid]}
-                        revealed
-                        presentation="none"
-                        noAnimate
-                        clashGhost={Boolean(room.lastOutcome.clashDestroyedByPenalty?.[uid])}
-                      />
-                      <div className="pointer-events-none absolute top-1/2 z-30 -translate-y-1/2">
-                         {room.lastOutcome?.powerCardIdsPlayed?.[uid] != null && (
-                           <div
-                             className={`scale-[0.8] origin-top group relative sm:scale-[0.88] ${
-                               seatIdx === 0 ? 'translate-x-[3.8rem] sm:translate-x-[4.2rem]' : '-translate-x-[3.8rem] sm:-translate-x-[4.2rem]'
-                             }`}
-                           >
-                             <PowerCardVisual
-                               cardId={room.lastOutcome!.powerCardIdsPlayed[uid]!}
-                               small
-                               destroyed={Boolean(room.lastOutcome.powerCardTowerBlocked?.[uid])}
-                             />
-                           </div>
-                         )}
+                      <div className="relative inline-block">
+                        {room.lastOutcome?.powerCardIdsPlayed?.[uid] != null && (
+                          <PowerTuckedUnderSuit side={seatIdx === 0 ? 'left' : 'right'}>
+                            <div className="overflow-visible rounded-xl shadow-[0_14px_32px_rgba(0,0,0,0.42)]">
+                              <PowerCardVisual
+                                cardId={room.lastOutcome!.powerCardIdsPlayed[uid]!}
+                                matchHandCard
+                                destroyed={Boolean(room.lastOutcome.powerCardTowerBlocked?.[uid])}
+                              />
+                            </div>
+                          </PowerTuckedUnderSuit>
+                        )}
+                        <div className="relative z-10">
+                          <CardVisual
+                            card={room.lastOutcome!.cardsPlayed[uid]}
+                            revealed
+                            presentation="none"
+                            noAnimate
+                            clashGhost={Boolean(room.lastOutcome.clashDestroyedByPenalty?.[uid])}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}

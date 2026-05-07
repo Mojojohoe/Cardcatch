@@ -76,7 +76,8 @@ export const PanicClashResolution: React.FC<{
   const fx = outcome.panicFx!;
   const opponentUid = fx.opponentUid;
   const panicCardId = fx.panicCardId;
-  const oppCardId = outcome.cardsPlayed[opponentUid];
+  const oppCardId =
+    outcome.initialCardsPlayed?.[opponentUid] ?? outcome.cardsPlayed[opponentUid];
   const opponentName = room.players[opponentUid]?.name ?? 'Opponent';
 
   const greedTax =

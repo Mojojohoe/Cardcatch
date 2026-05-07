@@ -99,7 +99,8 @@ export const shuffle = <T>(array: T[]): T[] => {
 export const HEART_GOD_RANK = 'G';
 
 function standardPlayingCardRankValue(suit: string, value: string, greedTax: boolean): number {
-  if (suit === 'Hearts' && value === HEART_GOD_RANK) return 19;
+  /** Post-Ace “Ascendant” rank (Emperor/Strength overflow); same clash tier as God of Hearts. */
+  if (value === HEART_GOD_RANK) return 19;
 
   let base: number;
   if (value === 'A') base = 14;
@@ -457,6 +458,20 @@ export function envyAllowsPlayCardId(
   return envyFreeCopiesInHand(hand, uid, cardId, sealedCards) > 0;
 }
 
+/** Advance along {@link VALUES}; steps past Ace become `${suit}-G` (clash 19). */
+export function bumpPlayingCardRank(cardId: string, steps: number): string {
+  const pc = parseCard(cardId);
+  if (pc.isJoker || steps === 0) return cardId;
+  const ladder = VALUES as readonly string[];
+  const ix = ladder.indexOf(pc.value as (typeof VALUES)[number]);
+  if (ix < 0) {
+    return cardId;
+  }
+  const j = ix + steps;
+  if (j < ladder.length) return `${pc.suit}-${ladder[j]!}`;
+  return `${pc.suit}-${HEART_GOD_RANK}`;
+}
+
 export const parseCard = (cardStr: string): { suit: string, value: string, isJoker: boolean } => {
   if (cardStr == null || typeof cardStr !== 'string') {
     return { suit: '', value: '', isJoker: false };
@@ -539,7 +554,9 @@ export const describeCardPlain = (cardStr: string): string => {
   }
   if (p.suit === 'Grovels') return 'Grovel';
   if (p.suit === 'Crowns') return `the ${displaySuitCardValue(p.suit, p.value)} of Crowns`;
-  if (p.suit === 'Hearts' && p.value === HEART_GOD_RANK) return 'God of Hearts';
+  if (p.value === HEART_GOD_RANK) {
+    return p.suit === 'Hearts' ? 'God of Hearts' : `the Ascendant of ${p.suit}`;
+  }
   const rk = RANK_WORDS[p.value] ?? p.value;
   return `the ${rk} of ${p.suit}`;
 };
@@ -1234,7 +1251,9 @@ type GameEvent =
     }
   | { type: 'CARD_SHOP_SET_OPEN'; uid: string; open: boolean }
   | { type: 'CARD_SHOP_BUY'; uid: string; slotId: string }
-  | { type: 'SHOP_CURSOR'; uid: string; nx: number; ny: number };
+  | { type: 'SHOP_CURSOR'; uid: string; nx: number; ny: number }
+  /** Guest asks host to push a full snapshot (tab focus, network recovery, periodic safety). */
+  | { type: 'REQUEST_STATE_SYNC'; uid: string };
 
 export type DicePresentation = 'hudBottom' | 'resolutionPage';
 
@@ -1300,6 +1319,9 @@ export class GameService {
   /** Host: debounce shop cursor broadcasts (~14 Hz flush of latest coords). */
   private shopCursorFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private shopCursorPending: { uid: string; nx: number; ny: number } | null = null;
+  /** Throttle host focus broadcasts / guest resync pings so tab wake storms stay cheap. */
+  private lastHostSessionResyncAt = 0;
+  private lastGuestSessionResyncRequestAt = 0;
 
   constructor() {
     this.myUid = Math.random().toString(36).substring(2, 9);
@@ -1761,6 +1783,10 @@ export class GameService {
         if (remoteUid && event.uid === remoteUid) {
           this.handleShopCursorDirect(event.uid, event.nx, event.ny);
         }
+      } else if (event.type === 'REQUEST_STATE_SYNC') {
+        if (remoteUid && event.uid === remoteUid && this.state) {
+          this.broadcastState();
+        }
       }
     } else {
       if (event.type === 'STATE_UPDATE') {
@@ -2174,7 +2200,7 @@ export class GameService {
     const cy = Math.max(0, Math.min(1, ny));
     this.shopCursorPending = { uid, nx: cx, ny: cy };
     if (this.shopCursorFlushTimer) return;
-    this.shopCursorFlushTimer = setTimeout(this.flushShopCursorToState, 72);
+    this.shopCursorFlushTimer = setTimeout(this.flushShopCursorToState, 24);
   }
 
   private normalizeCardShopBrowsersUids(): string[] {
@@ -2790,6 +2816,37 @@ export class GameService {
     if (this.isHost) {
       this.handleSubmitPowerDecision(this.myUid, option, wheelOffset, priestessSwapToCard);
     } else {
+      const state = this.state;
+      const pending = state?.pendingPowerDecisions?.[this.myUid];
+      if (
+        state &&
+        state.status === 'powering' &&
+        pending &&
+        pending.selectedOption === null &&
+        (pending.options.includes(option) || option === 'SPIN_WHEEL') &&
+        !pending.disabledReasons?.[option]
+      ) {
+        const nextPendingAll = { ...(state.pendingPowerDecisions ?? {}) };
+        const nextPendingSelf: PendingPowerDecision = { ...pending, selectedOption: option };
+        if (nextPendingSelf.powerCardId === 10) {
+          const resolvedOffset = typeof wheelOffset === 'number' ? wheelOffset : Math.random();
+          nextPendingSelf.wheelOffset = resolvedOffset;
+          nextPendingSelf.wheelResult = this.getWheelOutcome(resolvedOffset);
+        }
+        if (nextPendingSelf.powerCardId === 2) {
+          nextPendingSelf.priestessSwapToCard =
+            typeof priestessSwapToCard === 'string' && priestessSwapToCard.trim() !== ''
+              ? priestessSwapToCard
+              : null;
+        }
+        nextPendingAll[this.myUid] = nextPendingSelf;
+        this.state = {
+          ...state,
+          pendingPowerDecisions: nextPendingAll,
+          updatedAt: Date.now(),
+        };
+        this.onStateChange?.(this.state);
+      }
       this.sendEvent({ type: 'SUBMIT_POWER_DECISION', uid: this.myUid, option, wheelOffset, priestessSwapToCard });
     }
   }
@@ -2819,8 +2876,42 @@ export class GameService {
     if (this.isHost) {
       this.handleChatMessage(this.myUid, text);
     } else {
+      /** Optimistic echo: guest sees their line immediately; next STATE_UPDATE replaces full history. */
+      if (this.state?.players[this.myUid]) {
+        const name = this.state.players[this.myUid].name;
+        const entry: ChatMessageEntry = { uid: this.myUid, name, text, at: Date.now() };
+        const prev = this.state.chatMessages ?? [];
+        this.state = {
+          ...this.state,
+          chatMessages: [...prev, entry].slice(-40),
+          updatedAt: Date.now(),
+        };
+        this.onStateChange?.(this.state);
+      }
       this.sendEvent({ type: 'SEND_CHAT', uid: this.myUid, text });
     }
+  }
+
+  /**
+   * Mitigate Chrome tab throttling / missed P2P deliveries: host rebroadcasts; guest asks host for a snapshot.
+   * Called from visibility + online handlers while a match is active.
+   */
+  notifySessionResync(_reason?: string) {
+    void _reason;
+    if (!this.state) return;
+    const conn = this.connection as (DataConnection & { open?: boolean }) | null;
+    if (!conn?.open) return;
+
+    const now = Date.now();
+    if (this.isHost) {
+      if (now - this.lastHostSessionResyncAt < 900) return;
+      this.lastHostSessionResyncAt = now;
+      this.broadcastState();
+      return;
+    }
+    if (now - this.lastGuestSessionResyncRequestAt < 500) return;
+    this.lastGuestSessionResyncRequestAt = now;
+    this.sendEvent({ type: 'REQUEST_STATE_SYNC', uid: this.myUid });
   }
 
   private handleSelectDraft(uid: string, powerCardId: number, expectedTurn: number) {
@@ -3325,7 +3416,8 @@ export class GameService {
     const extras: Record<string, number> = { [hostUid]: 0, [guestUid]: 0 };
     extras[oppUid] = combat.extraOpponentPenalty;
 
-    const panicFrozenCardsPlayed = { ...prev.cardsPlayed, [uid]: panicCard };
+    /** Keep both players’ committed suit cards — panic only applies clash penalty to the opponent of the roller. */
+    const panicFrozenCardsPlayed = { ...prev.cardsPlayed };
 
     const nw = resolveFrozenTrickWinnerForPanic({
       roomData: room,
@@ -3350,7 +3442,6 @@ export class GameService {
     });
     const nextCardsPlayedVisual = {
       ...prev.cardsPlayed,
-      [uid]: tableauDisplay.panicDisplayed,
       [oppUid]: tableauDisplay.opponentDisplayed,
     };
 
@@ -3526,7 +3617,8 @@ export class GameService {
       events.push({
         type: 'COIN_FLIP',
         message: `${coinFlip === 'Host' ? players[p1Uid].name : players[p2Uid].name} wins priority flip!`,
-        resolutionDice: [pip],
+        coinFlipSides: { headsUid: p1Uid, tailsUid: p2Uid },
+        resolutionDice: [p1WinsFlip ? 1 : 0],
       });
     }
 
@@ -3587,7 +3679,8 @@ export class GameService {
       events.push({
         type: 'COIN_FLIP',
         message: `${players[winnerUid].name} wins the curse clash — their curse takes hold; ${players[loserUid].name}'s curse is spent.`,
-        resolutionDice: [pip],
+        coinFlipSides: { headsUid: p1Uid, tailsUid: p2Uid },
+        resolutionDice: [p1WinsClash ? 1 : 0],
       });
       events.push({
         type: 'POWER_TRIGGER',
@@ -3984,7 +4077,8 @@ export class GameService {
         events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 4, message: `${players[pUid].name}'s Emperor empowers the card!` });
         if (pUid === p1Uid) {
           const fromCard = c1;
-          c1 = `${targetSuit}-${VALUES[Math.min(VALUES.indexOf(pc1.value as any) + 2, VALUES.length - 1)]}`;
+          const stepped = bumpPlayingCardRank(c1, 2);
+          c1 = parseCard(stepped).isJoker ? c1 : `${targetSuit}-${parseCard(stepped).value}`;
           events.push({
             type: 'CARD_EMPOWER',
             uid: p1Uid,
@@ -3994,7 +4088,8 @@ export class GameService {
           });
         } else {
           const fromCard = c2;
-          c2 = `${targetSuit}-${VALUES[Math.min(VALUES.indexOf(pc2.value as any) + 2, VALUES.length - 1)]}`;
+          const stepped = bumpPlayingCardRank(c2, 2);
+          c2 = parseCard(stepped).isJoker ? c2 : `${targetSuit}-${parseCard(stepped).value}`;
           events.push({
             type: 'CARD_EMPOWER',
             uid: p2Uid,
@@ -4009,7 +4104,7 @@ export class GameService {
         if (pUid === p1Uid) {
           const pc = parseCard(c1);
           const fromCard = c1;
-          c1 = pc.isJoker ? c1 : `${pc.suit}-${VALUES[Math.min(VALUES.indexOf(pc.value as any) + 4, VALUES.length - 1)]}`;
+          c1 = pc.isJoker ? c1 : bumpPlayingCardRank(c1, 4);
           events.push({
             type: 'CARD_EMPOWER',
             uid: p1Uid,
@@ -4020,7 +4115,7 @@ export class GameService {
         } else {
           const pc = parseCard(c2);
           const fromCard = c2;
-          c2 = pc.isJoker ? c2 : `${pc.suit}-${VALUES[Math.min(VALUES.indexOf(pc.value as any) + 4, VALUES.length - 1)]}`;
+          c2 = pc.isJoker ? c2 : bumpPlayingCardRank(c2, 4);
           events.push({
             type: 'CARD_EMPOWER',
             uid: p2Uid,
@@ -4053,7 +4148,6 @@ export class GameService {
       const loversOpp = loversUid === p1Uid ? p2Uid : p1Uid;
 
       let emperorFirst: boolean;
-      let emperorDice: number[] | undefined;
       if (coinFlip === 'Host') {
         emperorFirst = emperorUid === p1Uid;
       } else if (coinFlip === 'Opponent') {
@@ -4061,7 +4155,6 @@ export class GameService {
       } else {
         const pip = rollFairD6();
         emperorFirst = fairHalfFromD6(pip);
-        emperorDice = [pip];
         coinFlip = emperorFirst === (emperorUid === p1Uid) ? 'Host' : 'Opponent';
       }
 
@@ -4070,7 +4163,8 @@ export class GameService {
         message: emperorFirst
           ? `${players[emperorUid].name}'s Emperor resolves before ${players[loversUid].name}'s Lovers.`
           : `${players[loversUid].name}'s Lovers resolve before ${players[emperorUid].name}'s Emperor.`,
-        ...(emperorDice ? { resolutionDice: emperorDice } : {}),
+        coinFlipSides: { headsUid: emperorUid, tailsUid: loversUid },
+        resolutionDice: [emperorFirst ? 1 : 0],
       });
 
       if (emperorFirst) {
@@ -4252,6 +4346,7 @@ export class GameService {
 
     if (deathVsTemperance) {
       const deathUid = committedPower1 === 13 ? p1Uid : p2Uid;
+      const temperanceUid = deathUid === p1Uid ? p2Uid : p1Uid;
       const pip = rollFairD6();
       const deathClaims = fairHalfFromD6(pip);
       if (deathClaims) {
@@ -4259,7 +4354,8 @@ export class GameService {
         events.push({
           type: 'COIN_FLIP',
           message: `${players[deathUid].name}'s Death wins the struggle against Temperance.`,
-          resolutionDice: [pip],
+          coinFlipSides: { headsUid: deathUid, tailsUid: temperanceUid },
+          resolutionDice: [1],
         });
         events.push({
           type: 'POWER_TRIGGER',
@@ -4272,7 +4368,8 @@ export class GameService {
         events.push({
           type: 'COIN_FLIP',
           message: `Temperance balances Death — the round ends in a draw.`,
-          resolutionDice: [pip],
+          coinFlipSides: { headsUid: deathUid, tailsUid: temperanceUid },
+          resolutionDice: [0],
         });
         events.push({
           type: 'POWER_TRIGGER',
@@ -4476,7 +4573,8 @@ export class GameService {
             events.push({
               type: 'COIN_FLIP',
               message: `${p1First ? players[p1Uid].name : players[p2Uid].name} wins Wheel order (${p1First ? players[p1Uid].name : players[p2Uid].name}'s Wheel resolves first, then ${p1First ? players[p2Uid].name : players[p1Uid].name}).`,
-              resolutionDice: [pip],
+              coinFlipSides: { headsUid: p1Uid, tailsUid: p2Uid },
+              resolutionDice: [p1First ? 1 : 0],
             });
           }
 
@@ -4565,7 +4663,8 @@ export class GameService {
             events.push({
               type: 'COIN_FLIP',
               message: `${players[winnerUid].name} wins the duel of Death (fresh flip — ${coinFlip}).`,
-              resolutionDice: [pip],
+              coinFlipSides: { headsUid: p1Uid, tailsUid: p2Uid },
+              resolutionDice: [hostWins ? 1 : 0],
             });
           }
           events.push({
@@ -4655,7 +4754,8 @@ export class GameService {
             events.push({
               type: 'COIN_FLIP',
               message: `${players[winnerUid].name} wins the twin Hanged Man tie (fresh flip — ${coinFlip}).`,
-              resolutionDice: [pip],
+              coinFlipSides: { headsUid: p1Uid, tailsUid: p2Uid },
+              resolutionDice: [hostWins ? 1 : 0],
             });
           }
           events.push({
@@ -4913,7 +5013,8 @@ export class GameService {
           message: p1Stars
             ? `${players[p1Uid].name} reels toward Stars — ${players[p2Uid].name} toward Moons (Sloth).`
             : `${players[p2Uid].name} reels toward Stars — ${players[p1Uid].name} toward Moons (Sloth).`,
-          resolutionDice: [pip],
+          coinFlipSides: { headsUid: p1Uid, tailsUid: p2Uid },
+          resolutionDice: [p1Stars ? 1 : 0],
         });
         if (p1Stars) {
           const o1 = c1;
