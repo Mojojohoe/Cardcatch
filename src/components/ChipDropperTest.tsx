@@ -330,7 +330,19 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
 
     const fixed = 1 / 90;
     let last = performance.now() / 1000;
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        /** After tab sleep the next frame’s wall-clock gap is useless for physics; restart integration clock. */
+        last = performance.now() / 1000;
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     const loop = () => {
+      if (document.hidden) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
       const now = performance.now() / 1000;
       let t = now - last;
       last = now;
@@ -383,6 +395,7 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
 
     return () => {
       mounted = false;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
       for (const { mesh, body } of coinsRef.current) {

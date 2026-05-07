@@ -2676,9 +2676,15 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   useEffect(() => {
     const el = handRowRef.current;
     if (!el) return;
-    const update = () => setHandRowW(el.clientWidth || Math.max(240, Math.floor(window.innerWidth * 0.82)));
-    update();
-    const raf = requestAnimationFrame(update);
+    let roRaf = 0;
+    const apply = () =>
+      setHandRowW(el.clientWidth || Math.max(240, Math.floor(window.innerWidth * 0.82)));
+    const update = () => {
+      cancelAnimationFrame(roRaf);
+      roRaf = requestAnimationFrame(apply);
+    };
+    apply();
+    const raf = requestAnimationFrame(apply);
     let ro: ResizeObserver | null = null;
     const hasRO = typeof ResizeObserver !== 'undefined';
     if (hasRO) {
@@ -2689,6 +2695,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     }
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(roRaf);
       if (ro) ro.disconnect();
       else window.removeEventListener('resize', update);
     };
@@ -2912,6 +2919,16 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     room?.settings?.enablePanicDice,
     room?.players,
   ]);
+
+  const shopCursorBroadcastEnabled =
+    cashShopOpen &&
+    room?.settings?.enablePokerChips === true &&
+    room?.shopBrowsingUid === myUid;
+
+  /** Before conditional returns — lobby → table would change hook count (React #310). */
+  useShopCursorBroadcast(shopCursorBroadcastEnabled, (nx, ny) => {
+    serviceRef.current.sendShopCursor(nx, ny);
+  });
 
   const handleDraftSelect = async (powerId: number) => {
     setLoading(true);
@@ -3202,15 +3219,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
-
-  const shopCursorBroadcastEnabled =
-    cashShopOpen &&
-    room.settings.enablePokerChips === true &&
-    room.shopBrowsingUid === myUid;
-
-  useShopCursorBroadcast(shopCursorBroadcastEnabled, (nx, ny) => {
-    serviceRef.current.sendShopCursor(nx, ny);
-  });
 
   const showOpponentShopCursor = Boolean(
     room.settings.enablePokerChips &&
