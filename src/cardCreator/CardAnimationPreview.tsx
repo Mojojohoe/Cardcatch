@@ -4,7 +4,8 @@ import { ArrowRightLeft, Clapperboard, Heart, Scissors, Sparkles, X } from 'luci
 import { CardVisual } from '../components/GameVisuals';
 import { SUITS, VALUES } from '../types';
 
-type PreviewAnimationId = 'deckPull' | 'upgradeWiggle' | 'transformFlip' | 'cutSlash' | 'heartPulse';
+type PreviewAnimationId = 'deckPull' | 'upgradeWiggle' | 'transformFlip' | 'tear' | 'cutSlash' | 'heartPulse';
+type TearHalfProps = { cardId: string; side: 'left' | 'right'; loopTick: number };
 
 const CARD_CHOICES: string[] = [];
 for (const suit of SUITS) {
@@ -16,9 +17,40 @@ const ANIMATION_DEFS: Array<{ id: PreviewAnimationId; name: string; durationMs: 
   { id: 'deckPull', name: 'Deck Pull / Upgrade Entry', durationMs: 1900 },
   { id: 'upgradeWiggle', name: 'Upgrade Wiggle', durationMs: 1100 },
   { id: 'transformFlip', name: 'Transform Flip', durationMs: 2200 },
+  { id: 'tear', name: 'Auto Tear (1s)', durationMs: 1000 },
   { id: 'cutSlash', name: 'Cut Slash', durationMs: 1700 },
   { id: 'heartPulse', name: 'Heart Pulse', durationMs: 1300 },
 ];
+
+const TearHalf: React.FC<TearHalfProps> = ({ cardId, side, loopTick }) => {
+  const isLeft = side === 'left';
+  return (
+    <motion.div
+      key={`tear-${side}-${cardId}-${loopTick}`}
+      className={`absolute top-1/2 h-[16rem] w-[6rem] -translate-y-1/2 overflow-hidden ${isLeft ? 'left-1/2 -translate-x-full' : 'left-1/2'}`}
+      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+      animate={{
+        x: isLeft ? -58 : 58,
+        y: 72,
+        rotate: isLeft ? -24 : 24,
+        opacity: [1, 1, 0.05],
+      }}
+      transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+      style={{
+        clipPath: isLeft
+          ? 'polygon(0% 0%, 84% 0%, 80% 12%, 86% 23%, 78% 37%, 88% 51%, 79% 67%, 86% 82%, 81% 100%, 0% 100%)'
+          : 'polygon(18% 0%, 100% 0%, 100% 100%, 16% 100%, 21% 86%, 13% 72%, 22% 56%, 14% 42%, 20% 28%, 12% 13%)',
+      }}
+    >
+      <div className={`absolute top-1/2 -translate-y-1/2 ${isLeft ? '-left-[1.45rem]' : '-left-[4.55rem]'}`}>
+        <CardVisual card={cardId} revealed noAnimate />
+      </div>
+      <div
+        className={`pointer-events-none absolute inset-y-0 ${isLeft ? 'right-0' : 'left-0'} w-[2px] bg-white/85 shadow-[0_0_12px_rgba(255,255,255,0.65)]`}
+      />
+    </motion.div>
+  );
+};
 
 export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator: () => void }> = ({
   onClose,
@@ -56,10 +88,12 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
   const iconForAnimation = (id: PreviewAnimationId) => {
     if (id === 'upgradeWiggle') return <Sparkles className="h-4 w-4" />;
     if (id === 'transformFlip') return <ArrowRightLeft className="h-4 w-4" />;
+    if (id === 'tear') return <Scissors className="h-4 w-4" />;
     if (id === 'cutSlash') return <Scissors className="h-4 w-4" />;
     if (id === 'heartPulse') return <Heart className="h-4 w-4" />;
     return <Clapperboard className="h-4 w-4" />;
   };
+  const useEntranceMotion = animationId === 'deckPull';
 
   return (
     <div className="fixed inset-0 z-[460] bg-black/90 p-3 text-white backdrop-blur-lg sm:p-5">
@@ -187,17 +221,33 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
                     transition={{ duration: 0.72, ease: 'easeOut' }}
                   />
                 )}
-                <CardVisual card={cardId} revealed />
+                <CardVisual card={cardId} revealed noAnimate />
               </motion.div>
+            ) : animationId === 'tear' ? (
+              <div key={`tear-wrap-${cardId}-${loopTick}`} className="relative h-[18rem] w-[16rem]">
+                <TearHalf cardId={cardId} side="left" loopTick={loopTick} />
+                <TearHalf cardId={cardId} side="right" loopTick={loopTick} />
+                <motion.div
+                  className="pointer-events-none absolute left-1/2 top-1/2 h-[16rem] w-[2px] -translate-x-1/2 -translate-y-1/2 bg-white/80 shadow-[0_0_20px_rgba(255,255,255,0.72)]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0, 0.95, 0] }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
+                />
+              </div>
             ) : (
               <CardVisual
-                key={`${animationId}-${loopTick}-${animationId === 'transformFlip' ? transformCard : cardId}`}
+                key={
+                  useEntranceMotion
+                    ? `deckpull-${cardId}-${loopTick}`
+                    : `static-preview-${animationId}-${cardId}`
+                }
                 card={animationId === 'transformFlip' ? transformCard : cardId}
                 revealed
                 presentation={animationId === 'deckPull' ? 'deckPull' : 'default'}
                 presentationPace="slow"
                 resolutionMorph={animationId === 'transformFlip' ? 'transform' : null}
                 resolutionWiggleTick={animationId === 'upgradeWiggle' ? loopTick + 1 : 0}
+                noAnimate={!useEntranceMotion}
               />
             )}
           </div>
