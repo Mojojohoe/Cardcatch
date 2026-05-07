@@ -85,12 +85,20 @@ import {
   PC_PWR_SM,
 } from '../cardUiDimensions';
 import { SUIT_COLORS } from '../suitPresentation';
+import { usePlayerDisplayPreferences } from '../playerDisplayPreferences';
+import { playSfx } from '../audio/sfx';
 import { SuitGlyph } from './SuitGlyphs';
 
 export { SUIT_COLORS };
 
 /** Corner rank / pip letters on playing-card faces (`GameVisuals` only; tooltips/UI stay sans). */
 const CARD_FACE_RANK_CLASS = 'font-card-rank tracking-tighter';
+const DRAW_SMALL_SFX = [
+  '/assets/sounds/Card-Draw-Small-1.mp3',
+  '/assets/sounds/Card-Draw-Small-2.mp3',
+  '/assets/sounds/Card-Draw-Small-3.mp3',
+  '/assets/sounds/Card-Draw-Small-4.mp3',
+] as const;
 
 /**
  * Classic white stock in {@link CardVisual} vector mode: `SUIT_COLORS.Diamonds` is white (for dark HUDs),
@@ -418,6 +426,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const holdTipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tipOpen, setTipOpen] = useState(false);
   const [holdTipOpen, setHoldTipOpen] = useState(false);
+  const { sfxVolume } = usePlayerDisplayPreferences();
   const holdCaption = useMemo(() => {
     if (revealed && card && isShopPackPlaceholder(card)) {
       return 'Cash Chips — delivers after this trick resolves. If two players queued the same shelf, dice settle who unwraps (coin-flip lobby mode).';
@@ -489,6 +498,11 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       if (holdTipTimer.current) clearTimeout(holdTipTimer.current);
     };
   }, []);
+  useEffect(() => {
+    if (noAnimate || !revealed || presentation !== 'deckPull') return;
+    const src = DRAW_SMALL_SFX[Math.floor(Math.random() * DRAW_SMALL_SFX.length)]!;
+    playSfx(src, sfxVolume);
+  }, [presentation, noAnimate, revealed, card, sfxVolume]);
   const isMoonSuit = suit === 'Moons';
   const isCrownsSuit = suit === 'Crowns';
   const isGrovelsSuit = suit === 'Grovels';
@@ -691,17 +705,28 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
         `}
       >
-      {resolutionMorph === 'transform_out' && (
+      {transformMorphActive && (
         <div className="pointer-events-none absolute inset-[-7px] z-[5]">
-          {[0, 1, 2].map((i) => (
+          {[0, 1, 2, 3].map((i) => (
             <motion.div
-              key={`transform-pulse-${resolutionMorphTick}-${i}`}
+              key={`transform-pulse-${resolutionMorph}-${resolutionMorphTick}-${i}`}
               className="absolute inset-0 rounded-xl border-2 border-fuchsia-400/85"
               initial={{ opacity: 0.92, scale: 0.9 }}
               animate={{ opacity: 0, scale: 1.18 }}
               transition={{
-                duration: 0.18,
-                delay: i * 0.06,
+                /**
+                 * Tempo curve:
+                 * - transform_out: slow -> fast approaching midpoint
+                 * - transform_in: fast -> slow departing midpoint
+                 */
+                duration:
+                  resolutionMorph === 'transform_out'
+                    ? [0.27, 0.23, 0.19, 0.16][i]
+                    : [0.16, 0.19, 0.23, 0.27][i],
+                delay:
+                  resolutionMorph === 'transform_out'
+                    ? [0, 0.2, 0.33, 0.43][i]
+                    : [0, 0.06, 0.17, 0.31][i],
                 ease: 'easeOut',
               }}
             />

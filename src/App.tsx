@@ -136,6 +136,7 @@ import { CardCreator } from './cardCreator/CardCreator';
 import { CardAnimationPreview } from './cardCreator/CardAnimationPreview';
 import { PlayerSettingsMenu } from './components/PlayerSettingsMenu';
 import { usePlayerDisplayPreferences } from './playerDisplayPreferences';
+import { playSfx } from './audio/sfx';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -1162,6 +1163,7 @@ const ResolutionSequence: React.FC<{
   /** Bumps when recap replays so dice `rollId`s stay unique across runs. */
   replayNonce: number;
 }> = ({ room, myUid, onComplete, onResolutionDiceRoll, replayNonce }) => {
+  const { sfxVolume } = usePlayerDisplayPreferences();
   const outcome = room.lastOutcome!;
   const [eventIndex, setEventIndex] = useState(-1);
   const [currentCards, setCurrentCards] = useState(() => ({ ...(outcome as any).initialCardsPlayed || outcome.cardsPlayed }));
@@ -1257,6 +1259,18 @@ const ResolutionSequence: React.FC<{
         const event = events[i];
         const fx = deriveResolutionFx(event, hostUid, guestUid);
         setResolutionFx(fx);
+        if (fx?.kind === 'power_tear' || fx?.kind === 'clash_shatter') {
+          playSfx('/assets/sounds/Card-Tear.mp3', sfxVolume);
+        }
+        if (fx?.kind === 'death_slash' || fx?.kind === 'wrath_cut') {
+          playSfx('/assets/sounds/Card-Slice.mp3', sfxVolume);
+        }
+        if (event.type === 'TRANSFORM') {
+          playSfx('/assets/sounds/Card-Transform.mp3', sfxVolume);
+        }
+        if (event.type === 'COIN_FLIP' && (event.message ?? '').includes('unwraps Cash Chips')) {
+          playSfx('/assets/sounds/Card-Buy.mp3', sfxVolume);
+        }
         setEventIndex(i);
         setVisibleEvents((prev) => [
           ...prev,

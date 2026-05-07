@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { ArrowRightLeft, Clapperboard, Heart, Scissors, Sparkles, X } from 'lucide-react';
 import { CardVisual } from '../components/GameVisuals';
 import { SUITS, VALUES } from '../types';
+import { usePlayerDisplayPreferences } from '../playerDisplayPreferences';
+import { playSfx } from '../audio/sfx';
 
 type PreviewAnimationId = 'deckPull' | 'upgradeWiggle' | 'transformFlip' | 'tear' | 'cutSlash' | 'heartPulse';
 type TearHalfProps = { cardId: string; side: 'left' | 'right'; loopTick: number };
@@ -56,6 +58,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
   onClose,
   onOpenCreator,
 }) => {
+  const { sfxVolume } = usePlayerDisplayPreferences();
   const [cardId, setCardId] = useState<string>('Hearts-10');
   const [transformTarget, setTransformTarget] = useState<string>('Hearts-K');
   const [animationId, setAnimationId] = useState<PreviewAnimationId>('deckPull');
@@ -81,6 +84,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
     if (animationId !== 'transformFlip') return undefined;
     setTransformCard(cardId);
     setTransformPhase('transform_out');
+    playSfx('/assets/sounds/Card-Transform.mp3', sfxVolume);
     const swapAt = window.setTimeout(() => {
       setTransformCard(transformTarget);
       setTransformPhase('transform_in');
@@ -92,7 +96,12 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
       window.clearTimeout(swapAt);
       window.clearTimeout(doneAt);
     };
-  }, [animationId, cardId, transformTarget, loopTick, selectedAnim.durationMs]);
+  }, [animationId, cardId, transformTarget, loopTick, selectedAnim.durationMs, sfxVolume]);
+
+  useEffect(() => {
+    if (animationId === 'cutSlash') playSfx('/assets/sounds/Card-Slice.mp3', sfxVolume);
+    if (animationId === 'tear') playSfx('/assets/sounds/Card-Tear.mp3', sfxVolume);
+  }, [animationId, loopTick, sfxVolume]);
 
   const iconForAnimation = (id: PreviewAnimationId) => {
     if (id === 'upgradeWiggle') return <Sparkles className="h-4 w-4" />;

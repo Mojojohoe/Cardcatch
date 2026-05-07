@@ -12,11 +12,13 @@ const STORAGE_KEY = 'cardcatch.playerDisplay.v1';
 export type PlayerDisplayPreferences = {
   highVisibilityMode: boolean;
   simpleCardFonts: boolean;
+  sfxVolume: number;
 };
 
 const DEFAULT_PREFS: PlayerDisplayPreferences = {
   highVisibilityMode: false,
   simpleCardFonts: false,
+  sfxVolume: 50,
 };
 
 function loadPrefs(): PlayerDisplayPreferences {
@@ -27,6 +29,10 @@ function loadPrefs(): PlayerDisplayPreferences {
     return {
       highVisibilityMode: Boolean(o.highVisibilityMode),
       simpleCardFonts: Boolean(o.simpleCardFonts),
+      sfxVolume:
+        typeof o.sfxVolume === 'number' && Number.isFinite(o.sfxVolume)
+          ? Math.max(0, Math.min(100, Math.round(o.sfxVolume)))
+          : 50,
     };
   } catch {
     return { ...DEFAULT_PREFS };
@@ -44,6 +50,7 @@ function savePrefs(p: PlayerDisplayPreferences) {
 type Ctx = PlayerDisplayPreferences & {
   setHighVisibilityMode: (v: boolean) => void;
   setSimpleCardFonts: (v: boolean) => void;
+  setSfxVolume: (v: number) => void;
 };
 
 const PlayerDisplayPreferencesContext = createContext<Ctx | null>(null);
@@ -74,14 +81,24 @@ export const PlayerDisplayPreferencesProvider: React.FC<{ children: React.ReactN
     });
   }, []);
 
+  const setSfxVolume = useCallback((v: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(v)));
+    setPrefs((prev) => {
+      const next = { ...prev, sfxVolume: clamped };
+      savePrefs(next);
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
     () =>
       ({
         ...prefs,
         setHighVisibilityMode,
         setSimpleCardFonts,
+        setSfxVolume,
       }) satisfies Ctx,
-    [prefs, setHighVisibilityMode, setSimpleCardFonts],
+    [prefs, setHighVisibilityMode, setSimpleCardFonts, setSfxVolume],
   );
 
   return (

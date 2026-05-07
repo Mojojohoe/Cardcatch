@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, MessageCircle, SendHorizonal } from 'lucide-react';
 import type { ChatMessageEntry, RoomData } from '../types';
 import type { GameService } from '../services/gameService';
+import { usePlayerDisplayPreferences } from '../playerDisplayPreferences';
+import { playSfx } from '../audio/sfx';
 
 export const RoomChat: React.FC<{
   room: RoomData;
@@ -10,9 +12,11 @@ export const RoomChat: React.FC<{
 }> = ({ room, myUid, serviceRef }) => {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState('');
+  const { sfxVolume } = usePlayerDisplayPreferences();
   const chatMsgs = room.chatMessages;
   const listRef = React.useRef<HTMLDivElement>(null);
   const messages = chatMsgs ?? [];
+  const notifiedThroughAtRef = React.useRef(0);
 
   /** Peer messages strictly after this timestamp count as unread (while chat is collapsed). */
   const [readThroughAt, setReadThroughAt] = useState(0);
@@ -26,6 +30,7 @@ export const RoomChat: React.FC<{
 
   useEffect(() => {
     setReadThroughAt(0);
+    notifiedThroughAtRef.current = 0;
   }, [room.code]);
 
   useEffect(() => {
@@ -35,6 +40,18 @@ export const RoomChat: React.FC<{
     const maxAt = list.length === 0 ? Date.now() : Math.max(...list.map((m) => m.at));
     setReadThroughAt((prev) => Math.max(prev, maxAt));
   }, [expanded, chatMsgs]);
+
+  useEffect(() => {
+    const peers = messages.filter((m) => m.uid !== myUid);
+    if (peers.length === 0) return;
+    const newestAt = peers[peers.length - 1]!.at;
+    if (newestAt <= notifiedThroughAtRef.current) return;
+    const tabUnfocused = typeof document !== 'undefined' && (document.hidden || !document.hasFocus());
+    if (!expanded || tabUnfocused) {
+      playSfx('/assets/sounds/Card-Notification.mp3', sfxVolume);
+    }
+    notifiedThroughAtRef.current = newestAt;
+  }, [messages, myUid, expanded, sfxVolume]);
 
   const send = async () => {
     if (!draft.trim()) return;

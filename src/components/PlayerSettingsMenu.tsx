@@ -49,8 +49,10 @@ export function PlayerSettingsMenu({ className }: { className?: string }) {
   const {
     highVisibilityMode,
     simpleCardFonts,
+    sfxVolume,
     setHighVisibilityMode,
     setSimpleCardFonts,
+    setSfxVolume,
   } = usePlayerDisplayPreferences();
 
   useEffect(() => {
@@ -99,6 +101,29 @@ export function PlayerSettingsMenu({ className }: { className?: string }) {
             pressed={simpleCardFonts}
             onToggle={() => setSimpleCardFonts(!simpleCardFonts)}
           />
+          <div className="border-b border-emerald-800/60 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <label htmlFor="setting-sfx-volume" className="block text-[11px] font-bold text-slate-100">
+                  SFX Volume
+                </label>
+                <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                  Controls card draw, cut, tear, transform, buy, and notification sounds.
+                </p>
+              </div>
+              <span className="w-10 text-right font-mono text-[10px] font-black text-amber-200">{sfxVolume}%</span>
+            </div>
+            <input
+              id="setting-sfx-volume"
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={sfxVolume}
+              onChange={(e) => setSfxVolume(Number(e.target.value))}
+              className="mt-2 w-full accent-amber-400"
+            />
+          </div>
           {CARD_ART_TOOLS_ENABLED && (
             <div className="pt-2">
               <button
