@@ -1,9 +1,10 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import type { RoomData } from '../types';
+import type { PendingPowerDecision, RoomData } from '../types';
 import { CardVisual, PowerCardVisual } from './GameVisuals';
 import { CompactTableGlyphRow } from './TableHudDecor';
 import { HoldDelayTooltip } from './HoldDelayTooltip';
+import { OpponentDecisionStrip } from './OpponentDecisionStrip';
 import { CURSE_GREEN_EYED_MONSTER, wrathCurseActive, envyCurseActive } from '../curses';
 
 const HUD_HOLD_TARGET_SUIT_CAPTION =
@@ -15,7 +16,9 @@ export const PowerResolutionOverlay: React.FC<{
   lustHeartRules: boolean;
   powerShowdown: boolean;
   greedJointTrumpUi: boolean;
-}> = ({ room, myUid, lustHeartRules, powerShowdown, greedJointTrumpUi }) => {
+  /** Opponent power decision UI (e.g. Wheel options) — shown inside this overlay above modals. */
+  opponentPendingDecision: PendingPowerDecision | null;
+}> = ({ room, myUid, lustHeartRules, powerShowdown, greedJointTrumpUi, opponentPendingDecision }) => {
   if (room.status !== 'powering') return null;
   const opponent = Object.values(room.players).find((p) => p.uid !== myUid);
   const me = room.players[myUid];
@@ -23,7 +26,7 @@ export const PowerResolutionOverlay: React.FC<{
 
   return (
     <motion.div
-      className="pointer-events-none absolute inset-0 z-[205] flex items-center justify-center"
+      className="pointer-events-none absolute inset-0 z-[280] flex items-center justify-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -33,6 +36,9 @@ export const PowerResolutionOverlay: React.FC<{
           <HoldDelayTooltip caption={HUD_HOLD_TARGET_SUIT_CAPTION} className="flex flex-col items-center">
             <CompactTableGlyphRow suit={room.targetSuit} greedJointTrump={greedJointTrumpUi} />
           </HoldDelayTooltip>
+        )}
+        {!powerShowdown && opponentPendingDecision && (
+          <OpponentDecisionStrip opponentName={opponent.name} decision={opponentPendingDecision} />
         )}
         <div className="flex items-center gap-8">
           <div className="relative flex flex-col items-center gap-2 pt-8 sm:pt-10">

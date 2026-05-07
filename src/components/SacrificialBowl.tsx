@@ -66,11 +66,13 @@ export interface SacrificialBowlProps {
   /** Red rim when a dragged card is over the catchment. */
   catchGlow: boolean;
   burnsRemaining: number;
+  /** Short post-burn emphasis pulse (expanded overlay). */
+  breathe?: boolean;
   className?: string;
 }
 
 export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(function SacrificialBowl(
-  { rasterMode, expanded, catchGlow, burnsRemaining, className },
+  { rasterMode, expanded, catchGlow, burnsRemaining, breathe = false, className },
   ref,
 ) {
   const uid = useId().replace(/:/g, '');
@@ -113,8 +115,8 @@ export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(
   );
 
   const glowRing = catchGlow
-    ? 'ring-2 ring-red-500/90 ring-offset-2 ring-offset-black/20 shadow-[0_0_28px_rgba(239,68,68,0.75)]'
-    : 'ring-1 ring-stone-600/40';
+    ? 'ring-[3px] ring-red-500/90 ring-offset-[3px] ring-offset-black/25 shadow-[0_0_32px_rgba(239,68,68,0.8)]'
+    : 'ring-2 ring-stone-500/55 ring-offset-2 ring-offset-emerald-950/30';
 
   const bowlFrameClass = expanded
     ? 'sacrificial-bowl-ui sacrificial-bowl-ui--expanded relative h-[min(72vmin,28rem)] w-[min(72vmin,28rem)]'
@@ -124,27 +126,27 @@ export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(
     <div
       ref={ref}
       className={`relative flex flex-col items-center justify-center ${className ?? ''}`}
-      style={{ pointerEvents: 'auto' }}
+      style={{ pointerEvents: 'auto', ['--sb-fire-compact-scale' as string]: '0.36' } as React.CSSProperties}
     >
       <div
-        className={`relative flex flex-col items-center rounded-full p-1 transition-[box-shadow,transform] duration-200 ${glowRing}`}
+        className={`sacrificial-bowl-breathe-ring relative flex flex-col items-center rounded-full p-1.5 transition-[box-shadow,transform] duration-200 ${glowRing} ${breathe ? 'sacrificial-bowl-breathe-ring--pulse' : ''}`}
       >
         <div className={bowlFrameClass}>
-          <div className="pointer-events-none absolute inset-[14%] z-0 flex items-center justify-center">{bowlInner}</div>
+          <div className="pointer-events-none absolute inset-[8%] z-0 translate-y-[40%]">{bowlInner}</div>
 
-          <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center overflow-visible">
+          <div className="sacrificial-bowl-fire-host overflow-visible">
             <div className="sacrificial-bowl-fire">
               {burnStyles.map((st, i) => (
                 <div
                   key={i}
-                  className={`sacrificial-bowl-burn ${i < BURN_COUNT ? 'opacity-80' : ''}`}
+                  className={`sacrificial-bowl-smoke ${i < BURN_COUNT ? 'opacity-80' : ''}`}
                   style={st}
                 />
               ))}
             </div>
           </div>
 
-          <div className="pointer-events-none absolute inset-[10%] z-10 flex items-center justify-center">{bowlOuter}</div>
+          <div className="pointer-events-none absolute inset-[6%] z-10 translate-y-[40%]">{bowlOuter}</div>
         </div>
       </div>
 

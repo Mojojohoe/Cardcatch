@@ -1,43 +1,114 @@
-/* Fire layer — adapted from design spec (blur + contrast stack). */
+/**
+ * Fire uses a fixed design-time size + transform: scale(...) so blur/contrast match
+ * the enlarged bowl. Ember "smoke" particles use an extra ~0.4 scale.
+ */
 .sacrificial-bowl-ui {
-  --sb-fire-size: 180px;
-  --sb-burn-size: 36px;
+  --sb-bowl-frame-size: 7rem;
+  --sb-fire-design: 500px;
+  --sb-burn-design: 100px;
+}
+
+@media (min-width: 640px) {
+  .sacrificial-bowl-ui {
+    --sb-bowl-frame-size: 7.5rem;
+  }
 }
 
 .sacrificial-bowl-ui--expanded {
-  --sb-fire-size: 500px;
-  --sb-burn-size: 100px;
+  --sb-bowl-frame-size: min(72vmin, 28rem);
+}
+
+/* Fire is authored at design resolution, then scaled into the frame (fixes compact-mode filters). */
+.sacrificial-bowl-fire-host {
+  position: absolute;
+  left: 50%;
+  top: -60%;
+  z-index: 5;
+  display: flex;
+  width: var(--sb-fire-design);
+  height: var(--sb-fire-design);
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+}
+
+.sacrificial-bowl-ui:not(.sacrificial-bowl-ui--expanded) .sacrificial-bowl-fire-host {
+  transform: translateX(-50%) scale(var(--sb-fire-compact-scale, 0.36));
+}
+
+.sacrificial-bowl-ui--expanded .sacrificial-bowl-fire-host {
+  transform: translateX(-50%) scale(1);
 }
 
 .sacrificial-bowl-fire {
   position: relative;
-  width: var(--sb-fire-size);
-  height: var(--sb-fire-size);
-  pointer-events: none;
+  width: var(--sb-fire-design);
+  height: var(--sb-fire-design);
   background: #ff9900;
   filter: blur(20px) contrast(30);
-  border: calc(var(--sb-fire-size) / 2) solid #000;
+  border: calc(var(--sb-fire-design) / 2) solid #000;
   border-bottom-color: transparent;
   border-radius: 40%;
   box-sizing: border-box;
   transform: scale(0.4, 1);
 }
 
-.sacrificial-bowl-burn {
+.sacrificial-bowl-smoke {
   position: absolute;
-  top: var(--sb-fire-size);
-  left: calc(-1 * var(--sb-burn-size) / 2);
-  width: var(--sb-burn-size);
-  height: var(--sb-burn-size);
+  top: var(--sb-fire-design);
+  left: calc(-1 * var(--sb-burn-design) / 2);
+  width: var(--sb-burn-design);
+  height: var(--sb-burn-design);
+  transform: scale(0.4);
+  transform-origin: center bottom;
   background: #000;
   border-radius: 100%;
 }
 
 @keyframes sacrificial-bowl-burning {
   0% {
-    transform: translateY(0);
+    transform: scale(0.4) translateY(0);
   }
   100% {
-    transform: translateY(calc(-1 * (var(--sb-fire-size) + var(--sb-burn-size))));
+    transform: scale(0.4)
+      translateY(calc(-1 * (var(--sb-fire-design) + var(--sb-burn-design))));
   }
+}
+
+.sacrificial-bowl-bowl-stack {
+  position: absolute;
+  inset: 10% 10% auto 10%;
+  top: 40%;
+  bottom: auto;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.sacrificial-bowl-bowl-stack--inner {
+  position: absolute;
+  inset: 14%;
+  top: calc(14% + 40%);
+  bottom: auto;
+  z-index: 0;
+}
+
+@keyframes sacrificial-bowl-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.04);
+    filter: brightness(1.08);
+  }
+}
+
+.sacrificial-bowl-breathe-ring--pulse {
+  animation: sacrificial-bowl-breathe 0.5s ease-in-out 1 both;
 }

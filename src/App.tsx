@@ -83,7 +83,6 @@ import {
 import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerInteraction';
 import { DesperationWheel, TargetSuitWheel } from './components/GameWheels';
 import { RoomChat } from './components/RoomChat';
-import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { DiceBoxTestOverlay } from './components/DiceBoxTestOverlay';
 import { diceTestCoinFlipPayload, diceTestRollPayloadFromValues } from './utils/diceTestRollPayload';
 import { ChipDropperTest } from './components/ChipDropperTest';
@@ -138,6 +137,7 @@ import {
 import { cardArtAssetUrl } from './cardArt/paths';
 import { isShopPackPlaceholder } from './shopPack';
 import { SacrificialBowl } from './components/SacrificialBowl';
+import { CardBurnSacrifice } from './components/CardBurnSacrifice';
 import { panicDiceSeatAllowed } from './services/panicDiceSeat';
 import { warmCardArtImages } from './cardArt/preload';
 import { shippedPlayingCardBackRasterUrl } from './cardArt/shippedRasterFallbacks';
@@ -2350,10 +2350,6 @@ const OpposingHandOverlayStack: React.FC<{
 
   return (
     <>
-      {!powerShowdown && roomStatus === 'powering' && opponentPendingDecision && (
-        <OpponentDecisionStrip opponentName={opponent.name} decision={opponentPendingDecision} />
-      )}
-
       {(opponent.desperationSpinning || opponent.desperationResult != null) && showOppTierBanner && (
         <DesperationWheel
           opposingHandOverlay
@@ -2494,9 +2490,11 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [handDragHoverIndex, setHandDragHoverIndex] = useState<number | null>(null);
   const [sacrificialBowlFocused, setSacrificialBowlFocused] = useState(false);
   const [sacrificialBowlCatchHover, setSacrificialBowlCatchHover] = useState(false);
+  const [sacrificialBowlBreathe, setSacrificialBowlBreathe] = useState(false);
   const [sacrificeBurnAnimCard, setSacrificeBurnAnimCard] = useState<string | null>(null);
   const [sacrificeOpponentBanner, setSacrificeOpponentBanner] = useState<string | null>(null);
   const sacrificialBowlDropRef = useRef<HTMLDivElement>(null);
+  const sacrificialBowlTimersRef = useRef<number[]>([]);
   const lastSacrificeToastAtRef = useRef<number | null>(null);
   const handHudLayoutRef = useRef<HTMLDivElement>(null);
   const [handHudNeedsStack, setHandHudNeedsStack] = useState(false);
@@ -2525,7 +2523,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       setHandDealVisibleCount(null);
       return;
     }
-    const handSig = `${room.code}:${self.uid}:${room.currentTurn}:${self.hand.length}`;
+    /** Exclude `hand.length` — mid-round burns/draws change count and must not replay the opening deal stagger + SFX. */
+    const handSig = `${room.code}:${self.uid}:${room.currentTurn}`;
     if (handDealStartedForRef.current === handSig) return;
     handDealStartedForRef.current = handSig;
     setHandDealVisibleCount(0);
@@ -2868,32 +2867,51 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     void import('@3d-dice/dice-box-threejs');
   }, [room?.status]);
 
+  /** Clear scheduled sacrificial bowl timers (burn / breathe sequence). */
+  const clearSacrificialBowlTimers = useCallback(() => {
+    sacrificialBowlTimersRef.current.forEach((id) => window.clearTimeout(id));
+    sacrificialBowlTimersRef.current = [];
+  }, []);
+
+  useEffect(() => () => clearSacrificialBowlTimers(), [clearSacrificialBowlTimers]);
+
   /** Sacrificial Bowl: expand + hit-test while dragging a hand card for burn. */
   useEffect(() => {
+    const holdOverlayForBurn =
+      Boolean(sacrificeBurnAnimCard) || sacrificialBowlBreathe;
     if (handDragFromIndex === null) {
-      setSacrificialBowlFocused(false);
-      setSacrificialBowlCatchHover(false);
+      if (!holdOverlayForBurn) {
+        setSacrificialBowlFocused(false);
+        setSacrificialBowlCatchHover(false);
+      }
       return;
     }
     const onDrag = (e: DragEvent) => {
       if (e.clientY === 0 && e.clientX === 0) return;
-      const yRatio = e.clientY / Math.max(1, window.innerHeight);
-      setSacrificialBowlFocused(yRatio < 0.44);
       const el = sacrificialBowlDropRef.current;
-      if (el) {
-        const r = el.getBoundingClientRect();
-        const pad = 12;
-        const over =
-          e.clientX >= r.left - pad &&
-          e.clientX <= r.right + pad &&
-          e.clientY >= r.top - pad &&
-          e.clientY <= r.bottom + pad;
-        setSacrificialBowlCatchHover(over);
-      }
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const x = e.clientX;
+      const y = e.clientY;
+      /** Proximity to brazier only — no full-screen “upper band” catchment. */
+      const expandPadPx = 88;
+      const glowPadPx = 22;
+      const inExpandProximity =
+        x >= r.left - expandPadPx &&
+        x <= r.right + expandPadPx &&
+        y >= r.top - expandPadPx &&
+        y <= r.bottom + expandPadPx;
+      const overBurnTarget =
+        x >= r.left - glowPadPx &&
+        x <= r.right + glowPadPx &&
+        y >= r.top - glowPadPx &&
+        y <= r.bottom + glowPadPx;
+      setSacrificialBowlFocused(inExpandProximity);
+      setSacrificialBowlCatchHover(overBurnTarget);
     };
     document.addEventListener('drag', onDrag);
     return () => document.removeEventListener('drag', onDrag);
-  }, [handDragFromIndex]);
+  }, [handDragFromIndex, sacrificeBurnAnimCard, sacrificialBowlBreathe]);
 
   /** Opponent-only banner when the other player burns a card. */
   useEffect(() => {
@@ -3358,6 +3376,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
 
+  const sacrificialBowlExpandedUi =
+    sacrificialBowlFocused || Boolean(sacrificeBurnAnimCard) || sacrificialBowlBreathe;
+
   const handleSacrificialBowlDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -3381,13 +3402,25 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       setSacrificialBowlCatchHover(false);
       return;
     }
+    clearSacrificialBowlTimers();
     setSacrificeBurnAnimCard(card);
+    setSacrificialBowlFocused(true);
+    setSacrificialBowlBreathe(false);
     setHandDragFromIndex(null);
     setHandDragHoverIndex(null);
-    setSacrificialBowlFocused(false);
     setSacrificialBowlCatchHover(false);
     void serviceRef.current.burnSacrificialBowlCard(idx);
-    window.setTimeout(() => setSacrificeBurnAnimCard(null), 1000);
+    const burnStripMs = 2000;
+    const breatheMs = 500;
+    const tBurnEnd = window.setTimeout(() => {
+      setSacrificeBurnAnimCard(null);
+      setSacrificialBowlBreathe(true);
+    }, burnStripMs);
+    const tAllDone = window.setTimeout(() => {
+      setSacrificialBowlFocused(false);
+      setSacrificialBowlBreathe(false);
+    }, burnStripMs + breatheMs);
+    sacrificialBowlTimersRef.current = [tBurnEnd, tAllDone];
   };
 
   const tableShopBrowsers = Array.isArray(room.cardShopBrowsersUids) ? room.cardShopBrowsersUids : [];
@@ -3519,27 +3552,28 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       )}
 
       <AnimatePresence>
-        {sacrificialBowlFocused && room.status === 'playing' && !me.confirmed && (
+        {sacrificialBowlExpandedUi && room.status === 'playing' && !me.confirmed && (
           <motion.div
             key="sacrificial-bowl-focus"
-            className="fixed inset-0 z-[446] flex flex-col items-center justify-center bg-black/72 px-4 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[446] flex flex-col items-center justify-start bg-black/72 px-4 pt-[min(6vh,3.5rem)] backdrop-blur-[2px] sm:pt-[min(8vh,4.5rem)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12 }}
           >
-            <p className="pointer-events-none mb-4 max-w-sm text-center text-[10px] font-black uppercase tracking-widest text-stone-300/95">
-              Release over the flame to sacrifice
+            <p className="pointer-events-none mb-3 max-w-sm pt-[min(2vh,1rem)] text-center text-[10px] font-black uppercase tracking-widest text-stone-300/95 sm:mb-4 sm:pt-[min(3vh,1.25rem)]">
+              {sacrificeBurnAnimCard ? 'Burning…' : 'Release over the flame to sacrifice'}
             </p>
             <div
               onDragOver={handleSacrificialBowlDragOver}
               onDrop={handleSacrificialBowlDrop}
-              className="flex flex-col items-center"
+              className="-mt-[min(4vh,2rem)] flex flex-col items-center sm:-mt-[min(5vh,2.5rem)]"
             >
               <SacrificialBowl
                 ref={sacrificialBowlDropRef}
                 rasterMode={displayCardArt?.mode === 'raster'}
                 expanded
+                breathe={sacrificialBowlBreathe}
                 catchGlow={sacrificialBowlCatchHover}
                 burnsRemaining={me.sacrificialBowlBurnsRemaining ?? 2}
               />
@@ -3557,12 +3591,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="relative h-[14rem] w-[14rem] sm:h-[16rem] sm:w-[16rem]">
-              <ResolutionTearOverlay>
-                <div className="scale-[0.52] sm:scale-[0.56]">
-                  <CardVisual card={sacrificeBurnAnimCard} revealed noAnimate presentation="none" />
-                </div>
-              </ResolutionTearOverlay>
+            <div className="relative flex justify-center">
+              <CardBurnSacrifice cardId={sacrificeBurnAnimCard} scale={0.34} />
             </div>
           </motion.div>
         )}
@@ -4032,8 +4062,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               </aside>
 
               <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:w-full sm:max-w-[min(100%,min(94vw,44rem))] md:max-w-[min(100%,min(92vw,52rem))] xl:max-w-[min(100%,min(92vw,64rem))] sm:px-3">
-                <div className="relative z-10 flex w-full min-w-0 flex-row flex-wrap items-start justify-center gap-x-3 gap-y-2 sm:gap-x-5">
-                  {room.status === 'playing' && !me.confirmed && opponent && !sacrificialBowlFocused ? (
+                <div className="relative z-10 mt-[5%] flex w-full min-w-0 flex-row flex-wrap items-start justify-center gap-x-3 gap-y-2 sm:gap-x-5">
+                  {room.status === 'playing' && !me.confirmed && opponent && !sacrificialBowlExpandedUi ? (
                     <HoldDelayTooltip
                       caption={HUD_HOLD_SACRIFICIAL_BOWL_CAPTION}
                       className="pointer-events-auto shrink-0 self-center sm:self-start"
@@ -4251,6 +4281,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             lustHeartRules={lustHeartUi}
             powerShowdown={powerShowdown}
             greedJointTrumpUi={greedJointTrumpUi}
+            opponentPendingDecision={opponentPendingDecision}
           />
         )}
       </AnimatePresence>

@@ -501,7 +501,10 @@ export const ChipDropperTest: React.FC<{
       <div className="fixed inset-0 z-[26] pointer-events-none">
         <HoldDelayTooltip
           caption={opponentTokensHoldCaption}
-          className="pointer-events-auto absolute top-1/2 left-[calc(50%-28vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
+          className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-xl
+            bottom-[max(7rem,18vh)] left-[calc(50%-min(23rem,90vw))]
+            h-[min(52vh,30rem)] w-[min(88vw,26rem)] scale-[0.25] origin-bottom-left
+            lg:bottom-auto lg:top-1/2 lg:left-[calc(50%-28vw)] lg:h-[min(56vh,34rem)] lg:w-[min(32vw,28rem)] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100 lg:origin-center"
           style={{ filter: tokenHueFilter(opponent?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
@@ -511,7 +514,7 @@ export const ChipDropperTest: React.FC<{
         </HoldDelayTooltip>
         <HoldDelayTooltip
           caption={selfTokensHoldCaption}
-          className="pointer-events-auto absolute top-1/2 left-[calc(50%+28vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
+          className="pointer-events-auto absolute top-1/2 left-[calc(50%+28vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl [@media(max-height:1100px)]:origin-center [@media(max-height:1100px)]:scale-[0.75]"
           style={{ filter: tokenHueFilter(me?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">

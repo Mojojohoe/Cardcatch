@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRightLeft, Clapperboard, Heart, Scissors, Sparkles, X } from 'lucide-react';
+import { ArrowRightLeft, Clapperboard, Flame, Heart, Scissors, Sparkles, X } from 'lucide-react';
 import { CardVisual } from '../components/GameVisuals';
+import { CardBurnSacrifice } from '../components/CardBurnSacrifice';
 import { SUITS, VALUES } from '../types';
 import { usePlayerDisplayPreferences } from '../playerDisplayPreferences';
 import { playSfx } from '../audio/sfx';
@@ -20,6 +21,7 @@ const ANIMATION_DEFS: Array<{ id: PreviewAnimationId; name: string; durationMs: 
   { id: 'upgradeWiggle', name: 'Upgrade Wiggle', durationMs: 1100 },
   { id: 'transformFlip', name: 'Transform Flip', durationMs: 2200 },
   { id: 'tear', name: 'Auto Tear (1s)', durationMs: 1000 },
+  { id: 'sacrificeBurn', name: 'Sacrifice Burn (sprite)', durationMs: 2500 },
   { id: 'cutSlash', name: 'Cut Slash', durationMs: 1700 },
   { id: 'heartPulse', name: 'Heart Pulse', durationMs: 1300 },
 ];
@@ -107,6 +109,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
     if (id === 'upgradeWiggle') return <Sparkles className="h-4 w-4" />;
     if (id === 'transformFlip') return <ArrowRightLeft className="h-4 w-4" />;
     if (id === 'tear') return <Scissors className="h-4 w-4" />;
+    if (id === 'sacrificeBurn') return <Flame className="h-4 w-4" />;
     if (id === 'cutSlash') return <Scissors className="h-4 w-4" />;
     if (id === 'heartPulse') return <Heart className="h-4 w-4" />;
     return <Clapperboard className="h-4 w-4" />;
@@ -203,7 +206,11 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
               Loop #{loopTick + 1}
             </div>
 
-            {(animationId === 'cutSlash' || animationId === 'heartPulse') ? (
+            {animationId === 'sacrificeBurn' ? (
+              <div key={`sacrifice-burn-${cardId}-${loopTick}`} className="flex justify-center">
+                <CardBurnSacrifice cardId={cardId} scale={0.34} />
+              </div>
+            ) : (animationId === 'cutSlash' || animationId === 'heartPulse') ? (
               <motion.div
                 key={`${animationId}-${loopTick}`}
                 initial={{ scale: 1, x: 0, y: 0, rotate: 0 }}

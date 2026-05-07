@@ -1,0 +1,85 @@
+/**
+ * Sprite-strip burn (CodePen jcoulterdesign / YbBoNb): burn + burnline layers, no ash.
+ * Container matches pen dimensions; scale wrapper shrinks to card-sized footprint.
+ */
+.card-burn-sacrifice {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.card-burn-sacrifice__scale {
+  transform-origin: top center;
+}
+
+/* Pen: $maskWidth 770px, $height 430px */
+.card-burn-image {
+  width: 770px;
+  height: 430px;
+  overflow: hidden;
+  position: relative;
+}
+
+.card-burn-image__layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 770px;
+  height: 430px;
+  background-size: auto 100%;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+}
+
+/** Strip “smoke” layers scaled down ~60% vs pen baseline */
+.card-burn-image__smoke-sprite {
+  transform: scale(0.4);
+  transform-origin: center center;
+}
+
+.card-burn-image__burn {
+  z-index: 0;
+}
+
+.card-burn-image__original {
+  z-index: 1;
+  mix-blend-mode: darken;
+  pointer-events: none;
+}
+
+.card-burn-image__original--hidden .card-burn-image__cardMount {
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.card-burn-image__cardMount {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 700px;
+  transform: translate(-50%, -50%) scale(0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-burn-image__burnline {
+  z-index: 2;
+  mix-blend-mode: lighten;
+}
+
+/* Pen: $totalTransitionTime 1.3s, $frames 50, end X -38145px */
+@keyframes card-burn-strip {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -38145px 0;
+  }
+}
+
+.card-burn-image--burn .card-burn-image__burn,
+.card-burn-image--burn .card-burn-image__burnline {
+  animation: card-burn-strip 2s forwards steps(50, end);
+}
