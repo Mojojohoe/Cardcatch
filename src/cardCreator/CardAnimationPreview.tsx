@@ -81,7 +81,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
     setTransformCard(cardId);
     const swapAt = window.setTimeout(() => {
       setTransformCard(transformTarget);
-    }, Math.max(280, Math.floor(selectedAnim.durationMs * 0.48)));
+    }, Math.max(220, Math.floor(selectedAnim.durationMs * 0.5)));
     return () => window.clearTimeout(swapAt);
   }, [animationId, cardId, transformTarget, loopTick, selectedAnim.durationMs]);
 

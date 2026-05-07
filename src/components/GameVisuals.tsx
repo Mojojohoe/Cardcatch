@@ -682,12 +682,28 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           ${useAssembledFace ? 'bg-transparent' : panicVec ? 'bg-transparent' : isMoonSuit ? 'bg-black' : isCrownsSuit ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-black' : isGrovelsSuit ? 'bg-gradient-to-br from-violet-950 via-slate-900 to-black' : isSwordsSuit ? 'bg-gradient-to-br from-zinc-950 via-red-950/55 to-black' : 'bg-white'}
           ${useAssembledFace ? (selected ? 'shadow-lg' : '') : selected ? 'border-yellow-400 ring-4 ring-yellow-400/30' : panicVec ? 'border-red-900/90 shadow-[0_14px_40px_rgba(0,0,0,0.55)]' : isCrownsSuit ? 'border-amber-700/70' : isGrovelsSuit ? 'border-violet-700/70' : isSwordsSuit ? 'border-red-800/90' : 'border-gray-200'}
           ${envyCovetedGlow ? 'ring-2 ring-emerald-400/85 shadow-[0_0_20px_rgba(16,185,129,0.38)]' : ''}
-          ${resolutionMorph === 'transform' ? 'ring-2 ring-fuchsia-500/80 shadow-[0_0_38px_rgba(168,85,247,0.55)]' : ''}
           ${disabled ? 'opacity-80 saturate-[0.72] brightness-95' : ''}
           ${muted ? 'opacity-[0.42] saturate-[0.48] brightness-[0.88]' : ''}
           ${clashGhost ? '!opacity-[0.5] saturate-[0.85]' : ''}
         `}
       >
+      {resolutionMorph === 'transform' && (
+        <div className="pointer-events-none absolute inset-[-7px] z-[5]">
+          {[0, 1, 2].map((i) => (
+            <motion.div
+              key={`transform-pulse-${i}`}
+              className="absolute inset-0 rounded-xl border-2 border-fuchsia-400/85"
+              initial={{ opacity: 0.92, scale: 0.9 }}
+              animate={{ opacity: 0, scale: 1.18 }}
+              transition={{
+                duration: 0.18,
+                delay: i * 0.06,
+                ease: 'easeOut',
+              }}
+            />
+          ))}
+        </div>
+      )}
       {isSwordsSuit && wrathPen > 0 && (
         <div
           className={`pointer-events-none absolute top-1 left-1/2 z-20 -translate-x-1/2 text-[9px] font-black tabular-nums text-red-500 sm:text-[11px] ${CARD_FACE_RANK_CLASS}`}
@@ -702,9 +718,10 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         animate={
           resolutionMorph === 'transform'
             ? {
-                rotateY: [0, -90, -90, 0],
-                scaleY: [1, 0.82, 0.82, 1],
+                rotateY: [0, 0, -90, -90, 0],
+                scaleY: [1, 1, 0.82, 0.82, 1],
                 filter: [
+                  'brightness(1)',
                   'brightness(1)',
                   'brightness(1.2)',
                   'brightness(1.2)',
@@ -717,7 +734,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         }
         transition={
           resolutionMorph === 'transform'
-            ? { duration: 0.92, times: [0, 0.48, 0.52, 1], ease: [0.22, 1, 0.36, 1] }
+            ? { duration: 1.12, times: [0, 0.18, 0.49, 0.51, 1], ease: [0.22, 1, 0.36, 1] }
             : playEmpowerWiggle
               ? { duration: 0.38, ease: [0.22, 1, 0.36, 1] }
               : { duration: 0 }

@@ -11,7 +11,6 @@ import {
   Trophy, 
   Copy, 
   Check, 
-  Shield, 
   Hash, 
   Info,
   RefreshCw,
@@ -988,7 +987,7 @@ type ResolutionFx =
   | { kind: 'death_slash'; victimUid: string }
   | { kind: 'wrath_cut'; victimUid: string }
   | { kind: 'clash_shatter'; uid: string; cardId: string }
-  | { kind: 'tower_shield'; towerUid: string }
+  | { kind: 'power_tear'; uid: string }
   | { kind: 'fool_swap' }
   | { kind: 'judgement_flash' }
   | { kind: 'temperance_balance' }
@@ -1021,6 +1020,9 @@ function deriveResolutionFx(event: ResolutionEvent, hostUid: string, guestUid: s
   if (event.type === 'CLASH_DESTROYED' && event.uid && event.cardId) {
     return { kind: 'clash_shatter', uid: event.uid, cardId: event.cardId };
   }
+  if (event.type === 'POWER_DESTROYED' && event.uid) {
+    return { kind: 'power_tear', uid: event.uid };
+  }
 
   if (event.type === 'POWER_TRIGGER') {
     const id = event.powerCardId;
@@ -1029,7 +1031,6 @@ function deriveResolutionFx(event: ResolutionEvent, hostUid: string, guestUid: s
       return { kind: 'greed_coin_drain', uid, pts: event.greedTaxPts! };
     }
     if (id === 13 && uid) return { kind: 'death_slash', victimUid: otherUid(uid) };
-    if (id === 16 && uid) return { kind: 'tower_shield', towerUid: uid };
     if (id === 0) return { kind: 'fool_swap' };
     if (id === 20) return { kind: 'judgement_flash' };
     if (id === 14) return { kind: 'temperance_balance' };
@@ -1110,6 +1111,46 @@ const PowerTuckedUnderSuit: React.FC<{
   >
     {children}
   </div>
+);
+
+const RESOLUTION_TEAR_LEFT_CLIP =
+  'polygon(0% 0%, 53% 0%, 49% 12%, 55% 24%, 47% 38%, 56% 50%, 48% 64%, 54% 79%, 50% 100%, 0% 100%)';
+const RESOLUTION_TEAR_RIGHT_CLIP =
+  'polygon(47% 0%, 100% 0%, 100% 100%, 50% 100%, 54% 82%, 46% 66%, 53% 50%, 45% 34%, 51% 17%)';
+
+const ResolutionTearOverlay: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <motion.div
+    key="resolution-tear"
+    className="pointer-events-none absolute inset-0 z-[34]"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+  >
+    <motion.div
+      className="absolute inset-0"
+      style={{ clipPath: RESOLUTION_TEAR_LEFT_CLIP }}
+      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+      animate={{ x: -52, y: 72, rotate: -19, opacity: [1, 1, 0.05] }}
+      transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">{children}</div>
+    </motion.div>
+    <motion.div
+      className="absolute inset-0"
+      style={{ clipPath: RESOLUTION_TEAR_RIGHT_CLIP }}
+      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+      animate={{ x: 52, y: 72, rotate: 19, opacity: [1, 1, 0.05] }}
+      transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">{children}</div>
+    </motion.div>
+    <motion.div
+      className="absolute inset-y-[10%] left-1/2 z-[36] w-[2px] -translate-x-1/2 bg-white/85 shadow-[0_0_12px_rgba(255,255,255,0.65)]"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 0.95, 0] }}
+      transition={{ duration: 0.6, ease: 'easeOut' }}
+    />
+  </motion.div>
 );
 
 const ResolutionSequence: React.FC<{
@@ -1379,11 +1420,11 @@ const ResolutionSequence: React.FC<{
           case 'TRANSFORM':
             if (event.uid && event.cardId && event.fromCardId && event.fromCardId !== event.cardId) {
               setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'transform' }));
-              /** Swap near the rotateY flat edge (~48% · see CardVisual `times`) */
-              await new Promise((r) => setTimeout(r, 440));
+              /** Warm-up pulse + flip: swap exactly at the flat edge midpoint (x≈0). */
+              await new Promise((r) => setTimeout(r, 560));
         if (!active) return;
               setCurrentCards((prev) => ({ ...prev, [event.uid!]: event.cardId! }));
-              await new Promise((r) => setTimeout(r, 520));
+              await new Promise((r) => setTimeout(r, 560));
               if (!active) return;
               setResolutionCardMorph((m) => {
                 const next = { ...m };
@@ -1447,10 +1488,11 @@ const ResolutionSequence: React.FC<{
                       ? Math.round(slothDreamWheelDefinition.spinDurationSeconds * 1000 + 750)
                       : 1200
                     : 1150;
-        if (fx?.kind === 'death_slash' || fx?.kind === 'wrath_cut' || fx?.kind === 'tower_shield')
+        if (fx?.kind === 'death_slash' || fx?.kind === 'wrath_cut')
           pauseMs = Math.max(pauseMs, 1380);
         if (fx?.kind === 'envy_lunge') pauseMs = Math.max(pauseMs, 1380);
         if (fx?.kind === 'clash_shatter') pauseMs = Math.max(pauseMs, 1640);
+        if (fx?.kind === 'power_tear') pauseMs = Math.max(pauseMs, 1640);
         if (fx?.kind === 'gluttony_bite') pauseMs = Math.max(pauseMs, 3400);
         if (fx?.kind === 'greed_coin_drain') pauseMs = Math.max(pauseMs, 1280);
         if (fx?.kind === 'judgement_flash' || fx?.kind === 'temperance_balance') pauseMs = Math.max(pauseMs, 1240);
@@ -1920,6 +1962,15 @@ const ResolutionSequence: React.FC<{
                           />
                         </motion.div>
                         <AnimatePresence>
+                          {resolutionFx?.kind === 'power_tear' && resolutionFx.uid === uid && (
+                            <ResolutionTearOverlay>
+                              <PowerCardVisual
+                                cardId={outcome.powerCardIdsPlayed[uid]!}
+                                matchHandCard
+                                destroyed
+                              />
+                            </ResolutionTearOverlay>
+                          )}
                           {devilStolen[uid] !== undefined && (
                             <motion.div
                               initial={{ scale: 0, x: -5, opacity: 0 }}
@@ -1951,54 +2002,14 @@ const ResolutionSequence: React.FC<{
                   />
                   <AnimatePresence>
                     {resolutionFx?.kind === 'clash_shatter' && resolutionFx.uid === uid && (
-                      <motion.div
-                        key="clash-shatter"
-                        className="pointer-events-none absolute inset-0 z-[32] flex items-center justify-center"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                      >
-                        <div className="relative h-[102%] w-[92%]">
-                          <motion.div
-                            className="absolute inset-0 overflow-hidden rounded-xl"
-                            initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-                            animate={{ x: -26, y: -18, rotate: -11, opacity: 0 }}
-                            transition={{ duration: 0.88, ease: [0.22, 1, 0.36, 1] }}
-                            style={{ clipPath: 'polygon(0 0, 100% 0, 52% 52%, 0 100%)' }}
-                          >
-                            <div className="flex h-full w-full items-center justify-center">
-                              <div className="origin-center scale-[0.98]">
-                                <CardVisual
-                                  card={resolutionFx.cardId}
-                                  revealed
-                                  noAnimate
-                                  presentation="none"
-                                  small
-                                />
-                              </div>
-                            </div>
-                          </motion.div>
-                          <motion.div
-                            className="absolute inset-0 overflow-hidden rounded-xl"
-                            initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-                            animate={{ x: 26, y: 18, rotate: 11, opacity: 0 }}
-                            transition={{ duration: 0.88, ease: [0.22, 1, 0.36, 1] }}
-                            style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%, 52% 52%)' }}
-                          >
-                            <div className="flex h-full w-full items-center justify-center">
-                              <div className="origin-center scale-[0.98]">
-                                <CardVisual
-                                  card={resolutionFx.cardId}
-                                  revealed
-                                  noAnimate
-                                  presentation="none"
-                                  small
-                                />
-                              </div>
-                            </div>
-                          </motion.div>
-                        </div>
-                      </motion.div>
+                      <ResolutionTearOverlay>
+                        <CardVisual
+                          card={resolutionFx.cardId}
+                          revealed
+                          noAnimate
+                          presentation="none"
+                        />
+                      </ResolutionTearOverlay>
                     )}
                     {(resolutionFx?.kind === 'death_slash' || resolutionFx?.kind === 'wrath_cut') &&
                       resolutionFx.victimUid === uid && (
@@ -2034,19 +2045,6 @@ const ResolutionSequence: React.FC<{
                             transition={{ delay: 0.15, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                           />
                         </motion.div>
-                      </motion.div>
-                    )}
-                    {resolutionFx?.kind === 'tower_shield' && resolutionFx.towerUid === uid && (
-                      <motion.div
-                        key="tower-shield"
-                        className="pointer-events-none absolute inset-[-6px] z-[26] flex items-center justify-center"
-                        initial={{ opacity: 0, scale: 0.65 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-                      >
-                        <div className="absolute inset-1 rounded-full bg-sky-400/14 blur-xl" />
-                        <Shield className="relative w-[3.85rem] h-[3.85rem] text-sky-200/95 drop-shadow-[0_0_22px_rgba(56,189,248,0.75)]" strokeWidth={1.35} />
                       </motion.div>
                     )}
                     {resolutionFx?.kind === 'star_sparkle' && resolutionFx.uid === uid && (
