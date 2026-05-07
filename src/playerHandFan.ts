@@ -33,13 +33,18 @@ export function playerHandFanMotion(
   /** Horizontal spread (px) per step from center — aggressively compressed as hand grows. */
   const spreadPx = (8 + Math.max(0, 8 - count) * 0.75) * squeezeForSpread;
   const x = d * spreadPx;
-  const edge = mid > 0 ? Math.abs(d) / mid : 0;
-  /** Outer cards drop lower so top edge reads as a smooth curve (circular-arc easing). */
-  const curveDepth = 12 + Math.min(26, count * 1.2) + (1 - squeeze) * 22;
-  /** Lift the whole hand while keeping proportional outer drop. */
-  const baseLift = 7 + Math.min(6, count * 0.3);
-  const edgeEase = 1 - Math.cos(edge * (Math.PI / 2));
-  const y = -baseLift + edgeEase * curveDepth;
+  /**
+   * Vertical “smile” arc in screen space (Framer `y`, positive = down): center cards sit higher,
+   * outer cards lower — pure translation (no card scaling). Uses a smooth bowl
+   * `0.5 * (1 - cos(π·u))` with u = distance from center / max distance.
+   */
+  const u = denom > 0 ? Math.abs(d) / denom : 0;
+  const bowl = (1 - Math.cos(Math.PI * u)) / 2;
+  /** Extra depth when row is horizontally squeezed so the arc still reads. */
+  const amplitude =
+    (20 + Math.min(52, count * 2.85) + (1 - squeeze) * 26) * (0.58 + 0.42 * squeezeForSpread);
+  const centerLift = 8 + Math.min(10, count * 0.45);
+  const y = -centerLift + bowl * amplitude;
   /**
    * Monotonic left→right stacking so each card paints above the one to its left (overlap keeps top-left
    * indices readable). A center-peaked z-order put both outer wings low — the right half read “backward”.

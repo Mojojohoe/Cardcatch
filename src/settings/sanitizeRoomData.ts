@@ -2,6 +2,7 @@ import type {
   CardShopOffer,
   CardShopSlot,
   CardShopState,
+  PendingCardShopPurchase,
   PlayerData,
   RoomData,
   ShopRemoteCursorState,
@@ -73,6 +74,51 @@ function sanitizeShopBrowsingUid(raw: RoomData['shopBrowsingUid']): RoomData['sh
   return typeof raw === 'string' && raw.length > 0 ? raw : null;
 }
 
+/** Deduped UIDs browsing the chip shop — migrates legacy `shopBrowsingUid`. */
+function sanitizeCardShopBrowsersUids(room: RoomData): string[] {
+  const raw = room.cardShopBrowsersUids;
+  if (Array.isArray(raw)) {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const uid of raw) {
+      if (typeof uid !== 'string' || uid.length === 0 || seen.has(uid)) continue;
+      seen.add(uid);
+      out.push(uid);
+    }
+    return out;
+  }
+  const leg = sanitizeShopBrowsingUid(room.shopBrowsingUid);
+  return leg ? [leg] : [];
+}
+
+function sanitizePendingCardShopPurchases(
+  raw: RoomData['pendingCardShopPurchases'],
+): RoomData['pendingCardShopPurchases'] {
+  if (raw === null || raw === undefined) return raw;
+  if (!Array.isArray(raw)) return null;
+  const out: PendingCardShopPurchase[] = [];
+  const seenUidSlotTurn = new Set<string>();
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const uid = (row as { uid?: unknown }).uid;
+    const slotId = (row as { slotId?: unknown }).slotId;
+    const tokensPaid = (row as { tokensPaid?: unknown }).tokensPaid;
+    const scheduledResolveTurn = (row as { scheduledResolveTurn?: unknown }).scheduledResolveTurn;
+    if (typeof uid !== 'string' || uid.length === 0) continue;
+    if (typeof slotId !== 'string' || slotId.length === 0) continue;
+    const paid = typeof tokensPaid === 'number' && Number.isFinite(tokensPaid) ? Math.max(0, Math.floor(tokensPaid)) : 0;
+    const turn =
+      typeof scheduledResolveTurn === 'number' && Number.isFinite(scheduledResolveTurn)
+        ? Math.max(1, Math.floor(scheduledResolveTurn))
+        : 1;
+    const k = `${uid}|${slotId}|${turn}`;
+    if (seenUidSlotTurn.has(k)) continue;
+    seenUidSlotTurn.add(k);
+    out.push({ uid, slotId, tokensPaid: paid, scheduledResolveTurn: turn });
+  }
+  return out;
+}
+
 function sanitizeShopRemoteCursor(raw: RoomData['shopRemoteCursor']): RoomData['shopRemoteCursor'] {
   if (raw === null || raw === undefined) return raw;
   if (typeof raw !== 'object' || raw === null) return null;
@@ -123,7 +169,9 @@ export function sanitizeRoomDataForClient(room: RoomData): RoomData {
     chatMessages: ensureArray(room.chatMessages, []),
     draftPowerAppearances: Array.isArray(room.draftPowerAppearances) ? room.draftPowerAppearances : undefined,
     cardShop: sanitizeCardShop(room.cardShop),
-    shopBrowsingUid: sanitizeShopBrowsingUid(room.shopBrowsingUid),
+    cardShopBrowsersUids: sanitizeCardShopBrowsersUids(room),
+    shopBrowsingUid: null,
     shopRemoteCursor: sanitizeShopRemoteCursor(room.shopRemoteCursor),
+    pendingCardShopPurchases: sanitizePendingCardShopPurchases(room.pendingCardShopPurchases),
   };
 }

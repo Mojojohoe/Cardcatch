@@ -43,6 +43,7 @@ import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide
 import { useOptionalCardArt } from '../cardArt/cardArtContext';
 import { isAssembledRasterCardId } from '../cardArt/assembledRaster';
 import { cardArtAssetUrl } from '../cardArt/paths';
+import { isShopPackPlaceholder } from '../shopPack';
 import {
   shippedBundledPowerBackUrl,
   shippedBundledPowerFaceUrl,
@@ -565,6 +566,33 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           <Rabbit className="w-full h-full opacity-60" />
         )}
       </motion.div>
+    );
+  }
+
+  /** Unplayable Cash Chips placeholder until the next trick resolves contested deliveries. */
+  if (revealed && card && isShopPackPlaceholder(card)) {
+    return (
+      <div
+        ref={rootRef}
+        className={`relative shrink-0 select-none overflow-hidden rounded-lg border border-emerald-800/55 bg-emerald-950/40 shadow-lg ${
+          small ? PC_HAND_VEC_SM : PC_HAND
+        }`}
+        title="This pack of cards will open next round."
+      >
+        <motion.div
+          {...(motionLayout ? { layout: true as const } : {})}
+          {...entrance}
+          className="h-full w-full"
+          transition={{ type: 'spring', stiffness: 720, damping: 38 }}
+        >
+          <img
+            src={cardArtAssetUrl('CardPack.png')}
+            alt=""
+            draggable={false}
+            className="h-full w-full object-cover opacity-95"
+          />
+        </motion.div>
+      </div>
     );
   }
 

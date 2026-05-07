@@ -452,7 +452,7 @@ export const ChipDropperTest: React.FC<{
       {/* Below results / panic overlays (z-[300]+); above main table (z-[20]) */}
       <div className="pointer-events-none fixed inset-0 z-[40]" aria-hidden>
         <div
-          className="absolute top-[41%] left-[calc(50%-24vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl shadow-[0_18px_44px_rgba(0,0,0,0.35)]"
+          className="absolute top-[35%] left-[calc(50%-18vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
           title="Their token catchment"
           style={{ filter: tokenHueFilter(opponent?.role) }}
         >
@@ -462,7 +462,7 @@ export const ChipDropperTest: React.FC<{
           <ChipSimulationCanvas ref={leftRef} chipColor={oppPalette.chipColor} chipEmissive={oppPalette.chipEmissive} className="min-h-0 flex-1" />
         </div>
         <div
-          className="absolute top-1/2 left-[calc(50%+35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl shadow-[0_22px_52px_rgba(0,0,0,0.38)]"
+          className="absolute top-1/2 left-[calc(50%+28vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
           title="Your token catchment"
           style={{ filter: tokenHueFilter(me?.role) }}
         >

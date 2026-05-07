@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import type { DiceTestRollPayload } from '../services/gameService';
+import type { DicePresentation, DiceTestRollPayload } from '../services/gameService';
 
 /**
  * Dice test overlay — uses `@3d-dice/dice-box-threejs` **only**, no custom mesh overlay.
@@ -29,6 +29,7 @@ function diceAssetPath(): string {
 }
 
 export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> = ({ roll }) => {
+  const placement: DicePresentation = roll?.presentation ?? 'hudBottom';
   const reactId = useId().replace(/:/g, '');
   const mountId = `dice-box-test-${reactId}`;
   const mountRef = useRef<HTMLDivElement>(null);
@@ -193,9 +194,17 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
     };
   }, [roll?.rollId, mountId]);
 
+  const outerHud =
+    'pointer-events-none fixed inset-x-0 bottom-0 z-[425] flex h-[min(42dvh,22rem)] flex-col justify-end transition-opacity duration-700 sm:h-[min(46dvh,26rem)]';
+  const outerPage =
+    'pointer-events-none fixed inset-0 z-[425] flex items-center justify-center bg-transparent transition-opacity duration-700';
+  const mountHud = 'dice-box-test-mount relative h-full min-h-[12rem] w-full';
+  const mountPage =
+    'dice-box-test-mount relative h-[min(48dvh,28rem)] w-[min(96vw,48rem)] max-w-[100vw]';
+
   return (
     <div
-      className={`pointer-events-none fixed inset-x-0 bottom-0 z-[420] flex h-[min(42dvh,22rem)] flex-col justify-end transition-opacity duration-700 sm:h-[min(46dvh,26rem)] ${
+      className={`${placement === 'resolutionPage' ? outerPage : outerHud} ${
         overlayOpaque && !fading ? 'opacity-100' : 'opacity-0'
       }`}
       aria-hidden={!overlayOpaque}
@@ -203,7 +212,7 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       <div
         id={mountId}
         ref={mountRef}
-        className="dice-box-test-mount relative h-full min-h-[12rem] w-full"
+        className={placement === 'resolutionPage' ? mountPage : mountHud}
       />
       {overlayOpaque && !diceReady && (
         <div className="pointer-events-none absolute left-4 top-2 rounded-xl border border-rose-300/40 bg-black/45 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-rose-200 backdrop-blur-sm">

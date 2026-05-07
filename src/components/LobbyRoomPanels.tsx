@@ -7,11 +7,13 @@ import {
   Flame,
   Hash,
   Heart,
+  Coins,
   Layers,
   Play,
   RefreshCw,
   Settings2,
   Skull,
+  Tag,
   X,
   Zap,
 } from 'lucide-react';
@@ -414,6 +416,41 @@ export const HostLobbyPanel: React.FC<HostLobbyPanelProps> = ({
                   )}
                 </div>
               )}
+              {room.settings.enablePokerChips && (
+                <div className="grid grid-cols-2 gap-3 rounded-xl border border-amber-900/40 bg-amber-950/20 p-3">
+                  <p className="col-span-2 text-[9px] font-black uppercase tracking-widest text-amber-400/95">
+                    Cash shop checkout
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onPatchSettings({ cardShopConflictMode: 'black_friday' })}
+                    className={`flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-3 text-left transition-all ${
+                      toggleTileClass(room.settings.cardShopConflictMode === 'black_friday')
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 text-[9px] font-black uppercase">
+                      <Tag className="h-3.5 w-3.5" /> Black Friday
+                    </span>
+                    <span className="text-[8px] font-bold leading-snug opacity-90">
+                      First player to pay takes the card immediately.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onPatchSettings({ cardShopConflictMode: 'coin_flip' })}
+                    className={`flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-3 text-left transition-all ${
+                      toggleTileClass(room.settings.cardShopConflictMode === 'coin_flip')
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 text-[9px] font-black uppercase">
+                      <Coins className="h-3.5 w-3.5" /> Coin flip
+                    </span>
+                    <span className="text-[8px] font-bold leading-snug opacity-90">
+                      Same shelf in one trick — flip next round; loser refunded.
+                    </span>
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -744,6 +781,14 @@ export const GuestLobbyPanel: React.FC<{
               <Layers className="h-3.5 w-3.5" /> Poker chips
             </p>
             <p className="mt-1 text-[8px] font-bold">{room.settings.enablePokerChips ? 'On' : 'Off'}</p>
+            {room.settings.enablePokerChips && (
+              <p className="mt-2 text-[8px] font-bold leading-snug text-slate-300/95">
+                Shop:{' '}
+                {(room.settings.cardShopConflictMode ?? 'coin_flip') === 'black_friday'
+                  ? 'Black Friday (instant)'
+                  : 'Coin flip (contested)'}
+              </p>
+            )}
           </div>
           <div className={`rounded-lg border px-3 py-2 ${toggleTileClass(room.settings.enablePanicDice)}`}>
             <p className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest">

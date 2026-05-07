@@ -1,5 +1,6 @@
-import { CURSE_IDS } from './curses';
+import { CURSES, CURSE_IDS } from './curses';
 import type { CardShopOffer, CardShopSlot, CardShopState } from './types';
+import { MAJOR_ARCANA } from './types';
 import { VALUES } from './types';
 
 const MAIN_SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades'] as const;
@@ -42,6 +43,26 @@ export function baseOfferPrice(offer: CardShopOffer): number {
       return suitCardTokenPrice(offer.cardId);
     default:
       return 0;
+  }
+}
+
+/** Short label for resolution / shop contest messages. */
+export function describeShopOfferLine(offer: CardShopOffer): string {
+  switch (offer.type) {
+    case 'joker':
+      return 'Joker';
+    case 'suit':
+      return offer.cardId;
+    case 'major': {
+      const m = MAJOR_ARCANA.find((x) => x.id === offer.powerId);
+      return m?.name ?? `Major ${offer.powerId}`;
+    }
+    case 'curse': {
+      const def = CURSES[offer.curseId as keyof typeof CURSES];
+      return def?.name ? `Curse — ${def.name}` : `Curse card`;
+    }
+    default:
+      return 'Shop offer';
   }
 }
 

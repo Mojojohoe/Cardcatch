@@ -86,6 +86,7 @@ import { DesperationWheel, TargetSuitWheel } from './components/GameWheels';
 import { RoomChat } from './components/RoomChat';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { DiceBoxTestOverlay } from './components/DiceBoxTestOverlay';
+import { diceTestRollPayloadFromValues } from './utils/diceTestRollPayload';
 import { ChipDropperTest } from './components/ChipDropperTest';
 import { CardShopModal } from './components/CardShopModal';
 import { ShopOpponentCursorOverlay } from './components/ShopOpponentCursorOverlay';
@@ -123,11 +124,12 @@ import { useShopCursorBroadcast } from './hooks/useShopCursorBroadcast';
 import { EMERALD_STRIP_TOOLTIP_PANEL } from './ui/emeraldTooltipClasses';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
-import { playerHandFanMotion } from './playerHandFan';
+import { playerHandFanMotion, computeHandFanSqueeze } from './playerHandFan';
 import { CARD_ART_HEIGHT, CARD_ART_WIDTH } from './cardArt/AssembledPlayingCardFace';
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
 import { DisplayCardArtModeOverride, mergeCardArtWithRoom, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
+import { isShopPackPlaceholder } from './shopPack';
 import { panicDiceSeatAllowed } from './services/panicDiceSeat';
 import { warmCardArtImages } from './cardArt/preload';
 import { shippedPlayingCardBackRasterUrl } from './cardArt/shippedRasterFallbacks';
@@ -1112,11 +1114,15 @@ const PriorityFlipCard: React.FC<{
   );
 };
 
-const ResolutionSequence: React.FC<{ 
-  room: RoomData, 
-  myUid: string, 
-  onComplete: () => void 
-}> = ({ room, myUid, onComplete }) => {
+const ResolutionSequence: React.FC<{
+  room: RoomData;
+  myUid: string;
+  onComplete: () => void;
+  /** Fullscreen dice replay for host-authored `resolutionDice` (synced values). */
+  onResolutionDiceRoll?: (payload: DiceTestRollPayload) => void;
+  /** Bumps when recap replays so dice `rollId`s stay unique across runs. */
+  replayNonce: number;
+}> = ({ room, myUid, onComplete, onResolutionDiceRoll, replayNonce }) => {
   const outcome = room.lastOutcome!;
   const [eventIndex, setEventIndex] = useState(-1);
   const [currentCards, setCurrentCards] = useState(() => ({ ...(outcome as any).initialCardsPlayed || outcome.cardsPlayed }));
@@ -1227,7 +1233,18 @@ const ResolutionSequence: React.FC<{
               event.type === 'COIN_FLIP' ? inferCoinFlipWinnerUid(event.message ?? '', room) : undefined,
           },
         ]);
-        
+
+        if (event.resolutionDice?.length && onResolutionDiceRoll) {
+          onResolutionDiceRoll(
+            diceTestRollPayloadFromValues({
+              dice: event.resolutionDice,
+              rollId: `reso-${room.currentTurn}-${i}-${replayNonce}`,
+              uid: room.hostUid,
+              presentation: 'resolutionPage',
+            }),
+          );
+        }
+
         switch (event.type) {
           case 'CARD_SWAP':
             if (event.uid && event.cardId) {
@@ -1391,7 +1408,9 @@ const ResolutionSequence: React.FC<{
 
         let pauseMs =
           event.type === 'COIN_FLIP'
-            ? 5800
+            ? event.resolutionDice?.length
+              ? 5200
+              : 5800
             : event.type === 'POWER_DESTROYED'
               ? 1500
               : event.type === 'CARD_EMPOWER' || event.type === 'TARGET_CHANGE'
@@ -2673,6 +2692,11 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   }, [room?.lastOutcome?.panicFx?.diceRollId, room?.status]);
 
   const handLenForFan = room?.players?.[myUid]?.hand?.length ?? 0;
+  const fanSqueeze = useMemo(
+    () => computeHandFanSqueeze(handLenForFan, Math.max(240, handRowW), 'wide'),
+    [handLenForFan, handRowW],
+  );
+
   useEffect(() => {
     const el = handRowRef.current;
     if (!el) return;
@@ -2728,10 +2752,9 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
   useEffect(() => {
     if (!cashShopOpen) return;
-    if (room?.shopBrowsingUid == null || room.shopBrowsingUid !== myUid) {
-      setCashShopOpen(false);
-    }
-  }, [room?.shopBrowsingUid, cashShopOpen, myUid]);
+    const browsers = Array.isArray(room?.cardShopBrowsersUids) ? room.cardShopBrowsersUids : [];
+    if (!browsers.includes(myUid)) setCashShopOpen(false);
+  }, [room?.cardShopBrowsersUids, cashShopOpen, myUid]);
 
   useEffect(() => {
     if (!room) return;
@@ -2920,10 +2943,12 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     room?.players,
   ]);
 
+  const pokerChipShopBrowsers = Array.isArray(room?.cardShopBrowsersUids) ? room.cardShopBrowsersUids : [];
   const shopCursorBroadcastEnabled =
     cashShopOpen &&
     room?.settings?.enablePokerChips === true &&
-    room?.shopBrowsingUid === myUid;
+    pokerChipShopBrowsers.includes(myUid) &&
+    pokerChipShopBrowsers.length >= 2;
 
   /** Before conditional returns — lobby → table would change hook count (React #310). */
   useShopCursorBroadcast(shopCursorBroadcastEnabled, (nx, ny) => {
@@ -3203,7 +3228,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
   const me = room.players[myUid];
   if (!me) return <div className="h-full flex items-center justify-center text-[10px] uppercase">DESYNCED</div>;
-  const fanSqueeze = 1;
   const handCardWidth = 115.2;
   const handOverlap = 36;
   const fanWidthPx =
@@ -3220,10 +3244,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
 
+  const tableShopBrowsers = Array.isArray(room.cardShopBrowsersUids) ? room.cardShopBrowsersUids : [];
   const showOpponentShopCursor = Boolean(
     room.settings.enablePokerChips &&
+      cashShopOpen &&
       opponent &&
-      room.shopBrowsingUid === opponent.uid &&
+      tableShopBrowsers.length >= 2 &&
+      tableShopBrowsers.includes(myUid) &&
+      tableShopBrowsers.includes(opponent.uid) &&
       room.shopRemoteCursor &&
       room.shopRemoteCursor.uid === opponent.uid,
   );
@@ -3367,6 +3395,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   setCashShopOpen(false);
                   void serviceRef.current.setCardShopOpen(false);
                 }}
+                purchaseMode={room.settings.cardShopConflictMode ?? 'coin_flip'}
+                pendingPurchases={room.pendingCardShopPurchases ?? null}
+                myUid={myUid}
               />
             ) : null}
             <ShopOpponentCursorOverlay
@@ -3649,7 +3680,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   opponentWheelDecisionSpinning ? 'min-h-[10rem] sm:min-h-[12rem]' : 'min-h-[11rem] sm:min-h-[12rem]'
                 }`}
               >
-                {room.settings.enablePokerChips && room.shopBrowsingUid === opponent.uid ? (
+                {room.settings.enablePokerChips && tableShopBrowsers.includes(opponent.uid) ? (
                   <div className="pointer-events-none absolute inset-0 z-[36] flex items-center justify-center rounded-2xl bg-black/55 px-3 backdrop-blur-[2px]">
                     <span className="max-w-[16rem] text-center text-[11px] font-black uppercase leading-snug tracking-widest text-amber-200 shadow-black/60 drop-shadow-md">
                       Opponent is browsing the shop
@@ -4081,6 +4112,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   key={`rs-${room.currentTurn}-${resolutionReplayNonce}`}
                   room={room}
                   myUid={myUid}
+                  replayNonce={resolutionReplayNonce}
+                  onResolutionDiceRoll={setHudDiceRoll}
                   onComplete={() => setShowResolutionSequence(false)}
                 />
               </motion.div>
@@ -4417,6 +4450,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 const combinedMuted = prideMuted || envyMuted;
                 /** Stable identity per multiset slot so reorder doesn’t remap React keys → no deal entrance replay. */
                 const occurrenceKey = handSlotOccurrenceRank(me.hand, i);
+                const isShopPack = isShopPackPlaceholder(card);
                 return (
                   <motion.div
                     key={`${card}#${occurrenceKey}`}
@@ -4428,24 +4462,24 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     }
                     transition={{ type: 'tween', duration: 0.22, ease: 'easeOut' }}
                     layout={false}
-                    className={`relative ${!me.confirmed ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                    draggable={!me.confirmed}
+                    className={`relative ${!me.confirmed && !isShopPack ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                    draggable={!me.confirmed && !isShopPack}
                     onDragStart={(e) => {
-                      if (me.confirmed) return;
+                      if (me.confirmed || isShopPack) return;
                       setHandDragFromIndex(i);
                       setHandDragHoverIndex(i);
                       e.dataTransfer.effectAllowed = 'move';
                       e.dataTransfer.setData('text/plain', String(i));
                     }}
                     onDragOver={(e) => {
-                      if (me.confirmed) return;
+                      if (me.confirmed || isShopPack) return;
                       e.preventDefault();
                       setHandDragHoverIndex(i);
                       e.dataTransfer.dropEffect = 'move';
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      if (me.confirmed) return;
+                      if (me.confirmed || isShopPack) return;
                       const from = Number(e.dataTransfer.getData('text/plain'));
                       setHandDragFromIndex(null);
                       setHandDragHoverIndex(null);
@@ -4486,7 +4520,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       envyCovetedGlow={Boolean(envyCovetedHere && !envyMuted)}
                       detailTooltip={detailTooltip}
                       lustHeartRulesActive={lustHeartUi}
-                      onClick={() => !me.confirmed && !combinedMuted && setSelectedCardIndex(i)}
+                      onClick={() => !me.confirmed && !combinedMuted && !isShopPack && setSelectedCardIndex(i)}
                       role={me.role}
                       presentation="none"
                       delay={0}

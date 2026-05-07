@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import type { CardShopSlot, CardShopState } from '../types';
+import type { CardShopSlot, CardShopState, PendingCardShopPurchase } from '../types';
 import { baseOfferPrice, slotChargeTokens } from '../cardShop';
 import { CardVisual, PowerCardVisual } from './GameVisuals';
 import { EMERALD_STRIP_TOOLTIP_PANEL } from '../ui/emeraldTooltipClasses';
 
-const SHOP_PURCHASE_HOVER =
-  'Click to purchase this card and add it to your hand immediately.';
+const SHOP_HELP_BLACK_FRIDAY =
+  'Click to buy — first player to pay takes the shelf immediately (classic race).';
+const SHOP_HELP_COIN_FLIP =
+  'Reserve with tokens. You get a pack in hand until the trick ends. If you both grabbed the same shelf, a coin flip next round decides who keeps it — the other seat is refunded.';
 
 const MAIN_GRID_IDS = [
   'curse_random',
@@ -101,12 +103,18 @@ function ShopTile({
   tokenBalance,
   onBuy,
   compact,
+  purchaseMode,
+  pendingPurchases,
+  myUid,
 }: {
   slotId: string;
   slot: CardShopSlot;
   tokenBalance: number;
   onBuy: (id: string) => void;
   compact?: boolean;
+  purchaseMode: 'black_friday' | 'coin_flip';
+  pendingPurchases?: PendingCardShopPurchase[] | null;
+  myUid: string;
 }) {
   const [hover, setHover] = useState(false);
   const price = slotChargeTokens(slot);
@@ -114,6 +122,10 @@ function ShopTile({
   const discounted = Boolean(slot.discountPercent && slot.discountPercent > 0);
   const canAfford = tokenBalance >= price && !slot.soldOut;
   const interactive = canAfford;
+  const pendingMine =
+    purchaseMode === 'coin_flip' &&
+    Boolean(pendingPurchases?.some((p) => p.uid === myUid && p.slotId === slotId));
+  const buyHelp = purchaseMode === 'black_friday' ? SHOP_HELP_BLACK_FRIDAY : SHOP_HELP_COIN_FLIP;
 
   return (
     <div
@@ -134,6 +146,17 @@ function ShopTile({
         <div className="relative">
           <OfferFace slot={slot} compact={compact} />
           {slot.soldOut ? <SoldOutBand /> : null}
+          {pendingMine ? (
+            <div className="pointer-events-none absolute inset-0 z-[25] flex flex-col items-center justify-center gap-2 rounded-xl bg-black/60 px-2 backdrop-blur-[2px]">
+              <div
+                className="h-8 w-8 animate-spin rounded-full border-2 border-amber-400/40 border-t-amber-200"
+                aria-hidden
+              />
+              <span className="text-center text-[10px] font-black uppercase leading-tight tracking-wide text-amber-100 drop-shadow-md">
+                Purchase pending
+              </span>
+            </div>
+          ) : null}
         </div>
         <div className="text-center font-mono text-[11px] font-bold tabular-nums text-amber-100/95">
           {discounted ? (
@@ -151,7 +174,7 @@ function ShopTile({
         <p
           className={`pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-30 max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 ${EMERALD_STRIP_TOOLTIP_PANEL}`}
         >
-          {SHOP_PURCHASE_HOVER}
+          {buyHelp}
         </p>
       ) : null}
     </div>
@@ -162,14 +185,24 @@ function DiscountOfferBlock({
   discountSlot,
   tokenBalance,
   onBuy,
+  purchaseMode,
+  pendingPurchases,
+  myUid,
 }: {
   discountSlot: CardShopSlot;
   tokenBalance: number;
   onBuy: () => void;
+  purchaseMode: 'black_friday' | 'coin_flip';
+  pendingPurchases?: PendingCardShopPurchase[] | null;
+  myUid: string;
 }) {
   const [hover, setHover] = useState(false);
   const price = slotChargeTokens(discountSlot);
   const affordable = !discountSlot.soldOut && tokenBalance >= price;
+  const pendingMine =
+    purchaseMode === 'coin_flip' &&
+    Boolean(pendingPurchases?.some((p) => p.uid === myUid && p.slotId === 'discount'));
+  const buyHelp = purchaseMode === 'black_friday' ? SHOP_HELP_BLACK_FRIDAY : SHOP_HELP_COIN_FLIP;
 
   return (
     <div className="flex max-w-full flex-1 flex-wrap items-end gap-4 sm:flex-nowrap">
@@ -198,8 +231,21 @@ function DiscountOfferBlock({
               }}
               onMouseLeave={() => setHover(false)}
             >
-              <OfferFace slot={discountSlot} compact />
-              {discountSlot.soldOut ? <SoldOutBand /> : null}
+              <div className="relative">
+                <OfferFace slot={discountSlot} compact />
+                {discountSlot.soldOut ? <SoldOutBand /> : null}
+                {pendingMine ? (
+                  <div className="pointer-events-none absolute inset-0 z-[25] flex flex-col items-center justify-center gap-2 rounded-lg bg-black/60 px-1 backdrop-blur-[2px]">
+                    <div
+                      className="h-7 w-7 animate-spin rounded-full border-2 border-rose-400/40 border-t-rose-100"
+                      aria-hidden
+                    />
+                    <span className="text-center text-[9px] font-black uppercase leading-tight text-rose-50">
+                      Purchase pending
+                    </span>
+                  </div>
+                ) : null}
+              </div>
             </button>
             <div className="mt-2 text-center font-mono text-[11px] font-bold tabular-nums text-rose-100">
               <span className="mr-1 text-slate-500 line-through">{baseOfferPrice(discountSlot.offer)}</span>
@@ -212,7 +258,7 @@ function DiscountOfferBlock({
           <p
             className={`pointer-events-none absolute bottom-full left-0 z-30 mb-2 max-w-[min(20rem,calc(100vw-2rem))] ${EMERALD_STRIP_TOOLTIP_PANEL}`}
           >
-            {SHOP_PURCHASE_HOVER}
+            {buyHelp}
           </p>
         ) : null}
       </div>
@@ -225,7 +271,10 @@ export const CardShopModal: React.FC<{
   tokenBalance: number;
   onBuy: (slotId: string) => void;
   onClose: () => void;
-}> = ({ cardShop, tokenBalance, onBuy, onClose }) => {
+  purchaseMode: 'black_friday' | 'coin_flip';
+  pendingPurchases?: PendingCardShopPurchase[] | null;
+  myUid: string;
+}> = ({ cardShop, tokenBalance, onBuy, onClose, purchaseMode, pendingPurchases, myUid }) => {
   const discountSlot = cardShop.slots.discount;
 
   return (
@@ -248,7 +297,18 @@ export const CardShopModal: React.FC<{
             {MAIN_GRID_IDS.map((id) => {
               const slot = cardShop.slots[id];
               if (!slot) return null;
-              return <ShopTile key={id} slotId={id} slot={slot} tokenBalance={tokenBalance} onBuy={onBuy} />;
+              return (
+                <ShopTile
+                  key={id}
+                  slotId={id}
+                  slot={slot}
+                  tokenBalance={tokenBalance}
+                  onBuy={onBuy}
+                  purchaseMode={purchaseMode}
+                  pendingPurchases={pendingPurchases}
+                  myUid={myUid}
+                />
+              );
             })}
           </div>
         </div>
@@ -264,7 +324,14 @@ export const CardShopModal: React.FC<{
         </button>
 
         {discountSlot ? (
-          <DiscountOfferBlock discountSlot={discountSlot} tokenBalance={tokenBalance} onBuy={() => onBuy('discount')} />
+          <DiscountOfferBlock
+            discountSlot={discountSlot}
+            tokenBalance={tokenBalance}
+            onBuy={() => onBuy('discount')}
+            purchaseMode={purchaseMode}
+            pendingPurchases={pendingPurchases}
+            myUid={myUid}
+          />
         ) : null}
       </footer>
     </div>

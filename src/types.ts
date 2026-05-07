@@ -97,6 +97,10 @@ export interface GameSettings {
   curseCardsInPowerDeck: boolean;
   /** Optional future module — no gameplay effect yet. */
   enablePokerChips: boolean;
+  /**
+   * When poker chips shop is active: instant first-buy (Black Friday) vs pack placeholder + coin flip tie-break next round (Coin Flip).
+   */
+  cardShopConflictMode: 'black_friday' | 'coin_flip';
   /** Rule module — once-per-match panic reroll dice on the results sheet. */
   enablePanicDice: boolean;
   /** When not Preydator: predator-role seat may earn a panic dice. */
@@ -171,6 +175,15 @@ export interface ShopRemoteCursorState {
   ny: number;
   /** Monotonic so clients re-render on duplicate coords after clamping. */
   seq: number;
+}
+
+/** Poker chips “Coin Flip” mode: awaiting pack open after checkout (resolves applying next round advancement). */
+export interface PendingCardShopPurchase {
+  uid: string;
+  slotId: string;
+  tokensPaid: number;
+  /** Matches `RoomData.currentTurn` when the buyer checked out — packs open after that trick resolves. */
+  scheduledResolveTurn: number;
 }
 
 export interface PlayerData {
@@ -272,6 +285,8 @@ export interface ResolutionEvent {
   slothDreamResult?: SlothDreamResult;
   /** Sloth dream wheel pointer offset ∈ [0,1) in weight space (replay). */
   slothDreamSpinOffset?: number;
+  /** When set, resolution UI runs a synced dice-box roll (see `DiceTestRollPayload`). */
+  resolutionDice?: number[];
 }
 
 /** One chat line synced by host across the room (PeerJS clients). */
@@ -376,13 +391,20 @@ export interface RoomData {
   slothSavedAvailableSuits?: Suit[] | null;
   /** Replicated shop inventory when `enablePokerChips` is on in settings. */
   cardShop?: CardShopState | null;
-  /** Seat currently viewing the cash shop (for opponent banner). */
+  /**
+   * UIDs whose clients have the cash shop UI open — both seats may browse at once.
+   * Shop cursors replicate only while at least two entries exist (same two-player table).
+   */
+  cardShopBrowsersUids?: string[] | null;
+  /** @deprecated Prefer `cardShopBrowsersUids`; retained for sanitizing legacy snapshots only. */
   shopBrowsingUid?: string | null;
   /**
-   * Replicated pointer for `shopBrowsingUid` in normalized viewport coords [0–1].
-   * Cleared when the shop closes or advances rounds.
+   * Replicated pointer for the browsing peer in normalized viewport coords [0–1].
+   * Only updated while ≥2 shoppers (see `cardShopBrowsersUids`).
    */
   shopRemoteCursor?: ShopRemoteCursorState | null;
+  /** Deferred shop deliveries (Coin Flip conflict mode); host-authoritative. */
+  pendingCardShopPurchases?: PendingCardShopPurchase[] | null;
   lastOutcome?: {
     targetSuit: Suit;
     winnerUid: string | 'draw';

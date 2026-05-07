@@ -57,6 +57,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   enableCurseCards: true,
   curseCardsInPowerDeck: false,
   enablePokerChips: true,
+  cardShopConflictMode: 'coin_flip',
   enablePanicDice: true,
   panicDicePredatorEnabled: true,
   panicDicePreyEnabled: true,
@@ -116,6 +117,12 @@ export function normalizeGameSettings(raw: Partial<GameSettings> | GameSettings)
     enableCurseCards: raw.enableCurseCards !== false,
     curseCardsInPowerDeck: Boolean(raw.curseCardsInPowerDeck),
     enablePokerChips: raw.enablePokerChips !== false,
+    cardShopConflictMode:
+      raw.cardShopConflictMode === 'black_friday'
+        ? 'black_friday'
+        : raw.cardShopConflictMode === 'coin_flip'
+          ? 'coin_flip'
+          : DEFAULT_GAME_SETTINGS.cardShopConflictMode,
     enablePanicDice: raw.enablePanicDice !== false,
     panicDicePredatorEnabled:
       raw.panicDicePredatorEnabled !== undefined ? raw.panicDicePredatorEnabled !== false : true,
