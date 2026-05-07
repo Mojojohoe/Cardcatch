@@ -5,6 +5,7 @@ import {
   Suit,
   SUITS,
   VALUES,
+  PANIC_BLADE_RANK_VALUES,
   isPanicBladeNumericValue,
   GameSettings,
   PlayerRole,
@@ -885,6 +886,51 @@ export function buildPanicExchangeFrames(args: {
   return { frames, exchanges };
 }
 
+function panicRankLadderForVisual(parsed: ReturnType<typeof parseCard>): readonly string[] | null {
+  if (parsed.isJoker) return null;
+  if (parsed.suit === 'Swords' && isPanicBladeNumericValue(parsed.value)) return PANIC_BLADE_RANK_VALUES;
+  return VALUES as readonly string[];
+}
+
+/** Match {@link PanicClashResolution} — step printed ranks down panic exchange beats for HUD / stored outcome. */
+export function reduceCardRankForPanicDisplay(cardId: string, downBy: number): string {
+  if (downBy <= 0) return cardId;
+  const parsed = parseCard(cardId);
+  if (parsed.isJoker) return cardId;
+  const ladder = panicRankLadderForVisual(parsed);
+  if (!ladder?.length) return cardId;
+  const idx = ladder.indexOf(parsed.value as (typeof ladder)[number]);
+  if (idx <= 0) return cardId;
+  const nextIdx = Math.max(0, idx - downBy);
+  return `${parsed.suit}-${ladder[nextIdx]}`;
+}
+
+export function panicClashDisplayedCardPair(args: {
+  panicCardId: string;
+  opponentCardId: string;
+  opponentWrathPenalty: number;
+  greedTaxActive: boolean;
+  opponentLustBump?: boolean;
+}): { panicDisplayed: string; opponentDisplayed: string } {
+  const { frames } = buildPanicExchangeFrames(args);
+  if (!frames.length) {
+    return { panicDisplayed: args.panicCardId, opponentDisplayed: args.opponentCardId };
+  }
+  const f0 = frames[0]!;
+  const fLast = frames[frames.length - 1]!;
+  const initialPanic = f0.panicRemaining ?? panicSwordStrikeStrength(args.panicCardId);
+  const initialOpp = f0.opponentEffective ?? 0;
+  const panicDisplayed = reduceCardRankForPanicDisplay(
+    args.panicCardId,
+    Math.max(0, initialPanic - fLast.panicRemaining),
+  );
+  const opponentDisplayed = reduceCardRankForPanicDisplay(
+    args.opponentCardId,
+    Math.max(0, initialOpp - fLast.opponentEffective),
+  );
+  return { panicDisplayed, opponentDisplayed };
+}
+
 /** Replay trick winner using frozen outcome cards (+ Justice summons) with appended clash penalties — host is always `calculateOutcome`'s historical p1. */
 export function resolveFrozenTrickWinnerForPanic(params: {
   roomData: Pick<RoomData, 'settings' | 'activeCurses'>;
@@ -1186,7 +1232,6 @@ type GameEvent =
       startedAt: number;
       presentation?: 'hudBottom' | 'resolutionPage';
     }
-  | { type: 'REQUEST_TOKEN_DROP'; uid: string }
   | { type: 'CARD_SHOP_SET_OPEN'; uid: string; open: boolean }
   | { type: 'CARD_SHOP_BUY'; uid: string; slotId: string }
   | { type: 'SHOP_CURSOR'; uid: string; nx: number; ny: number };
@@ -1202,6 +1247,8 @@ export type DiceTestRollPayload = {
   startedAt: number;
   /** Panic HUD strip vs fullscreen transparent resolution layer. */
   presentation?: DicePresentation;
+  /** Silver coin (`1dc`) leg labels for Cash Chips / coin-style rolls. */
+  coinFlipLegends?: { heads: string; tails: string };
 };
 
 const STORAGE_KEY = 'preydator_settings';
@@ -1589,10 +1636,6 @@ export class GameService {
       } else if (event.type === 'USE_PANIC_DICE') {
         if (remoteUid && event.uid === remoteUid) {
           this.handlePanicDiceUse(remoteUid);
-        }
-      } else if (event.type === 'REQUEST_TOKEN_DROP') {
-        if (remoteUid && event.uid === remoteUid) {
-          this.applyManualTokenIncrement(event.uid);
         }
       } else if (event.type === 'CARD_SHOP_SET_OPEN') {
         if (remoteUid && event.uid === remoteUid) {
@@ -1987,19 +2030,6 @@ export class GameService {
     this.broadcastState();
   }
 
-  private applyManualTokenIncrement(uid: string) {
-    if (!this.isHost || !this.state?.settings.enablePokerChips) return;
-    const p = this.state.players[uid];
-    if (!p) return;
-    const tokenBalance = (p.tokenBalance ?? 0) + 1;
-    this.state = {
-      ...this.state,
-      players: { ...this.state.players, [uid]: { ...p, tokenBalance } },
-      updatedAt: Date.now(),
-    };
-    this.broadcastState();
-  }
-
   private clearShopCursorPipeline() {
     if (this.shopCursorFlushTimer) {
       clearTimeout(this.shopCursorFlushTimer);
@@ -2278,9 +2308,12 @@ export class GameService {
 
       const a = contenders[0]!;
       const b = contenders[1]!;
+      /** First queued player = Heads, second = Tails (`1dc` coin: value 1 = heads, 0 = tails). */
+      const headsUid = a.uid;
+      const tailsUid = b.uid;
       extraEvents.push({
         type: 'COIN_FLIP',
-        message: `Cash shop clash — ${nameOf(a.uid)} and ${nameOf(b.uid)} queued ${offerLabel}. Flipping…`,
+        message: `Cash Chips — contested delivery\n${nameOf(headsUid)} → Heads\n${nameOf(tailsUid)} → Tails\nFlipping silver coin…`,
       });
 
       const plA = players[a.uid];
@@ -2304,15 +2337,16 @@ export class GameService {
       stripPackOnce(plA.hand, slotIdS);
       stripPackOnce(plB.hand, slotIdS);
 
-      const clashPip = rollFairD6();
-      const winnerEntry = fairHalfFromD6(clashPip) ? a : b;
+      const coinUp: 0 | 1 = Math.random() < 0.5 ? 1 : 0;
+      const winnerEntry = coinUp === 1 ? a : b;
       const loserEntry = winnerEntry.uid === a.uid ? b : a;
       players[loserEntry.uid].tokenBalance = (players[loserEntry.uid].tokenBalance ?? 0) + loserEntry.tokensPaid;
 
       extraEvents.push({
         type: 'COIN_FLIP',
-        message: `Coin chooses ${nameOf(winnerEntry.uid)} — they receive ${offerLabel}. ${nameOf(loserEntry.uid)} is refunded ${loserEntry.tokensPaid} chips.`,
-        resolutionDice: [clashPip],
+        coinFlipSides: { headsUid, tailsUid },
+        message: `${nameOf(winnerEntry.uid)} wins — unwraps Cash Chips (${offerLabel}).\n${nameOf(loserEntry.uid)} refunded ${loserEntry.tokensPaid} chips. Coin: ${coinUp === 1 ? 'Heads' : 'Tails'} (${coinUp === 1 ? nameOf(headsUid) : nameOf(tailsUid)}).`,
+        resolutionDice: [coinUp],
       });
 
       if (!applyGrantOffer(winnerEntry.uid, slotIdS)) {
@@ -2356,16 +2390,6 @@ export class GameService {
 
   onDiceTestRollEvent(handler: ((payload: DiceTestRollPayload) => void) | null) {
     this.onDiceTestRoll = handler;
-  }
-
-  /** Manual poker-chip token (+1 balance); host authoritative. */
-  async requestManualTokenDrop(uid?: string) {
-    const target = uid ?? this.myUid;
-    if (this.isHost) {
-      this.applyManualTokenIncrement(target);
-    } else {
-      this.sendEvent({ type: 'REQUEST_TOKEN_DROP', uid: target });
-    }
   }
 
   async setCardShopOpen(open: boolean) {
@@ -3154,12 +3178,14 @@ export class GameService {
     const extras: Record<string, number> = { [hostUid]: 0, [guestUid]: 0 };
     extras[oppUid] = combat.extraOpponentPenalty;
 
+    const panicFrozenCardsPlayed = { ...prev.cardsPlayed, [uid]: panicCard };
+
     const nw = resolveFrozenTrickWinnerForPanic({
       roomData: room,
       hostUid,
       guestUid,
       frozen: {
-        cardsPlayed: prev.cardsPlayed,
+        cardsPlayed: panicFrozenCardsPlayed,
         summonedCards: prev.summonedCards,
         targetSuit: prev.targetSuit,
         wrathFx: prev.wrathFx,
@@ -3167,6 +3193,19 @@ export class GameService {
       extraClashPenaltyByUid: extras,
       lustReplay,
     });
+
+    const tableauDisplay = panicClashDisplayedCardPair({
+      panicCardId: panicCard,
+      opponentCardId: oppCard,
+      opponentWrathPenalty: wrathPenOpp,
+      greedTaxActive,
+      opponentLustBump: lustReplay.lhPlayed(oppCard),
+    });
+    const nextCardsPlayedVisual = {
+      ...prev.cardsPlayed,
+      [uid]: tableauDisplay.panicDisplayed,
+      [oppUid]: tableauDisplay.opponentDisplayed,
+    };
 
     const clashDestroyed: Record<string, boolean> = { ...(prev.clashDestroyedByPenalty ?? {}) };
     if (!parseCard(oppCard).isJoker && oppCard !== GROVEL_CARD_ID) {
@@ -3177,9 +3216,9 @@ export class GameService {
     if (nw === 'draw') {
       finalMessage = 'Panic dice — the field deadlocks again.';
     } else {
-      const winnerCard = prev.cardsPlayed[nw];
+      const winnerCard = panicFrozenCardsPlayed[nw];
       const loserUid = nw === hostUid ? guestUid : hostUid;
-      const loserCard = prev.cardsPlayed[loserUid];
+      const loserCard = panicFrozenCardsPlayed[loserUid];
       const wrathTar = prev.wrathFx?.targetUid ?? null;
       const wrathMag =
         wrathTar && prev.wrathFx?.minionCard ? getWrathMagnitude(prev.wrathFx.minionCard) : 0;
@@ -3215,15 +3254,15 @@ export class GameService {
     const tokenByUid = computeOverkillTokenAward({
       p1Uid: hostUid,
       p2Uid: guestUid,
-      c1: prev.cardsPlayed[hostUid],
-      c2: prev.cardsPlayed[guestUid],
+      c1: panicFrozenCardsPlayed[hostUid],
+      c2: panicFrozenCardsPlayed[guestUid],
       targetSuit: prev.targetSuit,
       greedJointTrump: greedTaxActive && prev.targetSuit === 'Diamonds',
       greedTaxActive,
       clashPenaltyByUid: clashPenByUid,
       lustPlayedByUid: {
-        [hostUid]: lustReplay.lhPlayed(prev.cardsPlayed[hostUid]),
-        [guestUid]: lustReplay.lhPlayed(prev.cardsPlayed[guestUid]),
+        [hostUid]: lustReplay.lhPlayed(panicFrozenCardsPlayed[hostUid]),
+        [guestUid]: lustReplay.lhPlayed(panicFrozenCardsPlayed[guestUid]),
       },
     });
 
@@ -3254,6 +3293,7 @@ export class GameService {
       winnerUid: nw,
       message: finalMessage,
       gains,
+      cardsPlayed: nextCardsPlayedVisual,
       clashDestroyedByPenalty: clashDestroyed,
       events: [...prev.events, panicLine],
       panicFx: {
@@ -4058,13 +4098,48 @@ export class GameService {
     let lustPrintedHeartsBump = false;
 
     // Phase 3: Resolution
-    if (power1 === 14 || power2 === 14) {
+    const deathVsTemperance =
+      ((committedPower1 === 13 && committedPower2 === 14) || (committedPower1 === 14 && committedPower2 === 13)) &&
+      !blockedPowers[p1Uid] &&
+      !blockedPowers[p2Uid];
+
+    if (deathVsTemperance) {
+      const deathUid = committedPower1 === 13 ? p1Uid : p2Uid;
+      const pip = rollFairD6();
+      const deathClaims = fairHalfFromD6(pip);
+      if (deathClaims) {
+        winnerUid = deathUid;
+        events.push({
+          type: 'COIN_FLIP',
+          message: `${players[deathUid].name}'s Death wins the struggle against Temperance.`,
+          resolutionDice: [pip],
+        });
+        events.push({
+          type: 'POWER_TRIGGER',
+          uid: deathUid,
+          powerCardId: 13,
+          message: `${players[deathUid].name}'s Death claims the round.`,
+        });
+      } else {
         winnerUid = 'draw';
+        events.push({
+          type: 'COIN_FLIP',
+          message: `Temperance balances Death — the round ends in a draw.`,
+          resolutionDice: [pip],
+        });
         events.push({
           type: 'POWER_TRIGGER',
           powerCardId: 14,
           message: 'Temperance forced transparency and balance.',
         });
+      }
+    } else if (power1 === 14 || power2 === 14) {
+      winnerUid = 'draw';
+      events.push({
+        type: 'POWER_TRIGGER',
+        powerCardId: 14,
+        message: 'Temperance forced transparency and balance.',
+      });
     } else {
         const wp1 = wrathPen(c1, p1Uid);
         const wp2 = wrathPen(c2, p2Uid);

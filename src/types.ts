@@ -287,6 +287,8 @@ export interface ResolutionEvent {
   slothDreamSpinOffset?: number;
   /** When set, resolution UI runs a synced dice-box roll (see `DiceTestRollPayload`). */
   resolutionDice?: number[];
+  /** Cash Chips coin flip: `dc` die value 1 = heads, 0 = tails (synced with `resolutionDice[0]`). */
+  coinFlipSides?: { headsUid: string; tailsUid: string };
 }
 
 /** One chat line synced by host across the room (PeerJS clients). */

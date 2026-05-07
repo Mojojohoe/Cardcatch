@@ -66,7 +66,7 @@ const RASTER_EXT_ORDER = ['.png'] as const;
 export function rasterCandidatesForFileStem(stem: string): string[] {
   const trimmed = stem.trim();
   if (!trimmed) return [];
-  if (/\.(png|webp|jpg|jpeg|svg)$/i.test(trimmed)) {
+  if (/\.(png|gif|webp|jpg|jpeg|svg)$/i.test(trimmed)) {
     return [cardArtAssetUrl(trimmed)];
   }
   return RASTER_EXT_ORDER.map((ext) => cardArtAssetUrl(`${trimmed}${ext}`));

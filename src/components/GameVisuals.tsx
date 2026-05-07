@@ -415,10 +415,34 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const holdTipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tipOpen, setTipOpen] = useState(false);
   const [holdTipOpen, setHoldTipOpen] = useState(false);
-  const holdCaption = useMemo(
-    () => (revealed && card ? playingCardHoverCaption(card) : null),
-    [card, revealed],
-  );
+  const holdCaption = useMemo(() => {
+    if (revealed && card && isShopPackPlaceholder(card)) {
+      return 'Cash Chips — delivers after this trick resolves. If two players queued the same shelf, dice settle who unwraps (coin-flip lobby mode).';
+    }
+    return revealed && card ? playingCardHoverCaption(card) : null;
+  }, [card, revealed]);
+
+  const HOVER_HOLD_MS = 700;
+
+  const syncHoldTip = () => {
+    if (detailTooltip) {
+      setTipOpen(true);
+      return;
+    }
+    if (!holdCaption) return;
+    if (holdTipTimer.current) clearTimeout(holdTipTimer.current);
+    holdTipTimer.current = setTimeout(() => setHoldTipOpen(true), HOVER_HOLD_MS);
+  };
+
+  const clearHoldTip = () => {
+    if (detailTooltip) setTipOpen(false);
+    if (holdTipTimer.current) {
+      clearTimeout(holdTipTimer.current);
+      holdTipTimer.current = null;
+    }
+    setHoldTipOpen(false);
+  };
+
   const tooltipStyle = usePowerTooltipPosition(
     (Boolean(detailTooltip) && tipOpen) || (Boolean(holdCaption) && holdTipOpen),
     rootRef,
@@ -574,16 +598,22 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     return (
       <div
         ref={rootRef}
-        className={`relative shrink-0 select-none overflow-hidden rounded-lg border border-emerald-800/55 bg-emerald-950/40 shadow-lg ${
+        tabIndex={0}
+        style={{ isolation: 'isolate' }}
+        className={`relative shrink-0 cursor-pointer select-none overflow-visible rounded-lg outline-none transition-colors hover:border-emerald-500/50 ${
           small ? PC_HAND_VEC_SM : PC_HAND
-        }`}
-        title="This pack of cards will open next round."
+        } border border-emerald-800/55 bg-emerald-950/40 shadow-lg`}
+        onMouseEnter={syncHoldTip}
+        onMouseLeave={clearHoldTip}
+        onFocus={syncHoldTip}
+        onBlur={clearHoldTip}
       >
         <motion.div
           {...(motionLayout ? { layout: true as const } : {})}
           {...entrance}
-          className="h-full w-full"
           transition={{ type: 'spring', stiffness: 720, damping: 38 }}
+          whileHover={{ y: -9, zIndex: 50 }}
+          className="h-full w-full overflow-hidden rounded-[inherit]"
         >
           <img
             src={cardArtAssetUrl('CardPack.png')}
@@ -592,34 +622,25 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
             className="h-full w-full object-cover opacity-95"
           />
         </motion.div>
+        {typeof document !== 'undefined' &&
+          holdTipOpen &&
+          holdCaption &&
+          createPortal(
+            <div
+              ref={popRef}
+              style={tooltipStyle}
+              className="max-w-[16rem] rounded-xl border px-3 py-2.5 text-left text-[11px] font-semibold leading-snug shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px] border-yellow-500/40 bg-slate-950/98 text-slate-100"
+            >
+              {holdCaption}
+            </div>,
+            document.body,
+          )}
       </div>
     );
   }
 
   const allowHoverMotion =
     (!disabled && !muted) || Boolean(detailTooltip) || Boolean(!detailTooltip && holdCaption);
-
-  const HOVER_HOLD_MS = 700;
-
-  /** Static hit target: inner face translates on hover so pointer stays inside this box — avoids timer resets + neighbor stealing hover. */
-  const syncHoldTip = () => {
-    if (detailTooltip) {
-      setTipOpen(true);
-      return;
-    }
-    if (!holdCaption) return;
-    if (holdTipTimer.current) clearTimeout(holdTipTimer.current);
-    holdTipTimer.current = setTimeout(() => setHoldTipOpen(true), HOVER_HOLD_MS);
-  };
-
-  const clearHoldTip = () => {
-    if (detailTooltip) setTipOpen(false);
-    if (holdTipTimer.current) {
-      clearTimeout(holdTipTimer.current);
-      holdTipTimer.current = null;
-    }
-    setHoldTipOpen(false);
-  };
 
   /**
    * Each card isolates painting so faded center SuitGlyphs can't composite over overlapping neighbors

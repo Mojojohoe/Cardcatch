@@ -116,8 +116,18 @@ export function bundledCourtPictureStems(cardId: string): string[] {
 
 function pushUrlsFromStems(stems: string[], seen: Set<string>, out: string[]) {
   for (const stem of stems) {
+    const trimmed = stem.trim();
+    if (!trimmed) continue;
+    if (hasImageExtension(trimmed)) {
+      const url = cardArtAssetUrl(trimmed);
+      if (!seen.has(url)) {
+        seen.add(url);
+        out.push(url);
+      }
+      continue;
+    }
     for (const ext of RASTER_EXTS) {
-      const url = cardArtAssetUrl(`${stem}${ext}`);
+      const url = cardArtAssetUrl(`${trimmed}${ext}`);
       if (!seen.has(url)) {
         seen.add(url);
         out.push(url);

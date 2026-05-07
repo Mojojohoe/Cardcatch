@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RoomData } from '../types';
-import { VALUES, isPanicBladeNumericValue, PANIC_BLADE_RANK_VALUES } from '../types';
 import {
   buildPanicExchangeFrames,
   lustReplayContextFromOutcome,
-  parseCard,
   panicOpponentWrathPenaltyFromOutcome,
   panicSwordStrikeStrength,
+  reduceCardRankForPanicDisplay,
 } from '../services/gameService';
 import { greedCurseActive } from '../curses';
 import { CardVisual } from './GameVisuals';
@@ -60,24 +59,6 @@ const LAYOUT_SWITCH_MS = 420;
 /** Simultaneous −1 panic vs opponent stamina, every beat. */
 const EXCHANGE_STEP_MS = 600;
 const OUTRO_PAUSE_MS = 900;
-/** Ascending ladder (weakest → strongest); visual “down” walks toward index 0. */
-function rankLadderForVisualReduce(p: { suit: string; value: string; isJoker: boolean }): readonly string[] | null {
-  if (p.isJoker) return null;
-  if (p.suit === 'Swords' && isPanicBladeNumericValue(p.value)) return PANIC_BLADE_RANK_VALUES;
-  return VALUES as readonly string[];
-}
-
-function reduceCardVisualRank(cardId: string, downBy: number): string {
-  if (downBy <= 0) return cardId;
-  const p = parseCard(cardId);
-  if (p.isJoker) return cardId;
-  const ladder = rankLadderForVisualReduce(p);
-  if (!ladder?.length) return cardId;
-  const idx = ladder.indexOf(p.value);
-  if (idx <= 0) return cardId;
-  const nextIdx = Math.max(0, idx - downBy);
-  return `${p.suit}-${ladder[nextIdx]}`;
-}
 
 export type PanicClashDismissReason = 'aborted' | 'complete';
 
@@ -132,9 +113,9 @@ export const PanicClashResolution: React.FC<{
     panicRemaining: 0,
     opponentEffective: 0,
   };
-  const panicCardFx = reduceCardVisualRank(panicCardId, Math.max(0, initialPanic - f.panicRemaining));
+  const panicCardFx = reduceCardRankForPanicDisplay(panicCardId, Math.max(0, initialPanic - f.panicRemaining));
   const opponentCardFx =
-    oppCardId == null ? '' : reduceCardVisualRank(oppCardId, Math.max(0, initialOpponent - f.opponentEffective));
+    oppCardId == null ? '' : reduceCardRankForPanicDisplay(oppCardId, Math.max(0, initialOpponent - f.opponentEffective));
 
   useEffect(() => {
     if (!oppCardId || frames.length === 0) {

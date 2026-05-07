@@ -151,15 +151,29 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         clearDiceSafely();
 
         const ds = roll.dice;
-        const forced =
-          ds.length >= 2
-            ? `@${ds.slice(0, 2).join(',')}`
-            : ds.length === 1 && typeof ds[0] === 'number'
-              ? `@${ds[0]}`
-              : '';
-        const baseNotation = ds.length <= 1 ? '1dpip' : '2dpip';
-        const notation =
-          ds.length <= 1 && forced ? `1dpip${forced}` : ds.length >= 2 && forced ? `2dpip${forced}` : baseNotation;
+        const coinLegends = roll.coinFlipLegends;
+        const pre = roll.notation?.trim() ?? '';
+        const isSilverCoinRoll = Boolean(coinLegends) || pre.startsWith('1dc');
+
+        let notation: string;
+        if (
+          isSilverCoinRoll &&
+          ds.length === 1 &&
+          (ds[0] === 0 || ds[0] === 1)
+        ) {
+          const v = ds[0];
+          notation = /^1dc@\d+$/.test(pre) ? pre : `1dc@${v}`;
+        } else {
+          const forced =
+            ds.length >= 2
+              ? `@${ds.slice(0, 2).join(',')}`
+              : ds.length === 1 && typeof ds[0] === 'number'
+                ? `@${ds[0]}`
+                : '';
+          const baseNotation = ds.length <= 1 ? '1dpip' : '2dpip';
+          notation =
+            ds.length <= 1 && forced ? `1dpip${forced}` : ds.length >= 2 && forced ? `2dpip${forced}` : baseNotation;
+        }
         let animated = false;
         try {
           animated = await runDiceAnimation(diceRef.current!, notation);
@@ -201,6 +215,11 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
   const mountHud = 'dice-box-test-mount relative h-full min-h-[12rem] w-full';
   const mountPage =
     'dice-box-test-mount relative h-[min(48dvh,28rem)] w-[min(96vw,48rem)] max-w-[100vw]';
+  /** `1dc` coin needs an almost-square viewport — wide rects read as a squashed disc. */
+  const mountResolutionCoin =
+    'dice-box-test-mount relative aspect-square h-[min(56vmin,24rem)] w-[min(56vmin,24rem)] max-h-[88dvh] max-w-[min(92vw,24rem)]';
+
+  const coinLegendsShowing = overlayOpaque && Boolean(roll?.coinFlipLegends);
 
   return (
     <div
@@ -209,10 +228,28 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       }`}
       aria-hidden={!overlayOpaque}
     >
+      {coinLegendsShowing && roll?.coinFlipLegends && (
+        <div className="pointer-events-none absolute left-4 right-4 top-[14%] z-[426] flex flex-col items-center gap-2 text-center">
+          <div className="max-w-xl rounded-xl border border-amber-500/55 bg-black/42 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-amber-100/96 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-sm sm:text-[11px]">
+            <span className="block text-emerald-200/98">Silver coin toss</span>
+            <span className="mt-1.5 block font-bold tracking-wide text-white/95 normal-case">
+              <span className="text-red-400">Heads</span> · {roll.coinFlipLegends!.heads}{' '}
+              <span className="mx-1 text-white/55">│</span>
+              <span className="text-sky-400">Tails</span> · {roll.coinFlipLegends!.tails}
+            </span>
+          </div>
+        </div>
+      )}
       <div
         id={mountId}
         ref={mountRef}
-        className={placement === 'resolutionPage' ? mountPage : mountHud}
+        className={
+          placement === 'resolutionPage' && Boolean(roll?.coinFlipLegends)
+            ? mountResolutionCoin
+            : placement === 'resolutionPage'
+              ? mountPage
+              : mountHud
+        }
       />
       {overlayOpaque && !diceReady && (
         <div className="pointer-events-none absolute left-4 top-2 rounded-xl border border-rose-300/40 bg-black/45 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-rose-200 backdrop-blur-sm">
@@ -225,10 +262,21 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
             {roll?.notation ?? (result.dice.length <= 1 ? '1dpip' : '2dpip')}
           </div>
           <div className="mt-1 text-lg font-semibold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
-            Result: {result.total}
+            {roll?.coinFlipLegends ? (
+              <>
+                Lands:{' '}
+                <span className={result.total === 1 ? 'text-red-300' : 'text-sky-300'}>
+                  {result.total === 1 ? 'Heads' : 'Tails'}
+                </span>
+              </>
+            ) : (
+              <>Result: {result.total}</>
+            )}
           </div>
           <div className="mt-0.5 text-[12px] font-medium text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">
-            Dice: [{result.dice.join(', ')}]
+            {roll?.coinFlipLegends
+              ? `Coin: ${result.total === 1 ? 'heads' : 'tails'}`
+              : `Dice: [${result.dice.join(', ')}]`}
           </div>
         </div>
       )}

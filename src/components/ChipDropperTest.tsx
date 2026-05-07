@@ -20,6 +20,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { World, Vec3, Body, Box, Cylinder, ContactMaterial, Material } from 'cannon-es';
 import type { PlayerRole, RoomData } from '../types';
 import { useChipPileSync } from '../hooks/useChipPileSync';
+import { HoldDelayTooltip } from './HoldDelayTooltip';
 
 /**
  * Chip radius must stay **inside** {@link PLAY_HALF_X} / {@link PLAY_HALF_Z} with margin — larger coins than the
@@ -36,6 +37,8 @@ const CONTAINER_WALL_HEIGHT_Y = 90;
 const FLOOR_Y = -3.35;
 /** Nudge the front (+Z) containment wall toward the camera so chips can tip forward slightly before contact. */
 const FRONT_WALL_Z_EXTRA = 6;
+/** Narrow interior half-width so ±X slabs sit slightly inside nominal bounds (fewer sideways escapes). */
+const PLAY_MARGIN_X_SHRINK = 1.9;
 
 /** Tiny spawn spread so chips fall into one stack lane. */
 const STACK_SPAWN_JITTER = 0.18;
@@ -114,11 +117,13 @@ type SimulationProps = {
   chipEmissive: number;
   /** Panel fills this region (fixed / absolute sizing by caller) */
   className?: string;
+  /** Hover / focus on Cash Chips button: brighter emissive on spawned chips only. */
+  pileAccent?: boolean;
 };
 
 /** One independent chip pile (own scene / world). */
 export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationProps>(function ChipSimulationCanvas(
-  { chipColor, chipEmissive, className },
+  { chipColor, chipEmissive, className, pileAccent = false },
   ref,
 ) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -134,6 +139,21 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
   const groundBodyRef = useRef<Body | null>(null);
   const physicsMatsRef = useRef<{ chip: Material } | null>(null);
   const stillForRef = useRef<WeakMap<Body, number>>(new WeakMap());
+  const pileAccentRef = useRef(pileAccent);
+  pileAccentRef.current = pileAccent;
+
+  const applyPileAccentToMeshRoot = useCallback((root: Object3D) => {
+    const emissiveMul = pileAccentRef.current ? 6.5 : 1;
+    root.traverse((node) => {
+      const m = node as Mesh;
+      if (!m.isMesh) return;
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      for (const mat of mats) {
+        const sm = mat as MeshStandardMaterial;
+        if (sm?.emissiveIntensity !== undefined) sm.emissiveIntensity = 0.06 * emissiveMul;
+      }
+    });
+  }, []);
 
   const spawnCoin = useCallback(() => {
     const world = worldRef.current;
@@ -175,7 +195,8 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     );
     scene.add(mesh);
     coinsRef.current.push({ mesh, body });
-  }, []);
+    applyPileAccentToMeshRoot(mesh);
+  }, [applyPileAccentToMeshRoot]);
 
   const clearCoins = useCallback(() => {
     const world = worldRef.current;
@@ -198,6 +219,10 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
   );
 
   useImperativeHandle(ref, () => ({ spawn: spawnCoin, resetToCount }), [spawnCoin, resetToCount]);
+
+  useEffect(() => {
+    for (const { mesh } of coinsRef.current) applyPileAccentToMeshRoot(mesh);
+  }, [pileAccent, applyPileAccentToMeshRoot]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -257,16 +282,17 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     const wy = CONTAINER_WALL_HEIGHT_Y / 2;
     const hx = CONTAINER_WALL_THICK / 2;
     const hz = CONTAINER_WALL_THICK / 2;
+    const ix = Math.max(8, CONTAINER_HALF_X - PLAY_MARGIN_X_SHRINK);
     /** Side slabs extend in Z to match the forward-shifted front wall (`FRONT_WALL_Z_EXTRA`). */
     const zExtentSide = CONTAINER_HALF_Z + CONTAINER_WALL_THICK + FRONT_WALL_Z_EXTRA;
-    const xExtent = CONTAINER_HALF_X + CONTAINER_WALL_THICK;
+    const xExtent = ix + CONTAINER_WALL_THICK;
     const addWall = (half: Vec3, pos: Vec3) => {
       const wall = new Body({ mass: 0, shape: new Box(half), material: wallMat });
       wall.position.copy(pos);
       world.addBody(wall);
     };
-    addWall(new Vec3(hx, wy, zExtentSide), new Vec3(CONTAINER_HALF_X + hx, wy, 0));
-    addWall(new Vec3(hx, wy, zExtentSide), new Vec3(-CONTAINER_HALF_X - hx, wy, 0));
+    addWall(new Vec3(hx, wy, zExtentSide), new Vec3(ix + hx, wy, 0));
+    addWall(new Vec3(hx, wy, zExtentSide), new Vec3(-ix - hx, wy, 0));
     addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, CONTAINER_HALF_Z + hz + FRONT_WALL_Z_EXTRA));
     addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, -CONTAINER_HALF_Z - hz));
 
@@ -432,9 +458,19 @@ export const ChipDropperTest: React.FC<{
   myUid: string;
   selfBalance: number;
   opponentBalance: number;
-  onRequestDrop: () => void;
-  onOpenCashShop?: () => void;
-}> = ({ room, myUid, selfBalance, opponentBalance, onRequestDrop, onOpenCashShop }) => {
+  /** True while Cash Chips control is hovered/focused — your pile glows (not the frame). */
+  highlightSelfTokens?: boolean;
+  selfTokensHoldCaption: string;
+  opponentTokensHoldCaption: string;
+}> = ({
+  room,
+  myUid,
+  selfBalance,
+  opponentBalance,
+  highlightSelfTokens = false,
+  selfTokensHoldCaption,
+  opponentTokensHoldCaption,
+}) => {
   const leftRef = useRef<ChipSimulationHandle | null>(null);
   const rightRef = useRef<ChipSimulationHandle | null>(null);
 
@@ -450,46 +486,34 @@ export const ChipDropperTest: React.FC<{
   return (
     <>
       {/* Below results / panic overlays (z-[300]+); above main table (z-[20]) */}
-      <div className="pointer-events-none fixed inset-0 z-[40]" aria-hidden>
-        <div
-          className="absolute top-[35%] left-[calc(50%-18vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
-          title="Their token catchment"
+      <div className="fixed inset-0 z-[40] pointer-events-none">
+        <HoldDelayTooltip
+          caption={opponentTokensHoldCaption}
+          className="pointer-events-auto absolute top-[35%] left-[calc(50%-18vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
           style={{ filter: tokenHueFilter(opponent?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
             Their tokens: {opponentBalance}
           </div>
           <ChipSimulationCanvas ref={leftRef} chipColor={oppPalette.chipColor} chipEmissive={oppPalette.chipEmissive} className="min-h-0 flex-1" />
-        </div>
-        <div
-          className="absolute top-1/2 left-[calc(50%+28vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
-          title="Your token catchment"
+        </HoldDelayTooltip>
+        <HoldDelayTooltip
+          caption={selfTokensHoldCaption}
+          className="pointer-events-auto absolute top-1/2 left-[calc(50%+28vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl"
           style={{ filter: tokenHueFilter(me?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
             Your tokens: {selfBalance}
           </div>
-          <ChipSimulationCanvas ref={rightRef} chipColor={myPalette.chipColor} chipEmissive={myPalette.chipEmissive} className="min-h-0 flex-1" />
-          {onOpenCashShop ? (
-            <div className="pointer-events-auto mt-auto flex w-full justify-center px-2 pb-2 pt-1">
-              <button
-                type="button"
-                onClick={onOpenCashShop}
-                className="rounded-lg border border-amber-500/75 bg-amber-400/95 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-950 shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-colors hover:bg-amber-300"
-              >
-                Cash Chips
-              </button>
-            </div>
-          ) : null}
-        </div>
+          <ChipSimulationCanvas
+            ref={rightRef}
+            chipColor={myPalette.chipColor}
+            chipEmissive={myPalette.chipEmissive}
+            pileAccent={highlightSelfTokens}
+            className="min-h-0 flex-1"
+          />
+        </HoldDelayTooltip>
       </div>
-      <button
-        type="button"
-        onClick={onRequestDrop}
-        className="pointer-events-auto fixed top-[max(4.75rem,calc(env(safe-area-inset-top,0px)+4.25rem))] right-[max(1rem,env(safe-area-inset-right,0px)+0.5rem)] z-[480] rounded-lg border border-red-400/75 bg-red-500/90 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-red-950 shadow-[0_6px_18px_rgba(0,0,0,0.35)] hover:bg-red-400"
-      >
-        Drop token
-      </button>
     </>
   );
 };

@@ -35,3 +35,28 @@ export function diceTestRollPayloadFromValues(opts: {
     presentation,
   };
 }
+
+/** Forced `1dc` silver coin (`value` 1 = Heads, 0 = Tails) with player labels beside the dice box. */
+export function diceTestCoinFlipPayload(opts: {
+  coinValue: 0 | 1;
+  headsPlayerName: string;
+  tailsPlayerName: string;
+  rollId: string;
+  uid: string;
+  presentation?: DicePresentation;
+  startedAt?: number;
+}): DiceTestRollPayload {
+  const { coinValue, headsPlayerName, tailsPlayerName, rollId, uid } = opts;
+  const startedAt = opts.startedAt ?? Date.now();
+  const presentation = opts.presentation ?? 'hudBottom';
+  return {
+    uid,
+    rollId,
+    notation: `1dc@${coinValue}`,
+    dice: [coinValue],
+    total: coinValue,
+    startedAt,
+    presentation,
+    coinFlipLegends: { heads: headsPlayerName, tails: tailsPlayerName },
+  };
+}
