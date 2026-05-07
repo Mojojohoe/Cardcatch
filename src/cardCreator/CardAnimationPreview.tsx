@@ -246,6 +246,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
                 presentation={animationId === 'deckPull' ? 'deckPull' : 'default'}
                 presentationPace="slow"
                 resolutionMorph={animationId === 'transformFlip' ? 'transform' : null}
+                resolutionMorphTick={animationId === 'transformFlip' ? loopTick + 1 : 0}
                 resolutionWiggleTick={animationId === 'upgradeWiggle' ? loopTick + 1 : 0}
                 noAnimate={!useEntranceMotion}
               />

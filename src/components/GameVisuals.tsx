@@ -372,6 +372,8 @@ export interface CardVisualProps {
   envyCovetedGlow?: boolean;
   /** Round-resolution: identity flip (Strength-style transform) only. */
   resolutionMorph?: 'transform' | null;
+  /** Optional cycle id so transform pulses/flips can replay without remounting card shell. */
+  resolutionMorphTick?: number;
   /** Resolution empower / Lust surge: incremented to replay a short wiggle without swapping to vector art. */
   resolutionWiggleTick?: number;
   /**
@@ -405,6 +407,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     clashGhost = false,
     envyCovetedGlow = false,
     resolutionMorph = null,
+    resolutionMorphTick = 0,
     resolutionWiggleTick = 0,
     motionLayout = true,
     panicBladeFace = false,
@@ -691,7 +694,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         <div className="pointer-events-none absolute inset-[-7px] z-[5]">
           {[0, 1, 2].map((i) => (
             <motion.div
-              key={`transform-pulse-${i}`}
+              key={`transform-pulse-${resolutionMorphTick}-${i}`}
               className="absolute inset-0 rounded-xl border-2 border-fuchsia-400/85"
               initial={{ opacity: 0.92, scale: 0.9 }}
               animate={{ opacity: 0, scale: 1.18 }}
@@ -712,7 +715,11 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         </div>
       )}
       <motion.div
-        key={`${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}-${resolutionWiggleTick}`}
+        key={
+          resolutionMorph === 'transform'
+            ? `${cardArt?.mode ?? 'vec'}-transform-${resolutionMorphTick}`
+            : `${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}-${resolutionWiggleTick}`
+        }
         className={`relative z-[1] flex flex-1 flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : PC_FACE_MINH}`}
         style={{ transformStyle: 'preserve-3d' }}
         animate={

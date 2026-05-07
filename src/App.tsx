@@ -1182,6 +1182,7 @@ const ResolutionSequence: React.FC<{
   const [lustHeartBurst, setLustHeartBurst] = useState(false);
   /** Per-seat resolution morph on the played card (`transform` = identity flip only). */
   const [resolutionCardMorph, setResolutionCardMorph] = useState<Record<string, 'transform'>>({});
+  const [resolutionCardMorphTick, setResolutionCardMorphTick] = useState<Record<string, number>>({});
   /** Bumped after each empower step so `CardVisual` replays a short wiggle without dropping artwork mode. */
   const [resolutionEmpowerWiggleTick, setResolutionEmpowerWiggleTick] = useState<Record<string, number>>({});
   const [resolutionEmpowerCaption, setResolutionEmpowerCaption] = useState<{ uid: string; text: string } | null>(null);
@@ -1420,6 +1421,7 @@ const ResolutionSequence: React.FC<{
           case 'TRANSFORM':
             if (event.uid && event.cardId && event.fromCardId && event.fromCardId !== event.cardId) {
               setResolutionCardMorph((m) => ({ ...m, [event.uid!]: 'transform' }));
+              setResolutionCardMorphTick((m) => ({ ...m, [event.uid!]: (m[event.uid!] ?? 0) + 1 }));
               /** Warm-up pulse + flip: swap exactly at the flat edge midpoint (x≈0). */
               await new Promise((r) => setTimeout(r, 560));
         if (!active) return;
@@ -1427,6 +1429,11 @@ const ResolutionSequence: React.FC<{
               await new Promise((r) => setTimeout(r, 560));
               if (!active) return;
               setResolutionCardMorph((m) => {
+                const next = { ...m };
+                delete next[event.uid!];
+                return next;
+              });
+              setResolutionCardMorphTick((m) => {
                 const next = { ...m };
                 delete next[event.uid!];
                 return next;
@@ -1998,6 +2005,7 @@ const ResolutionSequence: React.FC<{
                     lustHeartRulesActive={lustHeartResolution}
                     clashGhost={Boolean(postClashGhost[uid])}
                     resolutionMorph={resolutionCardMorph[uid] ?? null}
+                    resolutionMorphTick={resolutionCardMorphTick[uid] ?? 0}
                     resolutionWiggleTick={resolutionEmpowerWiggleTick[uid] ?? 0}
                   />
                   <AnimatePresence>
