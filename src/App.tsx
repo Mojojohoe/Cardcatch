@@ -91,6 +91,7 @@ import { CardShopModal } from './components/CardShopModal';
 import { ShopOpponentCursorOverlay } from './components/ShopOpponentCursorOverlay';
 import { DevilCurseSpinOverlay } from './components/DevilCurseSpinOverlay';
 import { PanicClashResolution, type PanicClashDismissReason } from './components/PanicClashResolution';
+import { PowerResolutionOverlay } from './components/PowerResolutionOverlay';
 import { SuitGlyph } from './components/SuitGlyphs';
 import { SuitRasterOrGlyph } from './components/SuitRasterOrGlyph';
 import { DualTableTrumpCard, DualTrumpTableLabel } from './components/DualTableTrumpCard';
@@ -99,7 +100,6 @@ import {
   CursePowerIcon,
   cursePowerIconClass,
   DesperationVignette,
-  GreenEyedMonsterIcon,
   MajorArcanaIconGlyph,
   PowerCardVisual,
   SUIT_COLORS,
@@ -137,6 +137,7 @@ import { CardAnimationPreview } from './cardCreator/CardAnimationPreview';
 import { PlayerSettingsMenu } from './components/PlayerSettingsMenu';
 import { usePlayerDisplayPreferences } from './playerDisplayPreferences';
 import { playSfx } from './audio/sfx';
+import { ornateGreenFrameStyle, ornatePurpleFrameStyle } from './ui/ornateFrame';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -1097,22 +1098,6 @@ function resolutionColumnMotion(fx: ResolutionFx, uid: string) {
 
 const HUD_TABLE_ACTION_BTN =
   'rounded-xl border-2 border-amber-500/85 bg-amber-400/95 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-emerald-950 shadow-[0_8px_26px_rgba(0,0,0,0.38)] transition-[filter,transform] hover:brightness-105 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-35 sm:px-8 sm:py-3 sm:text-[11px]';
-
-/** Power/curse card under the playing card: same footprint as suit (`PC_HAND`), peeking from left/right with a 30° tilt. */
-const PowerTuckedUnderSuit: React.FC<{
-  side: 'left' | 'right';
-  children: React.ReactNode;
-}> = ({ side, children }) => (
-  <div
-    className={`pointer-events-auto absolute left-1/2 top-1/2 z-0 h-[10.8rem] w-[7.2rem] -translate-y-1/2 ${
-      side === 'left'
-        ? '-translate-x-[calc(50%+1.35rem)] rotate-[30deg]'
-        : '-translate-x-[calc(50%-1.35rem)] -rotate-[30deg]'
-    }`}
-  >
-    {children}
-  </div>
-);
 
 const RESOLUTION_TEAR_LEFT_CLIP =
   'polygon(0% 0%, 53% 0%, 49% 12%, 55% 24%, 47% 38%, 56% 50%, 48% 64%, 54% 79%, 50% 100%, 0% 100%)';
@@ -2285,7 +2270,8 @@ const OpponentDesperationTopStrip: React.FC<{ opponent: PlayerData; room: RoomDa
   return (
     <HoldDelayTooltip caption={HUD_HOLD_OPPONENT_DESPERATION_CAPTION} className={`z-[28] w-full max-w-full shrink-0 ${className}`}>
     <div
-      className={`w-full max-w-full rounded-lg border border-purple-800/65 bg-purple-950/93 py-1.5 shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]`}
+      style={ornatePurpleFrameStyle(true)}
+      className="w-full max-w-full py-1.5"
     >
       <div className="flex w-full max-w-full items-start gap-1.5 px-2">
         <Skull
@@ -3647,7 +3633,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         (room.status === 'playing' || room.status === 'powering' || room.status === 'results') && (
           <div className="mb-2 flex w-full justify-center px-1">
             {room.settings.hostRole === 'Preydator' && opponent ? (
-              <div className="flex w-full max-w-[min(100%,34rem)] items-stretch justify-center gap-2 rounded-xl border border-purple-800/55 bg-purple-950/55 px-2 py-1.5 shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
+              <div
+                style={ornatePurpleFrameStyle(true)}
+                className="flex w-full max-w-[min(100%,34rem)] items-stretch justify-center gap-2 px-2 py-1.5"
+              >
                 {[me, opponent].map((p) => (
                   <div key={`tier-top-${p.uid}`} className="min-w-0 flex-1 rounded-lg border border-purple-700/40 bg-purple-900/35 px-2 py-1 text-center">
                     <span className="block truncate text-[9px] font-black uppercase tracking-wide text-purple-200/95">
@@ -3657,7 +3646,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 ))}
               </div>
             ) : desperationSpinAllowed(room, myUid, me) ? (
-              <div className="mx-auto flex w-full max-w-md min-h-[2.3rem] flex-col items-center justify-center rounded-xl border border-purple-800/55 bg-purple-950/55 px-4 py-1.5 text-center shadow-[inset_0_0_0_1px_rgba(168,85,247,0.12)]">
+              <div
+                style={ornatePurpleFrameStyle(true)}
+                className="mx-auto flex w-full max-w-md min-h-[2.3rem] flex-col items-center justify-center px-4 py-1.5 text-center"
+              >
                 <span className="max-w-full text-[10px] font-black uppercase leading-snug tracking-widest text-purple-200/95">
                   {me.name}: {desperationLadderLabel(room.settings.tiers, me.desperationTier) ?? 'Off ladder'}
                 </span>
@@ -3821,24 +3813,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   </span>
                        </div>
                 <div className="flex h-[13rem] w-full min-w-0 items-end justify-center gap-1.5 px-2 opacity-[0.82] sm:h-[13.5rem] sm:gap-2 sm:px-4 sm:opacity-95 [@media(max-height:1100px)]:h-[10.75rem] [@media(max-height:1100px)]:sm:h-[11.25rem]">
-                  {room.status === 'playing' &&
-                    room.settings.enableCurseCards &&
-                    envyCurseActive(room.activeCurses ?? []) &&
-                    room.envyCovet &&
-                    room.envyCovet.uid === opponent.uid && (
-                      <motion.div
-                        className="pointer-events-none flex shrink-0 flex-col items-center justify-center opacity-[0.44]"
-                        initial={{ opacity: 0.44 }}
-                        animate={{ y: [0, -4, 0] }}
-                        transition={{ duration: 1.14, repeat: Infinity, ease: 'easeInOut' }}
-                        title={`Green-Eyed Monster covets ${describeCardPlain(room.envyCovet.cardId)} in ${opponent.name}'s hand`}
-                      >
-                        <GreenEyedMonsterIcon className="h-[2.85rem] w-[4rem] sm:h-12 sm:w-[4.7rem]" />
-                        <span className="mt-0.5 max-w-[4.25rem] text-center text-[5.5px] font-black uppercase leading-tight tracking-wide text-emerald-400/95">
-                          Covets their hand
-                        </span>
-                      </motion.div>
-                    )}
                   <div className="mx-auto flex w-max max-w-full min-w-0 flex-nowrap items-center justify-center -space-x-8 sm:-space-x-12">
                     {Array.from({ length: opponent.hand.length }).map((_, i) => (
                       <CardVisual key={`og-${i}`} card="" revealed={false} disabled role={opponent.role} delay={i * 0.08} />
@@ -3892,16 +3866,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
               <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:w-full sm:max-w-[min(100%,min(94vw,44rem))] md:max-w-[min(100%,min(92vw,52rem))] xl:max-w-[min(100%,min(92vw,64rem))] sm:px-3">
                 <div className="relative z-10 flex w-full min-w-0 flex-col items-center">
-               {room.status === 'playing' &&
-                 room.settings.enableCurseCards &&
-                 envyCurseActive(room.activeCurses ?? []) &&
-                 room.envyCovet &&
-                 room.players[room.envyCovet.uid] && (
-                   <p className="mb-2 max-w-[min(100%,26rem)] px-3 text-center text-[10px] font-black uppercase leading-snug tracking-wide text-emerald-300/95 drop-shadow-[0_0_14px_rgba(16,185,129,0.22)]">
-                     Green-Eyed Monster covets {describeCardPlain(room.envyCovet.cardId)} from{' '}
-                     {room.players[room.envyCovet.uid].name}.
-                   </p>
-                 )}
                {!(
                  room.status === 'powering' &&
                  me.currentMove &&
@@ -3919,129 +3883,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                )}
                
                <AnimatePresence mode="wait">
-                 {room.status === 'powering' && me.currentMove && opponent?.currentMove ? (
-                   <motion.div
-                     key="powering-cards"
-                     initial={{ opacity: 0, y: 10 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     className="flex flex-col items-center gap-3"
-                   >
-                     {room.targetSuit && (
-                       <HoldDelayTooltip
-                         caption={HUD_HOLD_TARGET_SUIT_CAPTION}
-                         className="flex flex-col items-center"
-                       >
-                         <CompactTableGlyphRow suit={room.targetSuit} greedJointTrump={greedJointTrumpUi} />
-                       </HoldDelayTooltip>
-                     )}
-                     <div className="flex items-center gap-8">
-                       <div className="relative flex flex-col items-center gap-2 pt-8 sm:pt-10">
-                         <span className="text-[9px] uppercase font-black text-emerald-400">{me.name}</span>
-                         {room.settings.enableCurseCards &&
-                           wrathCurseActive(room.activeCurses ?? []) &&
-                           room.wrathTargetUid === myUid &&
-                           room.wrathMinionCard && (
-                             <motion.div
-                               className="pointer-events-none absolute top-0 left-1/2 z-40 flex -translate-x-1/2 justify-center"
-                               initial={{ y: -4, opacity: 1 }}
-                               animate={{ y: [0, -8, 0] }}
-                               transition={{ y: { repeat: Infinity, duration: 1.15, ease: 'easeInOut' } }}
-                             >
-                               <div className="origin-top scale-[0.52] opacity-95 drop-shadow-[0_0_20px_rgba(220,38,38,0.45)]">
-                                 <CardVisual card={room.wrathMinionCard} revealed noAnimate presentation="none" small />
-                               </div>
-                             </motion.div>
-                           )}
-                         {room.settings.enableCurseCards &&
-                           envyCurseActive(room.activeCurses ?? []) &&
-                           room.envyCovet &&
-                           room.envyCovet.uid === myUid &&
-                           room.envyCovet.cardId === me.currentMove && (
-                             <motion.div
-                               className="pointer-events-none absolute top-0 left-1/2 z-[41] flex -translate-x-1/2 flex-col items-center gap-0.5"
-                               initial={{ y: -2, opacity: 1 }}
-                               animate={{ y: [0, -7, 0] }}
-                               transition={{ y: { repeat: Infinity, duration: 1.12, ease: 'easeInOut' } }}
-                             >
-                               <GreenEyedMonsterIcon className="h-11 w-[5.35rem] opacity-95 drop-shadow-[0_0_20px_rgba(16,185,129,0.48)] sm:h-12 sm:w-[5.85rem]" />
-                               <span className="text-[7px] font-black uppercase tracking-wider text-emerald-400/95">
-                                 Coveted
-                               </span>
-                             </motion.div>
-                           )}
-                         <CardVisual
-                           card={me.currentMove}
-                           revealed
-                           lustHeartRulesActive={lustHeartUi}
-                           envyCovetedGlow={Boolean(
-                             room.settings.enableCurseCards &&
-                               envyCurseActive(room.activeCurses ?? []) &&
-                               room.envyCovet?.uid === myUid &&
-                               room.envyCovet.cardId === me.currentMove,
-                           )}
-                         />
-                         {powerShowdown && me.currentPowerCard !== null && (
-                           <div className="relative -mt-1 flex flex-col items-center gap-0.5">
-                             <PowerCardVisual cardId={0} small revealed={false} />
-                             <span className="text-[6px] font-black uppercase tracking-widest text-slate-500">Power</span>
-                           </div>
-                         )}
-                       </div>
-                       <div className="relative flex flex-col items-center gap-2 pt-8 sm:pt-10">
-                         <span className="text-[9px] uppercase font-black text-emerald-500">{opponent.name}</span>
-                         {room.settings.enableCurseCards &&
-                           wrathCurseActive(room.activeCurses ?? []) &&
-                           room.wrathTargetUid === opponent?.uid &&
-                           room.wrathMinionCard && (
-                             <motion.div
-                               className="pointer-events-none absolute top-0 left-1/2 z-40 flex -translate-x-1/2 justify-center"
-                               initial={{ y: -4, opacity: 1 }}
-                               animate={{ y: [0, -8, 0] }}
-                               transition={{ y: { repeat: Infinity, duration: 1.15, ease: 'easeInOut' } }}
-                             >
-                               <div className="origin-top scale-[0.52] opacity-95 drop-shadow-[0_0_20px_rgba(220,38,38,0.45)]">
-                                 <CardVisual card={room.wrathMinionCard} revealed noAnimate presentation="none" small />
-                               </div>
-                             </motion.div>
-                           )}
-                         {room.settings.enableCurseCards &&
-                           envyCurseActive(room.activeCurses ?? []) &&
-                           room.envyCovet &&
-                           room.envyCovet.uid === opponent.uid &&
-                           room.envyCovet.cardId === opponent.currentMove && (
-                             <motion.div
-                               className="pointer-events-none absolute top-0 left-1/2 z-[41] flex -translate-x-1/2 flex-col items-center gap-0.5"
-                               initial={{ y: -2, opacity: 1 }}
-                               animate={{ y: [0, -7, 0] }}
-                               transition={{ y: { repeat: Infinity, duration: 1.12, ease: 'easeInOut' } }}
-                             >
-                               <GreenEyedMonsterIcon className="h-11 w-[5.35rem] opacity-95 drop-shadow-[0_0_20px_rgba(16,185,129,0.48)] sm:h-12 sm:w-[5.85rem]" />
-                               <span className="text-[7px] font-black uppercase tracking-wider text-emerald-400/95">
-                                 Coveted
-                               </span>
-                             </motion.div>
-                           )}
-                         <CardVisual
-                           card={opponent.currentMove}
-                           revealed
-                           lustHeartRulesActive={lustHeartUi}
-                           envyCovetedGlow={Boolean(
-                             room.settings.enableCurseCards &&
-                               envyCurseActive(room.activeCurses ?? []) &&
-                               room.envyCovet?.uid === opponent.uid &&
-                               room.envyCovet.cardId === opponent.currentMove,
-                           )}
-                         />
-                         {powerShowdown && opponent.currentPowerCard !== null && (
-                           <div className="relative -mt-1 flex flex-col items-center gap-0.5">
-                             <PowerCardVisual cardId={0} small revealed={false} />
-                             <span className="text-[6px] font-black uppercase tracking-widest text-slate-500">Power</span>
-                           </div>
-                         )}
-                       </div>
-                     </div>
-                   </motion.div>
-                 ) : isWheelSpinning ? (
+                 {isWheelSpinning ? (
                    <motion.div
                      key="wheel"
                      initial={{ opacity: 0, scale: 0.8 }}
@@ -4076,31 +3918,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                        const greedActive =
                          room.settings.enableCurseCards && greedCurseActive(room.activeCurses ?? []);
                        const joint = jointTableTrumpPair(ts, { greedActive });
-                       const envyCovetPlaying =
-                         room.status === 'playing' &&
-                         room.settings.enableCurseCards &&
-                         envyCurseActive(room.activeCurses ?? []) &&
-                         room.envyCovet;
                        return (
                          <>
-                           {envyCovetPlaying && room.envyCovet && room.players[room.envyCovet.uid] && (
-                             <div className="mb-2 flex flex-col items-center gap-2">
-                               <GreenEyedMonsterIcon className="h-14 w-[6.25rem] shadow-[0_12px_36px_rgba(16,185,129,0.35)] sm:h-16 sm:w-[7rem]" />
-                               <div className="pointer-events-auto origin-center scale-[0.42] drop-shadow-[0_10px_28px_rgba(16,185,129,0.35)]">
-                                 <CardVisual
-                                   card={room.envyCovet.cardId}
-                                   revealed
-                                   small
-                                   noAnimate
-                                   presentation="none"
-                                   detailTooltip={`Coveted from ${room.players[room.envyCovet.uid].name}'s hand — play this suit card to feed the monster.`}
-                                 />
-                               </div>
-                               <span className="max-w-[18rem] px-2 text-center text-[9px] font-bold uppercase tracking-wide text-emerald-400/95">
-                                 Prey · {room.players[room.envyCovet.uid].name}
-                        </span>
-                     </div>
-                           )}
                            {joint ? (
                              <DualTableTrumpCard suits={joint} />
                            ) : ts ? (
@@ -4233,6 +4052,18 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             </div>
           ) : null}
       </div>
+
+      <AnimatePresence>
+        {room.status === 'powering' && (
+          <PowerResolutionOverlay
+            room={room}
+            myUid={myUid}
+            lustHeartRules={lustHeartUi}
+            powerShowdown={powerShowdown}
+            greedJointTrumpUi={greedJointTrumpUi}
+          />
+        )}
+      </AnimatePresence>
 
       {room.status === 'results' && room.lastOutcome && (
         <motion.div 
@@ -4416,6 +4247,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                              </span>
                              {panicDiceResultsHover ? (
                                <div
+                                style={ornateGreenFrameStyle(true)}
                                  className={`pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-[340] max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 ${HUD_INSTANT_TOOLTIP_PANEL_CLASS}`}
                                >
                                  {PANIC_DICE_USED_HOVER}
@@ -4622,13 +4454,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   >
                     {envyCovetedHere && (
                       <motion.div
-                        className="pointer-events-none absolute -top-[3.35rem] left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-0.5"
+                        className="pointer-events-none absolute -top-[3.8rem] left-1/2 z-30 flex -translate-x-1/2 flex-col items-center"
                         title={ENVY_COVET_CARD_TOOLTIP}
                         initial={{ y: 0 }}
                         animate={{ y: [0, -5, 0] }}
                         transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
                       >
-                        <GreenEyedMonsterIcon className="h-10 w-[5.75rem] drop-shadow-[0_0_14px_rgba(16,185,129,0.5)] sm:h-11 sm:w-[6.25rem]" />
+                        <div className="origin-center scale-[0.52] drop-shadow-[0_0_14px_rgba(16,185,129,0.5)] sm:scale-[0.56]">
+                          <PowerCardVisual cardId={CURSE_GREEN_EYED_MONSTER} small revealed curseRackPeek />
+                        </div>
                       </motion.div>
                     )}
                     {selected && !me.confirmed && (
@@ -4706,6 +4540,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     )}
                     {panicDiceStripHover ? (
                       <div
+                        style={ornateGreenFrameStyle(true)}
                         className={`pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-[60] max-w-[min(20rem,calc(100vw-3rem))] -translate-x-1/2 sm:left-0 sm:max-w-[min(22rem,calc(100vw-11rem))] sm:translate-x-0 ${HUD_INSTANT_TOOLTIP_PANEL_CLASS}`}
                       >
                         {panicStripHoverText}
@@ -4760,6 +4595,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 )}
                 {panicDiceStripHover ? (
                   <div
+                    style={ornateGreenFrameStyle(true)}
                     className={`pointer-events-none absolute bottom-full left-1/2 z-[60] mb-3 max-w-[min(22rem,calc(100vw-2.5rem))] -translate-x-1/2 ${HUD_INSTANT_TOOLTIP_PANEL_CLASS}`}
                   >
                     {panicStripHoverText}

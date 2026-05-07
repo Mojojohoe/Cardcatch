@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import type { DicePresentation, DiceTestRollPayload } from '../services/gameService';
+import { usePlayerDisplayPreferences } from '../playerDisplayPreferences';
 
 /**
  * Dice test overlay — uses `@3d-dice/dice-box-threejs` **only**, no custom mesh overlay.
@@ -29,6 +30,7 @@ function diceAssetPath(): string {
 }
 
 export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> = ({ roll }) => {
+  const { sfxVolume } = usePlayerDisplayPreferences();
   const placement: DicePresentation = roll?.presentation ?? 'hudBottom';
   const reactId = useId().replace(/:/g, '');
   const mountId = `dice-box-test-${reactId}`;
@@ -79,7 +81,8 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
         const DiceBox = (mod.default ?? mod) as DiceBoxCtor;
         diceRef.current = new DiceBox(selector, {
           assetPath: diceAssetPath(),
-          sounds: false,
+          sounds: true,
+          volume: Math.max(0, Math.min(100, Math.round(sfxVolume))),
           theme_customColorset: {
             name: 'bone_die',
             foreground: '#f4efe6',
@@ -109,6 +112,14 @@ export const DiceBoxTestOverlay: React.FC<{ roll: DiceTestRollPayload | null }> 
       initPromiseRef.current = null;
     }
   };
+
+  useEffect(() => {
+    const api = diceRef.current as (DiceBoxThreeApi & { volume?: number; config?: { volume?: number } }) | null;
+    if (!api) return;
+    const v = Math.max(0, Math.min(100, Math.round(sfxVolume)));
+    api.volume = v;
+    if (api.config) api.config.volume = v;
+  }, [sfxVolume]);
 
   useEffect(() => {
     let cancelled = false;

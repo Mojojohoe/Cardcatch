@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import { Sparkles } from 'lucide-react';
 import {
   CardVisual,
-  GreenEyedMonsterIcon,
   PowerCardVisual,
   SUIT_COLORS,
 } from './GameVisuals';
@@ -16,6 +15,7 @@ import {
 } from '../services/gameService';
 import {
   CURSE_ENVY,
+  CURSE_GREEN_EYED_MONSTER,
   CURSE_GLUTTONY,
   CURSE_GREED,
   CURSE_LUST,
@@ -116,27 +116,23 @@ const CurseZonePanelInner: React.FC<{
           layout
           className={`${curseCol} gap-1 rounded-xl border-2 border-emerald-700/70 bg-zinc-950 px-1 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]`}
         >
-          <PowerCardVisual cardId={CURSE_ENVY} revealed matchHandCard curseRackPeek />
-          <p className="text-center text-[9px] font-black uppercase tracking-wider text-emerald-400">Envy</p>
-          <div className="mt-0.5 flex flex-col items-center gap-0.5">
-            <GreenEyedMonsterIcon className="mx-auto h-10 w-[4.95rem] drop-shadow-[0_0_16px_rgba(16,185,129,0.38)] sm:h-11 sm:w-[5.45rem]" />
-            <p className="text-center font-mono text-[12px] font-black tabular-nums text-emerald-200">
-              {(typeof envy.envyMonsterHp === 'number' ? envy.envyMonsterHp : ENVY_MONSTER_START_HP).toString()}
-              <span className="text-[9px] font-bold text-emerald-500/90"> HP</span>
-            </p>
-            <p className="px-0.5 text-center text-[8px] font-bold uppercase tracking-wide text-emerald-500/90">Monster</p>
+          <div className="flex items-start gap-1.5">
+            <PowerCardVisual cardId={CURSE_ENVY} revealed matchHandCard curseRackPeek />
+            <div className="relative">
+              <PowerCardVisual cardId={CURSE_GREEN_EYED_MONSTER} revealed matchHandCard curseRackPeek />
+              <span className="pointer-events-none absolute right-1 top-1 rounded bg-black/70 px-1 py-[1px] font-mono text-[9px] font-black tabular-nums text-emerald-200">
+                {(typeof envy.envyMonsterHp === 'number' ? envy.envyMonsterHp : ENVY_MONSTER_START_HP).toString()}
+              </span>
+            </div>
           </div>
+          <p className="text-center text-[9px] font-black uppercase tracking-wider text-emerald-400">Envy</p>
         </motion.div>
       )}
       {wrath && (
         <motion.div layout className={curseCol}>
-          <p className="text-center text-[9px] font-black uppercase tracking-wider text-red-500">Wrath</p>
-          <p className="text-center font-mono text-[10px] font-bold tabular-nums text-red-200/95">
-            {(wrath.wrathRound ?? 1)}/5
-          </p>
-          {wrathMinionCard ? (
-            <div className="mt-1 flex flex-col items-center gap-0.5">
-              <p className="text-center text-[8px] font-bold uppercase tracking-wide text-red-300/90">Agent</p>
+          <div className="flex items-start gap-1.5">
+            <PowerCardVisual cardId={CURSE_WRATH} revealed matchHandCard curseRackPeek />
+            {wrathMinionCard ? (
               <div className="origin-center scale-[0.52]">
                 <CardVisual
                   card={wrathMinionCard}
@@ -146,10 +142,14 @@ const CurseZonePanelInner: React.FC<{
                   detailTooltip={`${describeWrathMinionTitle(wrathMinionCard)} — mark is chosen when the round resolves.`}
                 />
               </div>
-            </div>
-          ) : (
-            <p className="mt-1 px-0.5 text-center text-[8px] font-bold text-red-300/80">Next round…</p>
-          )}
+            ) : (
+              <div className="flex h-[4.1rem] w-[2.7rem] items-center justify-center rounded-md border border-red-900/50 bg-black/40 text-[7px] font-bold uppercase text-red-300/80">
+                Soon
+              </div>
+            )}
+          </div>
+          <p className="text-center text-[9px] font-black uppercase tracking-wider text-red-500">Wrath</p>
+          <p className="text-center font-mono text-[10px] font-bold tabular-nums text-red-200/95">{(wrath.wrathRound ?? 1)}/5</p>
         </motion.div>
       )}
       {sloth && (

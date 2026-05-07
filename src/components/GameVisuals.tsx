@@ -43,6 +43,7 @@ import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide
 import { useOptionalCardArt } from '../cardArt/cardArtContext';
 import { cardArtAssetUrl } from '../cardArt/paths';
 import { isShopPackPlaceholder } from '../shopPack';
+import { ornateGreenFrameStyle } from '../ui/ornateFrame';
 import {
   shippedBundledPowerBackUrl,
   shippedBundledPowerFaceUrl,
@@ -850,12 +851,8 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
           createPortal(
             <div
               ref={popRef}
-              style={tooltipStyle}
-              className={`max-w-[16rem] rounded-xl border px-3 py-2.5 text-left text-[11px] font-semibold leading-snug shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px] ${
-                detailTooltip && tipOpen
-                  ? 'border-violet-800/85 bg-stone-950/98 text-violet-50'
-                  : 'border-yellow-500/40 bg-slate-950/98 text-slate-100'
-              }`}
+              style={{ ...tooltipStyle, ...ornateGreenFrameStyle(true) }}
+              className="max-w-[16rem] px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px]"
             >
               {detailTooltip && tipOpen ? detailTooltip : holdCaption}
             </div>,
@@ -1128,10 +1125,8 @@ export const PowerCardVisual: React.FC<{
           createPortal(
             <div
               ref={popRef}
-              style={tooltipStyle}
-              className={`rounded-xl px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${
-                curseChrome ? `border bg-zinc-950/98 ${curseChrome.tooltipBorder}` : 'border border-yellow-500/40 bg-slate-950/98'
-              } ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+              style={{ ...tooltipStyle, ...ornateGreenFrameStyle(true) }}
+              className={`px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
               aria-hidden={!tipOpen}
             >
               <div className="flex gap-3 items-start text-left">
@@ -1268,10 +1263,8 @@ export const PowerCardVisual: React.FC<{
         createPortal(
           <div
             ref={popRef}
-            style={tooltipStyle}
-            className={`rounded-xl px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${
-              curseChrome ? `border bg-zinc-950/98 ${curseChrome.tooltipBorder}` : 'border border-yellow-500/40 bg-slate-950/98'
-            } ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+            style={{ ...tooltipStyle, ...ornateGreenFrameStyle(true) }}
+            className={`px-3 py-2.5 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
             aria-hidden={!tipOpen}
           >
             <div className="flex gap-3 items-start text-left">

@@ -418,6 +418,10 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const previewPowerId = selected.startsWith('power-') ? Number(selected.slice(6)) : NaN;
   const previewCurseId = selected.startsWith('curse-') ? Number(selected.slice(6)) : NaN;
+  const prefersAssembledPreviewForOverlayCaption = Boolean(
+    (selected.startsWith('power-') || selected.startsWith('curse-')) &&
+      (draft?.backgroundOnly || draft?.backgroundCaption?.text?.trim()),
+  );
   const previewIsBack = selected.startsWith('back-');
 
   const handleSaveCard = () => {
@@ -800,7 +804,13 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Preview</p>
                   <div className="aspect-[24/37] w-full overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
                     <RasterCardArtPreview>
-                      {Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
+                      {prefersAssembledPreviewForOverlayCaption ? (
+                        <ScaledAssembledCardFace
+                          card={selected}
+                          override={draft ?? undefined}
+                          previewDefaults={draftDefaults}
+                        />
+                      ) : Number.isFinite(previewPowerId) && selected.startsWith('power-') ? (
                         <PowerCardVisual cardId={previewPowerId} small matchHandCard revealed curseRackPeek />
                       ) : Number.isFinite(previewCurseId) && selected.startsWith('curse-') ? (
                         <PowerCardVisual cardId={previewCurseId} small matchHandCard revealed curseRackPeek />
@@ -1465,7 +1475,7 @@ export const CardCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Preview ({selected})</p>
                   <div className="aspect-[24/37] w-full overflow-hidden rounded-xl border border-slate-700 bg-black shadow-xl">
                     <RasterCardArtPreview>
-                      {isAssembledRasterCardId(selected) ? (
+                      {isAssembledRasterCardId(selected) || prefersAssembledPreviewForOverlayCaption ? (
                         <ScaledAssembledCardFace
                           card={selected}
                           override={draft ?? manifest[selected] ?? undefined}

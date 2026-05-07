@@ -10,6 +10,7 @@ import {
 } from '../wheels';
 import { DesperationTierRow, Suit, SUITS } from '../types';
 import { desperationLadderLabel, desperationSidebarHighlightLadderIdx } from '../utils/desperationUi';
+import { ornatePurpleFrameStyle } from '../ui/ornateFrame';
 
 const DESPERATION_WHEEL_SEGMENTS = resolveWheelSegments(desperationWheelDefinition);
 
@@ -70,9 +71,10 @@ export const DesperationWheel: React.FC<{
   const layoutClass = opposingHandOverlay
     ? 'relative z-[24] mx-auto mt-10 flex w-full max-w-[min(100%,20rem)] flex-col items-center justify-start overflow-visible px-1 py-1 sm:mt-14'
     : 'absolute inset-0 z-[200] flex flex-col items-center justify-center p-4 overflow-hidden rounded-3xl transition-all duration-1000';
+  const ornatePanelStyle = ornatePurpleFrameStyle(opposingHandOverlay);
 
   return (
-    <div className={`${layoutClass} ${rootTone}`}>
+    <div className={`${layoutClass} ${rootTone}`} style={ornatePanelStyle}>
       {!isSpectator && !opposingHandOverlay && (
         <div className="absolute top-8 left-8 hidden space-y-4 sm:block">
           <h3 className="text-[10px] font-black uppercase tracking-widest border-l-4 border-purple-400 pl-3 text-purple-400">

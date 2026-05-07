@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePowerTooltipPosition } from '../hooks/usePowerTooltipPosition';
+import { ornateGreenFrameStyle } from '../ui/ornateFrame';
 
 const HOVER_HOLD_MS = 700;
 
@@ -58,7 +59,7 @@ export const HoldDelayTooltip: React.FC<Props> = ({ caption, children, className
       {children}
       {open && typeof document !== 'undefined'
         ? createPortal(
-            <div ref={popRef} style={tooltipStyle} className={HUD_HOLD_TOOLTIP_PANEL_CLASS}>
+            <div ref={popRef} style={{ ...tooltipStyle, ...ornateGreenFrameStyle(true) }} className={HUD_HOLD_TOOLTIP_PANEL_CLASS}>
               {caption}
             </div>,
             document.body,
