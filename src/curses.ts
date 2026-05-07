@@ -20,6 +20,37 @@ export const CURSE_IDS = [
   CURSE_SLOTH,
 ] as const;
 
+/** Seven table curses on the Devil’s post-round wheel (excludes duplicate Envy creature card). */
+export const DEVIL_TABLE_CURSE_IDS = [
+  CURSE_LUST,
+  CURSE_GLUTTONY,
+  CURSE_GREED,
+  CURSE_PRIDE,
+  CURSE_WRATH,
+  CURSE_ENVY,
+  CURSE_SLOTH,
+] as const;
+
+/** Strong brand hues for SVG overlays / Devil wheel wedges (matches curse chrome). */
+export const CURSE_TINT_HEX: Record<number, string> = {
+  [CURSE_LUST]: '#db2777',
+  [CURSE_GLUTTONY]: '#ea580c',
+  [CURSE_GREED]: '#ca8a04',
+  [CURSE_PRIDE]: '#e2e8f0',
+  [CURSE_WRATH]: '#dc2626',
+  [CURSE_ENVY]: '#10b981',
+  [CURSE_GREEN_EYED_MONSTER]: '#10b981',
+  [CURSE_SLOTH]: '#0ea5e9',
+};
+
+/** Uniform pick over {@link DEVIL_TABLE_CURSE_IDS} for `offset` ∈ [0,1). */
+export function pickDevilCurseFromOffset(offset: number): number {
+  const ids = DEVIL_TABLE_CURSE_IDS;
+  const n = ids.length;
+  const t = Math.max(0, Math.min(0.999999, offset)) * n;
+  return ids[Math.min(n - 1, Math.floor(t))]!;
+}
+
 export type CurseCardId = (typeof CURSE_IDS)[number];
 
 /** Hunger meter threshold — when reached while hearts feed, Lust clears (unless hearts exhausted first). */

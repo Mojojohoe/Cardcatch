@@ -44,7 +44,7 @@ power.2=If opponent uses a power card: three draft decoys plus optional swap of 
 power.3=Gain copies of both resulting suit cards after the round — the final cards on the table after transforms, frogging, and curse clash effects.
 power.4=Changes your card to the target suit and adds 2 to its value.
 power.5=Reveals half of the opponent's hand after the round, including power cards.
-power.6=Changes the target suit to hearts before round resolution.
+power.6=Transforms both committed plays to Hearts (rank unchanged; Jokers untouched).
 power.7=If the player loses the round, their suit card is returned to their hand with +1 value.
 power.8=Increases the played card value by 4.
 power.9=Swaps your play for a hand card that wins or draws against the opponent after clash penalties (e.g. Wrath debuffs on effective rank).
@@ -53,13 +53,13 @@ power.11=Conjures a brand-new suit card on the legal table suit; opponent must b
 power.12=Player forfeits the round, but gains 3 cards.
 power.13=Wins the round outright unless blocked by The Tower.
 power.14=The round is drawn. Players get suit cards back, power cards are consumed.
-power.15=Devil Deal: bend your suit to a King or spin the trump wheel against the opponent's suit. Pact injects a random curse next round (skipped if any curse holds the table). If you lose, you discard 1 random card.
+power.15=Devil Deal: bend your suit to a King or spin the trump wheel against the opponent's suit. After the round, a shared wheel picks the table curse among seven sins (skipped if any curse already holds the table). If you lose, you discard 1 random card.
 power.16=Stops the effects of an opponent's power card.
 power.17=Adds 'Stars' suit to the target wheel. Star suit transforms all played cards to Stars.
 power.18=Adds 'Moons' suit to target wheel and deck. Also conjures two Moons-suited suit cards next round.
 power.19=Gain a copy of your committed suit card exactly as it was locked in before any round modifiers — before powers, curses, or transforms resolve.
-power.20=Inverts round resolution: whoever would have won loses, and vice versa.
-power.21=Grants a random Major from the deck and conjures a brand-new random suit card (not drawn from the table deck).
+power.20=Whoever holds fewer cards in hand wins the round (same count → stalemate).
+power.21=Grants a random Major Arcana from the power deck and a random curse card into your power pile.
 
 # Curse descriptions by id
 curse.100=Hearts dominate the target wheel. Hearts played bump +3 ranks (past Ace becomes God at 19). Lust meter feeds until 100 or no hearts remain in deck or hands.

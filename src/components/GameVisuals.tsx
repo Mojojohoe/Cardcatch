@@ -380,6 +380,8 @@ export interface CardVisualProps {
   motionLayout?: boolean;
   /** Panic dice ephemeral blade — CardRed stock + red suit marks. */
   panicBladeFace?: boolean;
+  /** Shared raster face scale for the bottom hand row so every slot matches. */
+  handUniformRasterScale?: number;
 }
 
 export const CardVisual: React.FC<CardVisualProps> = (props) => {
@@ -405,6 +407,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     resolutionWiggleTick = 0,
     motionLayout = true,
     panicBladeFace = false,
+    handUniformRasterScale,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -674,7 +677,11 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       >
         {useAssembledFace ? (
           <div className="relative z-[1] h-full w-full min-h-0 overflow-visible rounded-[inherit]">
-            <ScaledAssembledCardFace card={card} override={cardArtOverride} />
+            <ScaledAssembledCardFace
+              card={card}
+              override={cardArtOverride}
+              uniformScale={handUniformRasterScale}
+            />
           </div>
         ) : (
         <>

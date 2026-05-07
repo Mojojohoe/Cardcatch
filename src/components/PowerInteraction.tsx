@@ -52,12 +52,12 @@ const optionMeta: Record<string, { title: string; description: string }> = {
   DEVIL_KING: {
     title: 'Crown Your Play — King',
     description:
-      'Your committed suit card becomes a King (same pip suit). Summons a random curse next round if the table has none. If you lose, you discard 1 random card.',
+      'Your committed suit card becomes a King (same pip suit). After the round, a shared wheel picks the table curse if none is active. If you lose, you discard 1 random card.',
   },
   DEVIL_RANDOMIZE: {
     title: 'Spin Opponent Suit',
     description:
-      'Spins the current trump/target wheel against the opponent’s play — their suit becomes the result (rank unchanged). Same curse / lose-card pact as Crown.',
+      'Spins the current trump/target wheel against the opponent’s play — their suit becomes the result (rank unchanged). Same post-round curse wheel / lose-card pact as Crown.',
   },
   SPIN_WHEEL: { title: 'Spin the wheel', description: 'Seven weighted outcomes—including round swing, cards, and jackpot.' },
 };
@@ -119,14 +119,18 @@ export const PowerDecisionModal: React.FC<{
           animate={{ y: 0, opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-          className={`relative z-10 mx-auto flex min-h-0 w-full ${isPriestess ? 'max-w-[min(96vw,78rem)]' : 'max-w-lg'} flex-col overflow-y-auto rounded-t-3xl border border-white/20 bg-slate-950/97 p-5 shadow-[0_-20px_80px_rgba(0,0,0,0.55)] sm:rounded-[2rem] sm:border-2 sm:p-8 ${
+          className={`relative z-10 mx-auto flex min-h-0 w-full ${
+            isPriestess ? 'max-w-[min(96vw,78rem)]' : isWheel ? 'max-w-[min(96vw,56rem)]' : 'max-w-lg'
+          } flex-col overflow-y-auto rounded-t-3xl border border-white/20 bg-slate-950/97 p-5 shadow-[0_-20px_80px_rgba(0,0,0,0.55)] sm:rounded-[2rem] sm:border-2 sm:p-8 ${
             dockBottom
               ? compactPane
                 ? 'max-h-[4.75rem] sm:max-h-[5rem]'
                 : 'max-h-[5.25rem] sm:max-h-[5.5rem]'
               : isPriestess
                 ? 'max-h-[min(96vh,62rem)]'
-                : 'max-h-[min(92vh,52rem)]'
+                : isWheel
+                  ? 'max-h-[min(94vh,64rem)]'
+                  : 'max-h-[min(92vh,52rem)]'
           }`}
         >
           <div className="absolute right-3 top-3 z-40 sm:right-4 sm:top-4">
@@ -310,7 +314,7 @@ export const PowerDecisionModal: React.FC<{
                             <FortuneWheelVisual
                               spinning={false}
                               offset={wheelOffsetPreview}
-                              sizeClass="w-[min(16rem,100%)] max-w-[min(16rem,88vw)] sm:w-[min(18rem,42vw)]"
+                              sizeClass="w-[min(24rem,94vw)] max-w-[min(28rem,96vw)] sm:w-[min(28rem,72vw)] md:w-[min(30rem,62vw)]"
                             />
                           </div>
                           <button

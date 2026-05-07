@@ -4,9 +4,6 @@
  */
 export const PC_HAND = 'w-[7.2rem] h-[10.8rem]';
 export const PC_HAND_VEC_SM = 'w-[4.2rem] h-[9.9rem]';
-/** @deprecated Hand assembled faces now use {@link PC_HAND} / {@link PC_HAND_VEC_SM} for a uniform footprint. */
-export const PC_ASM_SM = 'w-[3rem] sm:w-[4.2rem]';
-export const PC_ASM_MD = 'w-[3.6rem] sm:w-[7.2rem]';
 export const PC_BACK_SM = 'w-[2.7rem] h-[5.7rem] sm:w-[3.6rem] sm:h-[8.7rem]';
 export const PC_BACK_MD = 'w-[3.6rem] aspect-[24/37] shrink-0 sm:w-[7.2rem]';
 export const PC_FACE_MINH = 'min-h-[6.6rem] sm:min-h-[9.9rem]';

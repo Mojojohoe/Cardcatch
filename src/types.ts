@@ -45,7 +45,7 @@ export const MAJOR_ARCANA: PowerCard[] = [
   { id: 3, name: "The Empress", description: "Gain copies of both resulting suit cards after the round — the final cards on the table after transforms, frogging, and curse clash effects.", icon: "Crown" },
   { id: 4, name: "The Emperor", description: "Changes your card to the target suit and adds 2 to its value.", icon: "Shield" },
   { id: 5, name: "The Hierophant", description: "Reveals half of the opponent's hand after the round, including power cards.", icon: "BookType" },
-  { id: 6, name: "The Lovers", description: "Changes the target suit to hearts before round resolution.", icon: "Heart" },
+  { id: 6, name: "The Lovers", description: "Transforms both committed plays to Hearts (rank unchanged; Jokers untouched).", icon: "Heart" },
   { id: 7, name: "The Chariot", description: "If the player loses the round, their suit card is returned to their hand with +1 value.", icon: "FastForward" },
   { id: 8, name: "Strength", description: "Increases the played card value by 4.", icon: "BicepsFlexed" },
   { id: 9, name: "The Hermit", description: "Swaps your play for a hand card that wins or draws against the opponent after clash penalties (e.g. Wrath debuffs on effective rank).", icon: "Lamp" },
@@ -58,15 +58,15 @@ export const MAJOR_ARCANA: PowerCard[] = [
     id: 15,
     name: 'The Devil',
     description:
-      'Devil Deal: bend your suit to a King or spin the trump wheel against the opponent\'s suit. Pact injects a random curse next round (skipped if any curse holds the table). If you lose, you discard 1 random card.',
+      'Devil Deal: bend your suit to a King or spin the trump wheel against the opponent\'s suit. After the round, a shared wheel picks which table curse applies (skipped if any curse already holds the table). If you lose, you discard 1 random card.',
     icon: 'Flame',
   },
   { id: 16, name: "The Tower", description: "Stops the effects of an opponent's power card.", icon: "ZapOff" },
   { id: 17, name: "The Star", description: "Adds 'Stars' suit to the target wheel. Star suit transforms all played cards to Stars.", icon: "Star" },
   { id: 18, name: "The Moon", description: "Adds 'Moons' suit to target wheel and deck. Also conjures two Moons-suited suit cards next round.", icon: "Moon" },
   { id: 19, name: "The Sun", description: "Gain a copy of your committed suit card exactly as it was locked in before any round modifiers — before powers, curses, or transforms resolve.", icon: "Sun" },
-  { id: 20, name: "Judgement", description: "Inverts round resolution: whoever would have won loses, and vice versa.", icon: "Gavel" },
-  { id: 21, name: "The World", description: "Grants a random Major from the deck and conjures a brand-new random suit card (not drawn from the table deck).", icon: "Globe" }
+  { id: 20, name: "Judgement", description: "Whoever holds fewer cards in hand wins the round (tie → stalemate).", icon: "Gavel" },
+  { id: 21, name: "The World", description: "Grants a random Major Arcana from the power deck and a random curse card into your power pile.", icon: "Globe" }
 ];
 
 export interface Card {
@@ -145,6 +145,34 @@ export function effectiveActiveDesperationTierCount(settings: Pick<GameSettings,
   return settings.desperationStarterTierEnabled ? n : Math.max(1, n - 1);
 }
 
+/** One stock line in the replicated token shop (Poker Chips module). */
+export type CardShopOffer =
+  | { type: 'curse'; curseId: number }
+  | { type: 'major'; powerId: number }
+  | { type: 'joker'; cardId: string }
+  | { type: 'suit'; cardId: string };
+
+export interface CardShopSlot {
+  id: string;
+  soldOut: boolean;
+  /** Discount corner only: percent deducted before rounding up (`25` ⇒ pay ⌈75%⌉ of base). */
+  discountPercent?: number;
+  offer: CardShopOffer;
+}
+
+export interface CardShopState {
+  slots: Record<string, CardShopSlot>;
+}
+
+/** Opponent shop pointer position (replicated, normalized to the browser viewport). */
+export interface ShopRemoteCursorState {
+  uid: string;
+  nx: number;
+  ny: number;
+  /** Monotonic so clients re-render on duplicate coords after clamping. */
+  seq: number;
+}
+
 export interface PlayerData {
   uid: string;
   name: string;
@@ -170,6 +198,8 @@ export interface PlayerData {
   } | null;
   /** Spent panic dice — one use per seat per match when enabled for that seat. */
   panicDiceUsed?: boolean;
+  /** Poker Chips / shop: running token balance (gains, drops, purchases). */
+  tokenBalance?: number;
 }
 
 export interface PendingPowerDecision {
@@ -344,6 +374,15 @@ export interface RoomData {
    * to Stars/Moons — restored when the dream ends (Sun).
    */
   slothSavedAvailableSuits?: Suit[] | null;
+  /** Replicated shop inventory when `enablePokerChips` is on in settings. */
+  cardShop?: CardShopState | null;
+  /** Seat currently viewing the cash shop (for opponent banner). */
+  shopBrowsingUid?: string | null;
+  /**
+   * Replicated pointer for `shopBrowsingUid` in normalized viewport coords [0–1].
+   * Cleared when the shop closes or advances rounds.
+   */
+  shopRemoteCursor?: ShopRemoteCursorState | null;
   lastOutcome?: {
     targetSuit: Suit;
     winnerUid: string | 'draw';
@@ -361,7 +400,7 @@ export interface RoomData {
     initialCardsPlayed: Record<string, string>;
     gains: Record<
       string,
-      { type: 'card' | 'power' | 'draw' | 'token'; id: string | number | 'new-card' }[]
+      { type: 'card' | 'power' | 'draw' | 'token'; id: string | number | 'new-card' | 'world-curse' }[]
     >;
     /** Lust meter animation + persistence helper. */
     lustRoundFx?: {
@@ -428,6 +467,8 @@ export interface RoomData {
     };
     /** Devil pact: inject this curse next apply when no curse was active entering results. */
     devilForcedCurseId?: number;
+    /** Devil pact: spin replay — both clients animate to the same curse. */
+    devilCurseSpin?: { offset: number; curseId: number };
     /** Post-resolution panic reroll applying an ephemeral Sword to chip the opponent's clash stamina. */
     panicFx?: {
       attackerUid: string;

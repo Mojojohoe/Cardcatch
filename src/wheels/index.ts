@@ -13,6 +13,7 @@ export {
 export type { SlothDreamWheelLabel } from './presets';
 export {
   desperationWheelDefinition,
+  devilCurseWheelDefinition,
   fortuneWheelDefinition,
   slothDreamWheelDefinition,
   buildTargetSuitWheelDefinition,

@@ -30,6 +30,7 @@ import {
   CURSE_WRATH,
   CURSES,
   cursePlayedActivatesEnvyTable,
+  pickDevilCurseFromOffset,
   curseEffectActive,
   gluttonyCurseActive,
   greedCurseActive,
@@ -50,6 +51,7 @@ import {
 } from '../settings/normalizeGameSettings';
 import { sanitizeRoomDataForClient } from '../settings/sanitizeRoomData';
 import { panicDiceSeatAllowed } from './panicDiceSeat';
+import { createInitialCardShop, refreshDiscountSlot, slotChargeTokens } from '../cardShop';
 
 export const createDeck = (disableJokers: boolean): string[] => {
   const deck: string[] = [];
@@ -355,6 +357,24 @@ export function reorderHandSlots(hand: readonly string[], from: number, to: numb
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
+}
+
+/**
+ * Original hand indices of the cards immediately left/right of the insertion gap while reordering
+ * (matches {@link reorderHandSlots}: remove `from`, then insert at `to` in the shortened array).
+ */
+export function handReorderGapNeighborIndices(
+  from: number,
+  to: number,
+  n: number,
+): { left: number | null; right: number | null } {
+  if (n <= 1 || from === to || from < 0 || to < 0 || from >= n || to >= n) {
+    return { left: null, right: null };
+  }
+  const orig = (shortIdx: number) => (shortIdx < from ? shortIdx : shortIdx + 1);
+  const left = to > 0 ? orig(to - 1) : null;
+  const right = to < n - 1 ? orig(to) : null;
+  return { left, right };
 }
 
 /** Map a hand index through a pure permutation (same multiset); stable for duplicate card ids. */
@@ -1157,12 +1177,10 @@ type GameEvent =
       total: number,
       startedAt: number,
     }
-  | {
-      type: 'CHIP_DROP_BROADCAST',
-      uid: string,
-      dropId: string,
-      startedAt: number,
-    };
+  | { type: 'REQUEST_TOKEN_DROP'; uid: string }
+  | { type: 'CARD_SHOP_SET_OPEN'; uid: string; open: boolean }
+  | { type: 'CARD_SHOP_BUY'; uid: string; slotId: string }
+  | { type: 'SHOP_CURSOR'; uid: string; nx: number; ny: number };
 
 export type DiceTestRollPayload = {
   uid: string;
@@ -1170,12 +1188,6 @@ export type DiceTestRollPayload = {
   notation: string;
   dice: number[];
   total: number;
-  startedAt: number;
-};
-
-export type ChipDropPayload = {
-  uid: string;
-  dropId: string;
   startedAt: number;
 };
 
@@ -1212,10 +1224,12 @@ export class GameService {
   private state: RoomData | null = null;
   private onStateChange: ((state: RoomData) => void) | null = null;
   private onDiceTestRoll: ((payload: DiceTestRollPayload) => void) | null = null;
-  private onChipDrop: ((payload: ChipDropPayload) => void) | null = null;
   private myUid: string = '';
   private powerResolutionTimer: ReturnType<typeof setTimeout> | null = null;
   private powerShowdownClearTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Host: debounce shop cursor broadcasts (~14 Hz flush of latest coords). */
+  private shopCursorFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private shopCursorPending: { uid: string; nx: number; ny: number } | null = null;
 
   constructor() {
     this.myUid = Math.random().toString(36).substring(2, 9);
@@ -1374,6 +1388,7 @@ export class GameService {
           desperationSpinning: false,
           desperationOffset: 0,
           panicDiceUsed: false,
+          tokenBalance: 0,
         }
       },
       currentTurn: 1,
@@ -1553,13 +1568,21 @@ export class GameService {
         if (remoteUid && event.uid === remoteUid) {
           this.handlePanicDiceUse(remoteUid);
         }
-      } else if (event.type === 'CHIP_DROP_BROADCAST') {
+      } else if (event.type === 'REQUEST_TOKEN_DROP') {
         if (remoteUid && event.uid === remoteUid) {
-          this.onChipDrop?.({
-            uid: event.uid,
-            dropId: event.dropId,
-            startedAt: event.startedAt,
-          });
+          this.applyManualTokenIncrement(event.uid);
+        }
+      } else if (event.type === 'CARD_SHOP_SET_OPEN') {
+        if (remoteUid && event.uid === remoteUid) {
+          this.handleCardShopSetBrowsing(event.uid, event.open);
+        }
+      } else if (event.type === 'CARD_SHOP_BUY') {
+        if (remoteUid && event.uid === remoteUid) {
+          this.tryPurchaseCardShopSlot(event.uid, event.slotId);
+        }
+      } else if (event.type === 'SHOP_CURSOR') {
+        if (remoteUid && event.uid === remoteUid) {
+          this.handleShopCursorDirect(event.uid, event.nx, event.ny);
         }
       }
     } else {
@@ -1574,12 +1597,6 @@ export class GameService {
           notation: event.notation,
           dice: event.dice,
           total: event.total,
-          startedAt: event.startedAt,
-        });
-      } else if (event.type === 'CHIP_DROP_BROADCAST') {
-        this.onChipDrop?.({
-          uid: event.uid,
-          dropId: event.dropId,
           startedAt: event.startedAt,
         });
       }
@@ -1655,6 +1672,7 @@ export class GameService {
           desperationSpinning: false,
           desperationOffset: 0,
           panicDiceUsed: false,
+          tokenBalance: 0,
         }
       },
       updatedAt: Date.now()
@@ -1756,6 +1774,7 @@ export class GameService {
           desperationTier:
             settings.enableDesperation && (settings.hostRole !== 'Predator') ? desperationOpenTier : 0,
           panicDiceUsed: false,
+          tokenBalance: 0,
         },
         [guestUid]: {
           ...this.state.players[guestUid],
@@ -1764,6 +1783,7 @@ export class GameService {
           desperationTier:
             settings.enableDesperation && guestRole !== 'Predator' ? desperationOpenTier : 0,
           panicDiceUsed: false,
+          tokenBalance: 0,
         }
       },
       status: settings.disablePowerCards ? 'playing' : 'drafting',
@@ -1774,6 +1794,9 @@ export class GameService {
       draftTurn: 0,
       guestLobbyNotice: null,
       pendingPowerDecisions: {},
+      ...(settings.enablePokerChips
+        ? { cardShop: createInitialCardShop(), shopBrowsingUid: null }
+        : { cardShop: undefined, shopBrowsingUid: undefined }),
       updatedAt: Date.now()
     };
 
@@ -1930,6 +1953,123 @@ export class GameService {
     this.broadcastState();
   }
 
+  private applyManualTokenIncrement(uid: string) {
+    if (!this.isHost || !this.state?.settings.enablePokerChips) return;
+    const p = this.state.players[uid];
+    if (!p) return;
+    const tokenBalance = (p.tokenBalance ?? 0) + 1;
+    this.state = {
+      ...this.state,
+      players: { ...this.state.players, [uid]: { ...p, tokenBalance } },
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
+  private clearShopCursorPipeline() {
+    if (this.shopCursorFlushTimer) {
+      clearTimeout(this.shopCursorFlushTimer);
+      this.shopCursorFlushTimer = null;
+    }
+    this.shopCursorPending = null;
+  }
+
+  private flushShopCursorToState = () => {
+    this.shopCursorFlushTimer = null;
+    if (!this.isHost || !this.state || !this.shopCursorPending) return;
+    const { uid, nx, ny } = this.shopCursorPending;
+    this.shopCursorPending = null;
+    if (this.state.shopBrowsingUid !== uid) return;
+    const prevSeq = this.state.shopRemoteCursor?.seq ?? 0;
+    this.state = {
+      ...this.state,
+      shopRemoteCursor: { uid, nx, ny, seq: prevSeq + 1 },
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  };
+
+  private handleShopCursorDirect(uid: string, nx: number, ny: number) {
+    if (!this.isHost || !this.state?.settings.enablePokerChips) return;
+    if (this.state.shopBrowsingUid !== uid) return;
+    const cx = Math.max(0, Math.min(1, nx));
+    const cy = Math.max(0, Math.min(1, ny));
+    this.shopCursorPending = { uid, nx: cx, ny: cy };
+    if (this.shopCursorFlushTimer) return;
+    this.shopCursorFlushTimer = setTimeout(this.flushShopCursorToState, 72);
+  }
+
+  private handleCardShopSetBrowsing(uid: string, open: boolean) {
+    if (!this.isHost || !this.state?.settings.enablePokerChips) return;
+    this.clearShopCursorPipeline();
+    const prev = this.state.shopBrowsingUid ?? null;
+    const shopBrowsingUid = open ? uid : prev === uid ? null : prev;
+    if (shopBrowsingUid === prev) return;
+    this.state = {
+      ...this.state,
+      shopBrowsingUid,
+      shopRemoteCursor: null,
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
+  private tryPurchaseCardShopSlot(uid: string, slotId: string) {
+    if (!this.isHost || !this.state?.settings.enablePokerChips || !this.state.cardShop) return;
+    if (!['playing', 'powering', 'results'].includes(this.state.status)) return;
+    const shop = this.state.cardShop;
+    const slot = shop.slots[slotId];
+    const player = this.state.players[uid];
+    if (!slot || slot.soldOut || !player) return;
+
+    const price = slotChargeTokens(slot);
+    const balance = player.tokenBalance ?? 0;
+    if (balance < price) return;
+
+    const offer = slot.offer;
+    if (offer.type === 'curse') {
+      if (!isCurseCardId(offer.curseId)) return;
+    } else if (offer.type === 'major') {
+      if (!isMajorArcanaId(offer.powerId)) return;
+    } else if (offer.type === 'joker') {
+      if (offer.cardId !== 'Joker-1' && offer.cardId !== 'Joker-2') return;
+    } else if (offer.type === 'suit') {
+      parseCard(offer.cardId);
+    }
+
+    const nextHand = [...player.hand];
+    const nextPowers = [...player.powerCards];
+    if (offer.type === 'curse') {
+      nextPowers.push(offer.curseId);
+    } else if (offer.type === 'major') {
+      nextPowers.push(offer.powerId);
+    } else {
+      nextHand.push(offer.cardId);
+    }
+
+    this.state = {
+      ...this.state,
+      cardShop: {
+        ...shop,
+        slots: {
+          ...shop.slots,
+          [slotId]: { ...slot, soldOut: true },
+        },
+      },
+      players: {
+        ...this.state.players,
+        [uid]: {
+          ...player,
+          hand: nextHand,
+          powerCards: nextPowers,
+          tokenBalance: balance - price,
+        },
+      },
+      updatedAt: Date.now(),
+    };
+    this.broadcastState();
+  }
+
   async playCard(cardId: string) {
     if (this.isHost) {
       this.processMove(this.myUid, cardId);
@@ -1961,23 +2101,43 @@ export class GameService {
     this.onDiceTestRoll = handler;
   }
 
-  onChipDropEvent(handler: ((payload: ChipDropPayload) => void) | null) {
-    this.onChipDrop = handler;
+  /** Manual poker-chip token (+1 balance); host authoritative. */
+  async requestManualTokenDrop(uid?: string) {
+    const target = uid ?? this.myUid;
+    if (this.isHost) {
+      this.applyManualTokenIncrement(target);
+    } else {
+      this.sendEvent({ type: 'REQUEST_TOKEN_DROP', uid: target });
+    }
   }
 
-  async emitChipDrop(uid?: string) {
-    const payload: ChipDropPayload = {
-      uid: uid ?? this.myUid,
-      dropId: `chip-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      startedAt: Date.now(),
-    };
-    this.onChipDrop?.(payload);
-    this.sendEvent({
-      type: 'CHIP_DROP_BROADCAST',
-      uid: payload.uid,
-      dropId: payload.dropId,
-      startedAt: payload.startedAt,
-    });
+  async setCardShopOpen(open: boolean) {
+    if (this.isHost) {
+      this.handleCardShopSetBrowsing(this.myUid, open);
+    } else {
+      this.sendEvent({ type: 'CARD_SHOP_SET_OPEN', uid: this.myUid, open });
+    }
+  }
+
+  /** Normalized viewport pointer while this client has the cash shop open (throttle on the caller). */
+  sendShopCursor(nx: number, ny: number) {
+    if (!this.state?.settings.enablePokerChips) return;
+    if (this.state.shopBrowsingUid !== this.myUid) return;
+    const cx = Math.max(0, Math.min(1, nx));
+    const cy = Math.max(0, Math.min(1, ny));
+    if (this.isHost) {
+      this.handleShopCursorDirect(this.myUid, cx, cy);
+    } else {
+      this.sendEvent({ type: 'SHOP_CURSOR', uid: this.myUid, nx: cx, ny: cy });
+    }
+  }
+
+  async buyCardShopSlot(slotId: string) {
+    if (this.isHost) {
+      this.tryPurchaseCardShopSlot(this.myUid, slotId);
+    } else {
+      this.sendEvent({ type: 'CARD_SHOP_BUY', uid: this.myUid, slotId });
+    }
   }
 
   async usePanicDice() {
@@ -3344,10 +3504,31 @@ export class GameService {
         const temp = c1; c1 = c2; c2 = temp;
         events.push({ type: 'CARD_SWAP', message: `Cards have been swapped!` });
       }
-      if (p === 6) { // Lovers
-        events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 6, message: `${players[pUid].name}'s Lovers change target suit to Hearts!` });
-        targetSuit = 'Hearts';
-        events.push({ type: 'TARGET_CHANGE', suit: 'Hearts', message: `Target suit is now Hearts!` });
+      if (p === 6) {
+        // Lovers: both plays become Hearts (same printed rank); does not retarget the table suit.
+        events.push({
+          type: 'POWER_TRIGGER',
+          uid: pUid,
+          powerCardId: 6,
+          message: `${players[pUid].name}'s Lovers baptize both plays in Hearts!`,
+        });
+        for (const uid of [p1Uid, p2Uid] as const) {
+          const cur = uid === p1Uid ? c1 : c2;
+          const pc = parseCard(cur);
+          if (pc.isJoker || pc.suit === 'Hearts') continue;
+          const fromCard = cur;
+          const next = `Hearts-${pc.value}`;
+          if (uid === p1Uid) c1 = next;
+          else c2 = next;
+          events.push({
+            type: 'TRANSFORM',
+            uid,
+            fromCardId: fromCard,
+            cardId: next,
+            powerCardId: 6,
+            message: `${players[uid].name}'s card becomes ${next.replace('-', ' of ')}.`,
+          });
+        }
       }
       if (p === 4) { // Emperor
         events.push({ type: 'POWER_TRIGGER', uid: pUid, powerCardId: 4, message: `${players[pUid].name}'s Emperor empowers the card!` });
@@ -3921,16 +4102,22 @@ export class GameService {
           }
         }
 
-        if (power1 === 20 || power2 === 20) {
-          if (!(power1 === 20 && power2 === 20)) {
-            events.push({
-              type: 'POWER_TRIGGER',
-              powerCardId: 20,
-              message: `Judgement has inverted the fate!`,
-            });
-            if (winnerUid === p1Uid) winnerUid = p2Uid;
-            else if (winnerUid === p2Uid) winnerUid = p1Uid;
-          }
+        const judgement1 = committedPower1 === 20 && !blockedPowers[p1Uid];
+        const judgement2 = committedPower2 === 20 && !blockedPowers[p2Uid];
+        if (judgement1 || judgement2) {
+          const h1 = players[p1Uid].hand.length;
+          const h2 = players[p2Uid].hand.length;
+          events.push({
+            type: 'POWER_TRIGGER',
+            powerCardId: 20,
+            message:
+              judgement1 && judgement2
+                ? `Judgement weighs both hands — fewer cards claim the round.`
+                : `Judgement weighs the hands — fewer cards claim the round.`,
+          });
+          if (h1 < h2) winnerUid = p1Uid;
+          else if (h2 < h1) winnerUid = p2Uid;
+          else winnerUid = 'draw';
         }
 
         if (power1 === 7 && winnerUid === p2Uid) {
@@ -4059,14 +4246,24 @@ export class GameService {
     let finalMessage = "";
     if (winnerUid === 'draw') {
        if (power1 === 14 || power2 === 14) finalMessage = "Temperance has balanced the scale of fate.";
-       else finalMessage = "A perfect deadlock. Zero sum.";
+       else if (
+         (committedPower1 === 20 && !blockedPowers[p1Uid]) ||
+         (committedPower2 === 20 && !blockedPowers[p2Uid])
+       ) {
+         finalMessage = `Judgement finds the hands evenly weighted.`;
+       } else finalMessage = "A perfect deadlock. Zero sum.";
     } else {
        const wName = players[winnerUid].name;
 
        const hanged1 = committedPower1 === 12 && !blockedPowers[p1Uid];
        const hanged2 = committedPower2 === 12 && !blockedPowers[p2Uid];
        if (hanged1 || hanged2) finalMessage = `${wName} takes the round — The Hanged Man.`;
-       else if (power1 === 20 || power2 === 20) finalMessage = `Judgement names ${wName} as the survivor.`;
+       else if (
+         (committedPower1 === 20 && !blockedPowers[p1Uid]) ||
+         (committedPower2 === 20 && !blockedPowers[p2Uid])
+       ) {
+         finalMessage = `Judgement names ${wName} — fewer cards in hand.`;
+       }
        else {
           const winnerCardStr = winnerUid === p1Uid ? c1 : c2;
           const loserCardStr = winnerUid === p1Uid ? c2 : c1;
@@ -4377,11 +4574,11 @@ export class GameService {
     }
     if (power1 === 21) {
       gains[p1Uid].push({ type: 'draw', id: 'random-power' });
-      gains[p1Uid].push({ type: 'draw', id: 'new-card' });
+      gains[p1Uid].push({ type: 'draw', id: 'world-curse' });
     }
     if (power2 === 21) {
       gains[p2Uid].push({ type: 'draw', id: 'random-power' });
-      gains[p2Uid].push({ type: 'draw', id: 'new-card' });
+      gains[p2Uid].push({ type: 'draw', id: 'world-curse' });
     }
 
     // Precompute famine spillover for the results log: if draw requests exceed deck, mark those gains as famine-bone draws.
@@ -4506,6 +4703,7 @@ export class GameService {
 
     const hadCurseAtOutcomeStartCalc = curseEnabled && curseEffectActive(roomData.activeCurses ?? []);
     let devilForcedCurseId: number | undefined;
+    let devilCurseSpin: { offset: number; curseId: number } | undefined;
     const devilPactSummonsCurse =
       curseEnabled &&
       !hadCurseAtOutcomeStartCalc &&
@@ -4518,12 +4716,15 @@ export class GameService {
         );
       });
     if (devilPactSummonsCurse) {
-      devilForcedCurseId = shuffle([...CURSE_IDS])[0];
-      const label = CURSES[devilForcedCurseId]?.name ?? 'A curse';
+      const offset = Math.random();
+      const curseId = pickDevilCurseFromOffset(offset);
+      devilForcedCurseId = curseId;
+      devilCurseSpin = { offset, curseId };
+      const label = CURSES[curseId]?.name ?? 'A curse';
       events.push({
         type: 'POWER_TRIGGER',
         powerCardId: 15,
-        message: `The Devil’s pact summons ${label} next round.`,
+        message: `The Devil curses the table — ${label}.`,
       });
     }
 
@@ -4552,6 +4753,7 @@ export class GameService {
       slothDreamFx,
       clashDestroyedByPenalty: { ...clashDestroyedForOutcome },
       devilForcedCurseId,
+      devilCurseSpin,
     };
   }
 
@@ -4674,6 +4876,9 @@ export class GameService {
             const s = SUITS[Math.floor(Math.random() * SUITS.length)];
             const v = VALUES[Math.floor(Math.random() * VALUES.length)];
             updatedPlayers[uid].hand.push(`${s}-${v}`);
+          } else if (gain.id === 'world-curse') {
+            const pool = shuffle([...CURSE_IDS]);
+            if (pool.length > 0) updatedPlayers[uid].powerCards.push(pool[0]!);
           } else if (typeof gain.id === 'number' && gain.id > 0) {
             deckPullBudget[uid] += gain.id;
           } else if (typeof gain.id === 'number' && gain.id < 0) {
@@ -4684,6 +4889,8 @@ export class GameService {
               updatedPlayers[uid].hand.splice(randomIndex, 1);
             }
           }
+        } else if (gain.type === 'token' && typeof gain.id === 'number' && gain.id > 0) {
+          updatedPlayers[uid].tokenBalance = (updatedPlayers[uid].tokenBalance ?? 0) + gain.id;
         }
       });
     });
@@ -5170,6 +5377,8 @@ export class GameService {
       else if (updatedPlayers[p1Uid].hand.length === 0 && updatedPlayers[p2Uid].hand.length === 0 && outcome.winnerUid !== 'draw') winner = outcome.winnerUid;
     }
 
+    const chipsOn = roomData.settings.enablePokerChips === true;
+
     return {
       ...roomData,
       players: updatedPlayers,
@@ -5196,11 +5405,19 @@ export class GameService {
       envyCovet: curseOk ? nextEnvyCovet : null,
       envyBothGrovelTrap: curseOk ? nextEnvyBothTrap : false,
       slothSavedAvailableSuits: curseOk ? nextSlothSaved ?? null : null,
+      ...(chipsOn
+        ? {
+            shopBrowsingUid: null,
+            shopRemoteCursor: null,
+            ...(roomData.cardShop ? { cardShop: refreshDiscountSlot(roomData.cardShop) } : {}),
+          }
+        : {}),
       updatedAt: Date.now()
     };
   }
 
   destroy() {
+    this.clearShopCursorPipeline();
     if (this.powerShowdownClearTimer) {
       clearTimeout(this.powerShowdownClearTimer);
       this.powerShowdownClearTimer = null;

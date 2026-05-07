@@ -15,12 +15,16 @@ type Props = {
    * Pass `undefined` to use context only.
    */
   previewDefaults?: CardArtGlobalDefaults;
+  /**
+   * When set, every card in a row can share the same raster scale (avoids per-slot measurement drift in the hand).
+   */
+  uniformScale?: number;
 };
 
 /**
  * Scales 256×374 art to fit inside the parent box (uniform scale, centered) so hand rows match vector footprints.
  */
-export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, className, previewDefaults }) => {
+export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, className, previewDefaults, uniformScale }) => {
   const ctx = useOptionalCardArt();
   const defaults = previewDefaults !== undefined ? previewDefaults : ctx?.defaults;
   /** Bumps effect when switching vector ↔ raster so we never keep a stale scale from the wrong layout pass. */
@@ -32,6 +36,11 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
+
+    if (uniformScale != null && uniformScale > 0) {
+      setScale(Math.min(1, uniformScale));
+      return;
+    }
 
     const measure = () => {
       const rect = el.getBoundingClientRect();
@@ -67,7 +76,7 @@ export const ScaledAssembledCardFace: React.FC<Props> = ({ card, override, class
       alive = false;
       ro.disconnect();
     };
-  }, [layoutEpoch]);
+  }, [layoutEpoch, uniformScale]);
 
   return (
     <div

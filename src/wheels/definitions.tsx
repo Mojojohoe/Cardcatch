@@ -1,10 +1,12 @@
 import React from 'react';
-import { Cloud, Moon, Skull, Sun } from 'lucide-react';
+import { Cloud, Flame, Moon, Skull, Sun } from 'lucide-react';
 import type { Suit } from '../types';
 import { SuitGlyph } from '../components/SuitGlyphs';
 import { SuitRasterOrGlyph } from '../components/SuitRasterOrGlyph';
 import { SUITS } from '../types';
 import { SUIT_COLORS } from '../suitPresentation';
+import { CURSES, CURSE_TINT_HEX, DEVIL_TABLE_CURSE_IDS } from '../curses';
+import { PowerCardVisual } from '../components/GameVisuals';
 import type { WheelDefinition, WheelOutcomeInput } from './types';
 import { DESPERATION_SLICE_ROWS, FORTUNE_SLICE_ROWS, SLOTH_DREAM_SLICE_ROWS } from './presets';
 
@@ -176,6 +178,43 @@ export const fortuneWheelDefinition: WheelDefinition = {
   showSliceDividers: true,
   dividerOpacity: 0.3,
   outcomes: fortuneOutcomes,
+};
+
+const devilCurseOutcomes: WheelOutcomeInput[] = DEVIL_TABLE_CURSE_IDS.map((cid) => ({
+  id: `curse-${cid}`,
+  label: CURSES[cid]?.name ?? `Curse ${cid}`,
+  display: (CURSES[cid]?.sin ?? 'Curse').toUpperCase(),
+  probability: 1,
+  color: CURSE_TINT_HEX[cid] ?? '#475569',
+  content: (
+    <div className="flex scale-[0.72] justify-center sm:scale-[0.78]">
+      <PowerCardVisual cardId={cid} small revealed curseRackPeek />
+    </div>
+  ),
+}));
+
+/** Seven equal curses — landing matches {@link pickDevilCurseFromOffset} in game resolution. */
+export const devilCurseWheelDefinition: WheelDefinition = {
+  id: 'devil_table_curse',
+  name: 'The Devil’s curse',
+  outerEdgeColor: 'rgba(127, 29, 29, 0.65)',
+  color1: '#1c1917',
+  color2: '#0c0a09',
+  tickerColor: '#f97316',
+  spinDurationSeconds: 5.5,
+  extraSpinsWhileSpinning: 11,
+  outerEdgeWidthPx: 10,
+  showSliceDividers: true,
+  dividerOpacity: 0.28,
+  hub: {
+    mode: 'node',
+    node: (
+      <div className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-orange-700/80 bg-zinc-950/95 shadow-inner sm:h-16 sm:w-16">
+        <Flame className="h-7 w-7 text-orange-500 sm:h-8 sm:w-8" strokeWidth={2} />
+      </div>
+    ),
+  },
+  outcomes: devilCurseOutcomes,
 };
 
 const defaultSuits = SUITS;

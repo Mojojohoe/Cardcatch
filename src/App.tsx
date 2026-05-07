@@ -52,7 +52,6 @@ import {
 import {
   GameService,
   type DiceTestRollPayload,
-  type ChipDropPayload,
   parseCard,
   desperationSpinAllowed,
   describeWrathMinionTitle,
@@ -60,10 +59,10 @@ import {
   GROVEL_CARD_ID,
   isCardBlockedByPride,
   reorderHandSlots,
+  handReorderGapNeighborIndices,
   handIndexAfterReorder,
   handSlotOccurrenceRank,
   envyGreedySealSlots,
-  ENVY_MONSTER_START_HP,
   playingCardUpgradeSteps,
   lustHeartUpgradeSteps,
   describeCardPlain,
@@ -81,7 +80,6 @@ import {
   ResolutionEventType,
   desperationTierRowsForDisplay,
   effectiveActiveDesperationTierCount,
-  ActiveCurseState,
 } from './types';
 import { FortuneWheelVisual, PowerDecisionModal } from './components/PowerInteraction';
 import { DesperationWheel, TargetSuitWheel } from './components/GameWheels';
@@ -89,6 +87,9 @@ import { RoomChat } from './components/RoomChat';
 import { OpponentDecisionStrip } from './components/OpponentDecisionStrip';
 import { DiceBoxTestOverlay } from './components/DiceBoxTestOverlay';
 import { ChipDropperTest } from './components/ChipDropperTest';
+import { CardShopModal } from './components/CardShopModal';
+import { ShopOpponentCursorOverlay } from './components/ShopOpponentCursorOverlay';
+import { DevilCurseSpinOverlay } from './components/DevilCurseSpinOverlay';
 import { PanicClashResolution, type PanicClashDismissReason } from './components/PanicClashResolution';
 import { SuitGlyph } from './components/SuitGlyphs';
 import { SuitRasterOrGlyph } from './components/SuitRasterOrGlyph';
@@ -97,12 +98,15 @@ import {
   CardVisual,
   CursePowerIcon,
   cursePowerIconClass,
+  DesperationVignette,
   GreenEyedMonsterIcon,
   MajorArcanaIconGlyph,
   PowerCardVisual,
   SUIT_COLORS,
   WolfIcon,
 } from './components/GameVisuals';
+import { CurseZonePanel } from './components/CurseZonePanel';
+import { ActiveCurseBackgroundTints, CompactTableGlyphRow } from './components/TableHudDecor';
 import { CssCoinEmbed, CssCoinFlipDegrees } from './coinflip/CssCoinEmbed';
 import {
   ConfigurableWheel,
@@ -114,9 +118,13 @@ import { resolutionLogLineClass } from './utils/resolutionLogColors';
 import { HostLobbyPanel, GuestLobbyPanel } from './components/LobbyRoomPanels';
 import { normalizeGameSettings, CUSTOM_LOBBY_PRESET_ID } from './settings/normalizeGameSettings';
 import { sanitizeRoomDataForClient } from './settings/sanitizeRoomData';
+import { useLayoutScaleBump } from './hooks/useLayoutScaleBump';
+import { useShopCursorBroadcast } from './hooks/useShopCursorBroadcast';
+import { EMERALD_STRIP_TOOLTIP_PANEL } from './ui/emeraldTooltipClasses';
 import type { SavedLobbyPreset } from './settings/gameSettingsConstants';
 import { jointTableTrumpPair, tableTrumpSuitNameClass } from './suitPresentation';
 import { playerHandFanMotion } from './playerHandFan';
+import { CARD_ART_HEIGHT, CARD_ART_WIDTH } from './cardArt/AssembledPlayingCardFace';
 import { CardArtSessionBridge } from './cardArt/CardArtSessionBridge';
 import { DisplayCardArtModeOverride, mergeCardArtWithRoom, useOptionalCardArt } from './cardArt/cardArtContext';
 import { cardArtAssetUrl } from './cardArt/paths';
@@ -145,7 +153,6 @@ import {
   prideCurseActive,
   envyCurseActive,
   wrathCurseActive,
-  LUST_METER_MAX,
 } from './curses';
 
 const SLOTH_DREAM_WHEEL_SEGMENTS = resolveWheelSegments(slothDreamWheelDefinition);
@@ -226,192 +233,6 @@ const TyrantCrownTablePiece: React.FC<{ crownTotal: number }> = ({ crownTotal })
     );
 };
 
-function gluttonyMoodCopy(phase: number): string {
-  if (phase >= 2) return 'Gluttony is wasting away, gluttony wants more meat';
-  if (phase >= 1) return 'Gluttony is starving, gluttony wants more meat';
-  return 'Gluttony is hungry, gluttony wants more meat';
-}
-
-/** Compact wheel / resolution-style table suit glyphs (areas 13–14) — frees vertical space under the HUD banner. */
-const CompactTableGlyphRow: React.FC<{
-  suit: Suit | null | undefined;
-  greedJointTrump: boolean;
-}> = ({ suit, greedJointTrump }) => {
-  const cardArt = useOptionalCardArt();
-  if (!suit) return null;
-  const joint = jointTableTrumpPair(suit, { greedActive: greedJointTrump });
-  const artwork = cardArt?.mode === 'raster';
-  return (
-    <div className="mb-2 flex flex-col items-center gap-1">
-      <span className="text-[8px] font-black uppercase tracking-wider text-slate-500">Table suit</span>
-      {joint ? (
-        <DualTableTrumpCard suits={joint} density="compact" appearance="hud" />
-      ) : artwork ? (
-        <div className="relative flex h-12 min-w-[4.85rem] max-w-[5.85rem] items-center justify-center overflow-hidden rounded-xl border-2 border-amber-800/80 shadow-md shadow-black/35">
-          <img
-            src={cardArtAssetUrl('GoldCard.png')}
-            alt=""
-            draggable={false}
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-          />
-          <div className="relative z-10 flex h-full w-full items-center justify-center p-1.5">
-            <SuitRasterOrGlyph
-              suit={suit}
-              className="h-8 w-8 max-h-[88%] max-w-[88%] object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.42)] sm:h-9 sm:w-9"
-               />
-            </div>
-          </div>
-      ) : (
-        <div
-          className={`flex items-center justify-center gap-1 rounded-full border-2 border-slate-600/90 bg-slate-950/90 px-2 py-1 shadow-md ${SUIT_COLORS[suit]}`}
-        >
-          <SuitGlyph suit={suit} className="h-8 w-8 sm:h-9 sm:w-9 drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]" />
-          </div>
-        )}
-    </div>
-  );
-};
-
-const CurseZonePanel: React.FC<{
-  settings: GameSettings;
-  activeCurses?: ActiveCurseState[];
-  prideCeilingCard?: string | null;
-  wrathMinionCard?: string | null;
-}> = ({ settings, activeCurses, prideCeilingCard, wrathMinionCard }) => {
-  if (!settings.enableCurseCards) {
-    return <div className="w-12 sm:w-[4.75rem] shrink-0" aria-hidden />;
-  }
-  const lust = activeCurses?.find((c) => c.id === CURSE_LUST);
-  const gluttony = activeCurses?.find((c) => c.id === CURSE_GLUTTONY);
-  const greed = activeCurses?.find((c) => c.id === CURSE_GREED);
-  const pride = activeCurses?.find((c) => c.id === CURSE_PRIDE);
-  const envy = activeCurses?.find((c) => c.id === CURSE_ENVY);
-  const wrath = activeCurses?.find((c) => c.id === CURSE_WRATH);
-  const sloth = activeCurses?.find((c) => c.id === CURSE_SLOTH);
-  if (!lust && !gluttony && !greed && !pride && !envy && !wrath && !sloth)
-    return <div className="w-12 sm:w-[4.75rem] shrink-0" aria-hidden />;
-  const curseCol = 'relative flex w-[7.5rem] shrink-0 flex-col items-center gap-1.5 overflow-visible sm:w-[8rem]';
-    return (
-    <div className="relative flex w-full max-w-none shrink-0 flex-row flex-wrap items-start justify-center gap-x-5 gap-y-6 overflow-visible px-0.5 pt-1 pb-2">
-      {lust && (
-        <motion.div layout className={curseCol}>
-          <PowerCardVisual cardId={CURSE_LUST} revealed matchHandCard curseRackPeek />
-          <p className="text-center text-[7px] font-black uppercase tracking-wider text-pink-400">Lust</p>
-          <p className="text-center font-mono text-[10px] font-bold tabular-nums leading-tight text-pink-200">
-            {lust.lustAccumulated ?? 0}
-            <span className="text-pink-500/80">/{LUST_METER_MAX}</span>{' '}
-            <span className="block text-[6px] font-bold uppercase tracking-wide text-pink-400/90">Hunger</span>
-          </p>
-        </motion.div>
-      )}
-      {gluttony && (
-        <motion.div layout className={curseCol}>
-          <PowerCardVisual cardId={CURSE_GLUTTONY} revealed matchHandCard curseRackPeek />
-          <p className="text-center text-[7px] font-black uppercase tracking-wider text-orange-400">Gluttony</p>
-          <p className="max-w-[12rem] px-0.5 text-center text-[7px] font-bold leading-snug normal-case text-orange-200/95">
-            {gluttonyMoodCopy(gluttony.gluttonyPhase ?? 0)}
-          </p>
-        </motion.div>
-      )}
-      {greed && (
-        <motion.div layout className={curseCol}>
-          <PowerCardVisual cardId={CURSE_GREED} revealed matchHandCard curseRackPeek />
-          <p className="text-center text-[7px] font-black uppercase tracking-wider text-yellow-400">Greed</p>
-          <div className="mt-0.5 flex flex-col items-center gap-0.5">
-            <SuitGlyph suit="Crowns" className="h-7 w-7 text-yellow-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.35)] sm:h-8 sm:w-8" />
-            <p className="text-center font-mono text-[9px] font-bold tabular-nums text-yellow-200">
-              {(greed.greedCrown ?? 0).toString()}/17
-            </p>
-            <p className="px-0.5 text-center text-[6px] font-bold uppercase tracking-wide text-yellow-500/90">Tax</p>
-           </div>
-      </motion.div>
-      )}
-      {pride && (
-    <motion.div
-      layout
-          className={`${curseCol} rounded-xl border-2 border-white/25 bg-zinc-950 px-1.5 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]`}
-        >
-          <Sparkles className="mx-auto h-5 w-5 text-white sm:h-6 sm:w-6" />
-          <p className="mt-1 text-center text-[7px] font-black uppercase tracking-wider text-slate-100">Pride</p>
-          {prideCeilingCard ? (
-            <div className="mt-1 flex flex-col items-center gap-0.5">
-              <p className="text-center text-[6px] font-bold uppercase tracking-wide text-violet-300/90">Barrier</p>
-              <div className={`flex items-center gap-1 ${SUIT_COLORS[parseCard(prideCeilingCard).suit] ?? 'text-violet-200'}`}>
-                <SuitGlyph suit={parseCard(prideCeilingCard).suit} className="h-6 w-6 sm:h-7 sm:w-7" />
-                <span className="font-card-rank text-[11px] font-black tabular-nums">
-                  {(() => {
-                    const pc = parseCard(prideCeilingCard);
-                    return pc.suit === 'Crowns' ? displaySuitCardValue(pc.suit, pc.value) : pc.value;
-                  })()}
-        </span>
-      </div>
-      </div>
-          ) : (
-            <p className="mt-1 px-0.5 text-center text-[6px] font-bold text-violet-300/80">Next round…</p>
-          )}
-    </motion.div>
-      )}
-      {envy && (
-    <motion.div 
-      layout
-          className={`${curseCol} gap-1 rounded-xl border-2 border-emerald-700/70 bg-zinc-950 px-1 py-2 shadow-[0_14px_44px_rgba(0,0,0,0.55)]`}
-        >
-          <PowerCardVisual cardId={CURSE_ENVY} revealed matchHandCard curseRackPeek />
-          <p className="text-center text-[7px] font-black uppercase tracking-wider text-emerald-400">Envy</p>
-          {/* Same stacking idea as Greed + Crown: curse card on top, Green-Eyed Monster token underneath with HP */}
-          <div className="mt-0.5 flex flex-col items-center gap-0.5">
-            <GreenEyedMonsterIcon className="mx-auto h-10 w-[4.95rem] drop-shadow-[0_0_16px_rgba(16,185,129,0.38)] sm:h-11 sm:w-[5.45rem]" />
-            <p className="text-center font-mono text-[10px] font-black tabular-nums text-emerald-200">
-              {(typeof envy.envyMonsterHp === 'number' ? envy.envyMonsterHp : ENVY_MONSTER_START_HP).toString()}
-              <span className="text-[7px] font-bold text-emerald-500/90"> HP</span>
-            </p>
-            <p className="px-0.5 text-center text-[6px] font-bold uppercase tracking-wide text-emerald-500/90">
-              Monster
-            </p>
-      </div>
-        </motion.div>
-      )}
-      {wrath && (
-        <motion.div layout className={curseCol}>
-          <p className="text-center text-[7px] font-black uppercase tracking-wider text-red-500">Wrath</p>
-          <p className="text-center font-mono text-[8px] font-bold tabular-nums text-red-200/95">
-            {(wrath.wrathRound ?? 1)}/5
-          </p>
-          {wrathMinionCard ? (
-            <div className="mt-1 flex flex-col items-center gap-0.5">
-              <p className="text-center text-[6px] font-bold uppercase tracking-wide text-red-300/90">Agent</p>
-              <div className="origin-center scale-[0.52]">
-                <CardVisual
-                  card={wrathMinionCard}
-                  revealed
-                  noAnimate
-                  small
-                  detailTooltip={`${describeWrathMinionTitle(wrathMinionCard)} — mark is chosen when the round resolves.`}
-                />
-      </div>
-      </div>
-          ) : (
-            <p className="mt-1 px-0.5 text-center text-[6px] font-bold text-red-300/80">Next round…</p>
-          )}
-        </motion.div>
-      )}
-      {sloth && (
-        <motion.div layout className={curseCol}>
-          <PowerCardVisual cardId={CURSE_SLOTH} revealed matchHandCard curseRackPeek />
-          <p className="text-center text-[7px] font-black uppercase tracking-wider text-indigo-300">Sloth</p>
-          <p className="mt-0.5 px-0.5 text-center text-[6px] font-bold leading-snug normal-case text-indigo-100/95">
-            The sloth is dreaming
-          </p>
-          <div className="mt-1 flex items-center justify-center gap-1.5 text-amber-200">
-            <SuitGlyph suit="Stars" className="h-5 w-5 sm:h-6 sm:w-6" />
-            <SuitGlyph suit="Moons" className="h-5 w-5 sm:h-6 sm:w-6" />
-      </div>
-    </motion.div>
-      )}
-    </div>
-  );
-};
-
 /** Plain forum-export tags when a unicode playing card glyph is not defined. */
 const CLIPBOARD_SUIT_TAG: Record<string, string> = {
   Hearts: '♥',
@@ -441,19 +262,6 @@ function opponentDesperationUiRelevant(room: RoomData, opp: PlayerData): boolean
   if (!desperationSpinAllowed(room, opp.uid, opp)) return false;
   return opp.desperationTier >= 0;
 }
-
-const DesperationVignette: React.FC<{ tier: number, totalTiers: number }> = ({ tier, totalTiers }) => {
-  if (tier <= 0 || totalTiers === 0) return null;
-  const intensity = Math.min(tier / totalTiers, 1);
-  return (
-    <div 
-      className="absolute inset-0 pointer-events-none z-[60] transition-all duration-1000 rounded-3xl"
-      style={{
-        boxShadow: `inset 0 0 ${intensity * 180}px ${intensity * 120}px rgba(126, 34, 206, ${intensity * 0.4}), inset 0 0 ${intensity * 100}px ${intensity * 80}px rgba(0,0,0,${intensity * 0.8})`
-      }}
-    />
-  );
-};
 
 const InsightModal: React.FC<{ 
   intel: { type: string, cards: string[], powerCards: number[] }, 
@@ -550,7 +358,7 @@ const InsightModal: React.FC<{
 };
 
 const AcquiredAssets: React.FC<{
-  gains: { type: 'card' | 'power' | 'draw' | 'token', id: string | number | 'new-card' }[];
+  gains: { type: 'card' | 'power' | 'draw' | 'token', id: string | number | 'new-card' | 'world-curse' }[];
   side: 'left' | 'right';
   label: string;
   /** Slower staggers + draw arcs when deck has just emptied into bones */
@@ -609,12 +417,15 @@ const AcquiredAssets: React.FC<{
               (() => {
                 const isLose = typeof gain.id === 'number' && gain.id < 0;
                 const isPowerGain = gain.id === 'random-power';
+                const isWorldCurse = gain.id === 'world-curse';
                 const isNewCard = gain.id === 'new-card';
                 const isFamineBone = gain.id === 'famine-bone';
                 const hologramClasses = isLose
                   ? 'bg-red-900/25 border-red-400/45 shadow-[0_0_24px_rgba(239,68,68,0.2)]'
                   : isPowerGain
                     ? 'bg-white/[0.08] border-white/35 shadow-[0_0_22px_rgba(255,255,255,0.12)]'
+                    : isWorldCurse
+                      ? 'bg-violet-950/35 border-violet-400/45 shadow-[0_0_22px_rgba(167,139,250,0.22)]'
                     : isFamineBone
                       ? 'bg-emerald-900/24 border-emerald-500/35 shadow-[0_0_22px_rgba(16,185,129,0.14)]'
                     : isNewCard
@@ -624,6 +435,8 @@ const AcquiredAssets: React.FC<{
                   ? 'bg-red-500/20 border-red-500/55 text-red-300'
                   : isPowerGain
                     ? 'bg-white/15 border-white/50 text-white'
+                    : isWorldCurse
+                      ? 'bg-violet-600/25 border-violet-400/55 text-violet-100'
                     : isFamineBone
                       ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
                     : isNewCard
@@ -634,6 +447,8 @@ const AcquiredAssets: React.FC<{
                     ? 'LOSE'
                     : gain.id === 'random-power'
                       ? 'POWER'
+                      : isWorldCurse
+                        ? 'CURSE'
                       : isFamineBone
                         ? 'BONE'
                       : gain.id === 'new-card'
@@ -661,6 +476,8 @@ const AcquiredAssets: React.FC<{
                     <span className="text-[9px] sm:text-[10px] font-black">{Math.abs(gain.id)}</span>
                   ) : gain.id === 'random-power' ? (
                     <Zap className="w-3 h-3 sm:w-4 sm:h-4" />
+                  ) : isWorldCurse ? (
+                    <Flame className="w-3 h-3 sm:w-4 sm:w-4 text-violet-200" />
                   ) : (
                     <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                   )}
@@ -671,6 +488,8 @@ const AcquiredAssets: React.FC<{
                       ? 'text-red-200'
                       : isPowerGain
                         ? 'text-white/95'
+                        : isWorldCurse
+                          ? 'text-violet-100'
                         : isFamineBone
                           ? 'text-emerald-200'
                         : isNewCard
@@ -2614,8 +2433,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const myUid = serviceRef.current.getUid();
   const [famineBannerPhase, setFamineBannerPhase] = useState<FamineBannerPhase>('idle');
   const [hudDiceRoll, setHudDiceRoll] = useState<DiceTestRollPayload | null>(null);
-  const [chipDropEvent, setChipDropEvent] = useState<ChipDropPayload | null>(null);
-  const tokenDropPlayedTurnRef = useRef<number>(-1);
+  const [cashShopOpen, setCashShopOpen] = useState(false);
+  const layoutScaleBump = useLayoutScaleBump();
   const [panicDiceConfirmOpen, setPanicDiceConfirmOpen] = useState(false);
   const [panicDiceStripExplainOpen, setPanicDiceStripExplainOpen] = useState(false);
   const [panicDiceStripHover, setPanicDiceStripHover] = useState(false);
@@ -2835,37 +2654,6 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   }, []);
 
   useEffect(() => {
-    serviceRef.current.onChipDropEvent((payload) => {
-      setChipDropEvent(payload);
-    });
-    return () => {
-      serviceRef.current.onChipDropEvent(null);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!room || room.status !== 'playing') return;
-    if (!serviceRef.current.getIsHost()) return;
-    if (!room.lastOutcome?.gains) return;
-    if (tokenDropPlayedTurnRef.current === room.currentTurn) return;
-
-    tokenDropPlayedTurnRef.current = room.currentTurn;
-    const drops: string[] = [];
-    for (const uid of Object.keys(room.players)) {
-      const tokenCount = (room.lastOutcome.gains[uid] ?? []).reduce((sum, g) => {
-        if (g.type !== 'token' || typeof g.id !== 'number' || g.id <= 0) return sum;
-        return sum + g.id;
-      }, 0);
-      for (let i = 0; i < tokenCount; i++) drops.push(uid);
-    }
-    drops.forEach((uid, i) => {
-      window.setTimeout(() => {
-        void serviceRef.current.emitChipDrop(uid);
-      }, i * 110);
-    });
-  }, [room?.status, room?.currentTurn, room?.lastOutcome?.gains, room?.updatedAt]);
-
-  useEffect(() => {
     if (room?.status !== 'results') setPanicClashOpen(false);
     if (room?.status === 'playing') panicClashPlayedRollIdsRef.current.clear();
   }, [room?.status]);
@@ -2918,6 +2706,34 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     if (highVisibilityMode) return { ...cardArtForUi, mode: 'vector' as const };
     return cardArtForUi;
   }, [cardArtForUi, highVisibilityMode]);
+
+  const handUniformRasterScale = useMemo(() => {
+    if (!displayCardArt || displayCardArt.mode !== 'raster') return undefined;
+    void layoutScaleBump;
+    const rootPx =
+      typeof document !== 'undefined'
+        ? parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+        : 16;
+    const slotW = 7.2 * rootPx;
+    const slotH = 10.8 * rootPx;
+    return Math.min(1, slotW / CARD_ART_WIDTH, slotH / CARD_ART_HEIGHT);
+  }, [displayCardArt?.mode, layoutScaleBump]);
+
+  useEffect(() => {
+    if (!cashShopOpen) return;
+    if (room?.shopBrowsingUid == null || room.shopBrowsingUid !== myUid) {
+      setCashShopOpen(false);
+    }
+  }, [room?.shopBrowsingUid, cashShopOpen, myUid]);
+
+  useEffect(() => {
+    if (!room) return;
+    if (['waiting', 'drafting', 'finished'].includes(room.status) || !room.settings.enablePokerChips) {
+      void serviceRef.current.setCardShopOpen(false);
+      setCashShopOpen(false);
+    }
+  }, [room?.status, room?.settings?.enablePokerChips]);
+
   const deckBackRasterUrl = useMemo(() => {
     if (displayCardArt?.mode !== 'raster') return null;
     const m = displayCardArt?.manifest?.['back-deck'];
@@ -3387,6 +3203,23 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   const opponentUid = Object.keys(room.players).find(uid => uid !== myUid);
   const opponent = opponentUid ? room.players[opponentUid] : null;
 
+  const shopCursorBroadcastEnabled =
+    cashShopOpen &&
+    room.settings.enablePokerChips === true &&
+    room.shopBrowsingUid === myUid;
+
+  useShopCursorBroadcast(shopCursorBroadcastEnabled, (nx, ny) => {
+    serviceRef.current.sendShopCursor(nx, ny);
+  });
+
+  const showOpponentShopCursor = Boolean(
+    room.settings.enablePokerChips &&
+      opponent &&
+      room.shopBrowsingUid === opponent.uid &&
+      room.shopRemoteCursor &&
+      room.shopRemoteCursor.uid === opponent.uid,
+  );
+
   const panicDiceStripVisible =
     room.settings.enablePanicDice &&
     panicDiceSeatAllowed(room, myUid) &&
@@ -3465,6 +3298,10 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
           : undefined
       }
     >
+      <ActiveCurseBackgroundTints
+        enabled={Boolean(artworkFelt && room.settings.enableCurseCards !== false)}
+        activeCurses={room.activeCurses}
+      />
       {room.famineActive && famineBannerPhase === 'bone_deal' && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[241] bg-stone-900/95 border border-stone-500 px-5 py-2 rounded-full shadow-lg max-w-[min(94vw,32rem)]">
           <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-stone-100 text-center block">
@@ -3493,14 +3330,45 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         totalTiers={effectiveActiveDesperationTierCount(room.settings)}
       />
       <DiceBoxTestOverlay roll={hudDiceRoll} />
-      <ChipDropperTest
-        room={room}
-        myUid={myUid}
-        lastDrop={chipDropEvent}
-        onRequestDrop={() => {
-          void serviceRef.current.emitChipDrop();
-        }}
-      />
+      {room.settings.enablePokerChips &&
+        (room.status === 'playing' || room.status === 'powering' || room.status === 'results') && (
+          <>
+            <ChipDropperTest
+              room={room}
+              myUid={myUid}
+              selfBalance={me.tokenBalance ?? 0}
+              opponentBalance={opponent ? opponent.tokenBalance ?? 0 : 0}
+              onRequestDrop={() => {
+                void serviceRef.current.requestManualTokenDrop();
+              }}
+              onOpenCashShop={
+                room.cardShop
+                  ? () => {
+                      setCashShopOpen(true);
+                      void serviceRef.current.setCardShopOpen(true);
+                    }
+                  : undefined
+              }
+            />
+            {cashShopOpen && room.cardShop ? (
+              <CardShopModal
+                cardShop={room.cardShop}
+                tokenBalance={me.tokenBalance ?? 0}
+                onBuy={(slotId) => void serviceRef.current.buyCardShopSlot(slotId)}
+                onClose={() => {
+                  setCashShopOpen(false);
+                  void serviceRef.current.setCardShopOpen(false);
+                }}
+              />
+            ) : null}
+            <ShopOpponentCursorOverlay
+              visible={showOpponentShopCursor}
+              nx={room.shopRemoteCursor?.nx ?? 0}
+              ny={room.shopRemoteCursor?.ny ?? 0}
+              opponentRole={opponent?.role ?? 'Prey'}
+            />
+          </>
+        )}
 
       {panicDiceStripExplainOpen && (
         <div
@@ -3773,6 +3641,13 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   opponentWheelDecisionSpinning ? 'min-h-[10rem] sm:min-h-[12rem]' : 'min-h-[11rem] sm:min-h-[12rem]'
                 }`}
               >
+                {room.settings.enablePokerChips && room.shopBrowsingUid === opponent.uid ? (
+                  <div className="pointer-events-none absolute inset-0 z-[36] flex items-center justify-center rounded-2xl bg-black/55 px-3 backdrop-blur-[2px]">
+                    <span className="max-w-[16rem] text-center text-[11px] font-black uppercase leading-snug tracking-widest text-amber-200 shadow-black/60 drop-shadow-md">
+                      Opponent is browsing the shop
+                    </span>
+                  </div>
+                ) : null}
                 <div className="mb-1 text-center">
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
                     Cards: {opponent.hand.length}
@@ -4208,6 +4083,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex flex-col items-center gap-4 sm:gap-6 py-12 px-4 w-full h-full justify-center max-w-4xl mx-auto overflow-y-auto relative"
               >
+                {room.lastOutcome.devilCurseSpin && (
+                  <DevilCurseSpinOverlay
+                    offset={room.lastOutcome.devilCurseSpin.offset}
+                    curseId={room.lastOutcome.devilCurseSpin.curseId}
+                  />
+                )}
                 {/* Captured Assets Section */}
                 {room.lastOutcome.gains && (
                   <>
@@ -4283,53 +4164,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                            </div>
                          )}
                       </div>
-                      {uid === myUid && (panicDiceResultsVisible || panicDiceResultsUsedVisible) && (
-                        <div className="relative mt-3 flex flex-col items-center">
-                          {panicDiceResultsInteractive ? (
-                            <button
-                              type="button"
-                              onClick={() => setPanicDiceConfirmOpen(true)}
-                              title="Use panic dice once per game after the round is resolved."
-                              className="group outline-none transition-transform hover:scale-[1.05] active:scale-95"
-                            >
-                              <img
-                                src={cardArtAssetUrl('PanicDice.png')}
-                                alt=""
-                                draggable={false}
-                                className="relative h-[3.5rem] w-auto max-w-[5rem] object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_18px_rgba(251,191,36,0.45)]"
-                              />
-                              <span className="pointer-events-none block text-center text-[7px] font-black uppercase tracking-widest text-amber-400/95">
-                                Use dice
-                              </span>
-                            </button>
-                          ) : (
-                            <>
-                              <div
-                                role="presentation"
-                                className="cursor-not-allowed outline-none select-none"
-                                onMouseEnter={() => setPanicDiceResultsHover(true)}
-                                onMouseLeave={() => setPanicDiceResultsHover(false)}
-                                aria-label={PANIC_DICE_USED_HOVER}
-                              >
-                                <img
-                                  src={cardArtAssetUrl('PanicDice.png')}
-                                  alt=""
-                                  draggable={false}
-                                  className="pointer-events-none relative h-[3.5rem] w-auto max-w-[5rem] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]"
-                                />
-                              </div>
-                              <span className="pointer-events-none mt-0.5 block text-center text-[7px] font-black uppercase tracking-widest text-slate-500">
-                                Dice used
-                              </span>
-                              {panicDiceResultsHover ? (
-                                <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-[340] max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-slate-600/65 bg-emerald-950/98 px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-emerald-50 shadow-xl backdrop-blur-sm">
-                                  {PANIC_DICE_USED_HOVER}
-                                </div>
-                              ) : null}
-                            </>
-                          )}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -4353,14 +4187,65 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      ))}
                    </div>
                    
-                   <button 
-                    onClick={handleNextRound}
-                    disabled={loading || me.readyForNextRound}
-                    className="group relative bg-yellow-400 text-black px-16 sm:px-24 py-4 sm:py-5 rounded-full font-black uppercase text-sm sm:text-base shadow-[0_0_50px_rgba(250,204,21,0.2)] hover:shadow-[0_0_80px_rgba(250,204,21,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer mt-2"
-                   >
-                     <span className="relative z-10">{me.readyForNextRound ? 'WAITING FOR OTHER...' : 'READY FOR NEXT ROUND'}</span>
-                     <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity rounded-full" />
-                   </button>
+                   <div className="mt-2 flex flex-wrap items-center justify-center gap-4 sm:gap-6">
+                     <button 
+                      onClick={handleNextRound}
+                      disabled={loading || me.readyForNextRound}
+                      className="group relative bg-yellow-400 text-black px-16 sm:px-24 py-4 sm:py-5 rounded-full font-black uppercase text-sm sm:text-base shadow-[0_0_50px_rgba(250,204,21,0.2)] hover:shadow-[0_0_80px_rgba(250,204,21,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                     >
+                       <span className="relative z-10">{me.readyForNextRound ? 'WAITING FOR OTHER...' : 'READY FOR NEXT ROUND'}</span>
+                       <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity rounded-full" />
+                     </button>
+                     {(panicDiceResultsVisible || panicDiceResultsUsedVisible) && (
+                       <div className="relative flex flex-col items-center">
+                         {panicDiceResultsInteractive ? (
+                           <button
+                             type="button"
+                             onClick={() => setPanicDiceConfirmOpen(true)}
+                             title="Use panic dice once per game after the round is resolved."
+                             className="group outline-none transition-transform hover:scale-[1.05] active:scale-95"
+                           >
+                             <img
+                               src={cardArtAssetUrl('PanicDice.png')}
+                               alt=""
+                               draggable={false}
+                               className="relative h-[3.5rem] w-auto max-w-[5rem] object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)] transition-[filter] group-hover:brightness-110 group-hover:drop-shadow-[0_0_18px_rgba(251,191,36,0.45)]"
+                             />
+                             <span className="pointer-events-none block text-center text-[7px] font-black uppercase tracking-widest text-amber-400/95">
+                               Use dice
+                             </span>
+                           </button>
+                         ) : (
+                           <>
+                             <div
+                               role="presentation"
+                               className="cursor-not-allowed outline-none select-none"
+                               onMouseEnter={() => setPanicDiceResultsHover(true)}
+                               onMouseLeave={() => setPanicDiceResultsHover(false)}
+                               aria-label={PANIC_DICE_USED_HOVER}
+                             >
+                               <img
+                                 src={cardArtAssetUrl('PanicDice.png')}
+                                 alt=""
+                                 draggable={false}
+                                 className="pointer-events-none relative h-[3.5rem] w-auto max-w-[5rem] object-contain opacity-[0.5] saturate-0 grayscale contrast-95 brightness-110 drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]"
+                               />
+                             </div>
+                             <span className="pointer-events-none mt-0.5 block text-center text-[7px] font-black uppercase tracking-widest text-slate-500">
+                               Dice used
+                             </span>
+                             {panicDiceResultsHover ? (
+                               <div
+                                 className={`pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-[340] max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 ${EMERALD_STRIP_TOOLTIP_PANEL}`}
+                               >
+                                 {PANIC_DICE_USED_HOVER}
+                               </div>
+                             ) : null}
+                           </>
+                         )}
+                       </div>
+                     )}
+                   </div>
                 </div>
               </motion.div>
             )}
@@ -4487,16 +4372,22 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   handDragHoverIndex !== null &&
                   handDragFromIndex !== handDragHoverIndex;
                 const gapPush = dragGapActive ? 18 : 0;
-                const gapShift =
-                  dragGapActive && handDragFromIndex !== null && handDragHoverIndex !== null
-                    ? handDragFromIndex < handDragHoverIndex
-                      ? i > handDragFromIndex && i <= handDragHoverIndex
-                        ? gapPush
-                        : 0
-                      : i >= handDragHoverIndex && i < handDragFromIndex
-                        ? -gapPush
-                        : 0
-                    : 0;
+                let gapShift = 0;
+                if (
+                  dragGapActive &&
+                  handDragFromIndex !== null &&
+                  handDragHoverIndex !== null &&
+                  me.hand.length > 1
+                ) {
+                  const { left, right } = handReorderGapNeighborIndices(
+                    handDragFromIndex,
+                    handDragHoverIndex,
+                    me.hand.length,
+                  );
+                  const fromIdx = handDragFromIndex;
+                  if (left !== null && left !== fromIdx && i === left) gapShift -= gapPush;
+                  if (right !== null && right !== fromIdx && i === right) gapShift += gapPush;
+                }
                 const prideMuted = prideBlocksCard(room, myUid, card);
                 const envyMuted = envySealBlocksHandIndex(room, myUid, me.hand, i);
                 const envyCovetedHere = Boolean(
@@ -4592,6 +4483,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       presentation="none"
                       delay={0}
                       motionLayout={false}
+                      handUniformRasterScale={handUniformRasterScale}
                     />
                   </motion.div>
                 );
@@ -4642,7 +4534,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       </div>
                     )}
                     {panicDiceStripHover ? (
-                      <div className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-[60] w-[min(20rem,calc(100vw-8rem))] max-w-[min(20rem,calc(100vw-3rem))] -translate-x-1/2 rounded-xl border border-amber-700/55 bg-emerald-950/97 px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-emerald-50 shadow-xl backdrop-blur-sm sm:left-0 sm:w-[min(22rem,calc(100vw-11rem))] sm:translate-x-0">
+                      <div
+                        className={`pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-[60] w-[min(20rem,calc(100vw-8rem))] max-w-[min(20rem,calc(100vw-3rem))] -translate-x-1/2 sm:left-0 sm:w-[min(22rem,calc(100vw-11rem))] sm:translate-x-0 ${EMERALD_STRIP_TOOLTIP_PANEL}`}
+                      >
                         {panicStripHoverText}
                       </div>
                     ) : null}
@@ -4694,7 +4588,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   </div>
                 )}
                 {panicDiceStripHover ? (
-                  <div className="pointer-events-none absolute bottom-full left-1/2 z-[60] mb-3 max-w-[min(22rem,calc(100vw-2.5rem))] -translate-x-1/2 rounded-xl border border-amber-700/55 bg-emerald-950/97 px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-emerald-50 shadow-xl backdrop-blur-sm">
+                  <div
+                    className={`pointer-events-none absolute bottom-full left-1/2 z-[60] mb-3 max-w-[min(22rem,calc(100vw-2.5rem))] -translate-x-1/2 ${EMERALD_STRIP_TOOLTIP_PANEL}`}
+                  >
                     {panicStripHoverText}
                   </div>
                 ) : null}

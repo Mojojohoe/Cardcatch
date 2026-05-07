@@ -19,7 +19,7 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { World, Vec3, Body, Box, Cylinder, ContactMaterial, Material } from 'cannon-es';
 import type { PlayerRole, RoomData } from '../types';
-import type { ChipDropPayload } from '../services/gameService';
+import { useChipPileSync } from '../hooks/useChipPileSync';
 
 /**
  * Chip radius must stay **inside** {@link PLAY_HALF_X} / {@link PLAY_HALF_Z} with margin — larger coins than the
@@ -32,6 +32,10 @@ const CONTAINER_HALF_X = 22;
 const CONTAINER_HALF_Z = 13;
 const CONTAINER_WALL_THICK = 0.56;
 const CONTAINER_WALL_HEIGHT_Y = 90;
+/** Lower the felt so stacks sit deeper in frame. */
+const FLOOR_Y = -3.35;
+/** Nudge the front (+Z) containment wall toward the camera so chips can tip forward slightly before contact. */
+const FRONT_WALL_Z_EXTRA = 6;
 
 /** Tiny spawn spread so chips fall into one stack lane. */
 const STACK_SPAWN_JITTER = 0.18;
@@ -85,16 +89,17 @@ function disposeObjectMaterials(root: Object3D | null) {
 
 export type ChipSimulationHandle = {
   spawn: () => void;
+  resetToCount: (count: number) => void;
 };
 
-function tokenPalette(role: PlayerRole | undefined): { border: string; chipColor: number; chipEmissive: number } {
+function tokenPalette(role: PlayerRole | undefined): { chipColor: number; chipEmissive: number } {
   if (role === 'Prey') {
-    return { border: 'border-blue-500/45', chipColor: 0xef4444, chipEmissive: 0x3b0000 };
+    return { chipColor: 0xef4444, chipEmissive: 0x3b0000 };
   }
   if (role === 'Preydator') {
-    return { border: 'border-purple-500/45', chipColor: 0xef4444, chipEmissive: 0x3b0000 };
+    return { chipColor: 0xef4444, chipEmissive: 0x3b0000 };
   }
-  return { border: 'border-red-500/45', chipColor: 0xef4444, chipEmissive: 0x3b0000 };
+  return { chipColor: 0xef4444, chipEmissive: 0x3b0000 };
 }
 
 function tokenHueFilter(role: PlayerRole | undefined): string {
@@ -172,7 +177,27 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     coinsRef.current.push({ mesh, body });
   }, []);
 
-  useImperativeHandle(ref, () => ({ spawn: spawnCoin }), [spawnCoin]);
+  const clearCoins = useCallback(() => {
+    const world = worldRef.current;
+    const scene = sceneRef.current;
+    if (!world || !scene) return;
+    for (const { mesh, body } of coinsRef.current) {
+      scene.remove(mesh);
+      world.removeBody(body);
+    }
+    coinsRef.current = [];
+  }, []);
+
+  const resetToCount = useCallback(
+    (count: number) => {
+      clearCoins();
+      const n = Math.min(140, Math.max(0, Math.floor(count)));
+      for (let i = 0; i < n; i++) spawnCoin();
+    },
+    [clearCoins, spawnCoin],
+  );
+
+  useImperativeHandle(ref, () => ({ spawn: spawnCoin, resetToCount }), [spawnCoin, resetToCount]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -225,23 +250,24 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     const groundHalf = new Vec3(220, 0.18, 220);
     const groundShape = new Box(groundHalf);
     const ground = new Body({ mass: 0, shape: groundShape, material: feltMat });
-    ground.position.set(0, -groundHalf.y, 0);
+    ground.position.set(0, FLOOR_Y - groundHalf.y, 0);
     world.addBody(ground);
     groundBodyRef.current = ground;
 
     const wy = CONTAINER_WALL_HEIGHT_Y / 2;
     const hx = CONTAINER_WALL_THICK / 2;
     const hz = CONTAINER_WALL_THICK / 2;
-    const zExtent = CONTAINER_HALF_Z + CONTAINER_WALL_THICK;
+    /** Side slabs extend in Z to match the forward-shifted front wall (`FRONT_WALL_Z_EXTRA`). */
+    const zExtentSide = CONTAINER_HALF_Z + CONTAINER_WALL_THICK + FRONT_WALL_Z_EXTRA;
     const xExtent = CONTAINER_HALF_X + CONTAINER_WALL_THICK;
     const addWall = (half: Vec3, pos: Vec3) => {
       const wall = new Body({ mass: 0, shape: new Box(half), material: wallMat });
       wall.position.copy(pos);
       world.addBody(wall);
     };
-    addWall(new Vec3(hx, wy, zExtent), new Vec3(CONTAINER_HALF_X + hx, wy, 0));
-    addWall(new Vec3(hx, wy, zExtent), new Vec3(-CONTAINER_HALF_X - hx, wy, 0));
-    addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, CONTAINER_HALF_Z + hz));
+    addWall(new Vec3(hx, wy, zExtentSide), new Vec3(CONTAINER_HALF_X + hx, wy, 0));
+    addWall(new Vec3(hx, wy, zExtentSide), new Vec3(-CONTAINER_HALF_X - hx, wy, 0));
+    addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, CONTAINER_HALF_Z + hz + FRONT_WALL_Z_EXTRA));
     addWall(new Vec3(xExtent, wy, hz), new Vec3(0, wy, -CONTAINER_HALF_Z - hz));
 
     let mounted = true;
@@ -391,16 +417,13 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
 export const ChipDropperTest: React.FC<{
   room: RoomData;
   myUid: string;
-  lastDrop: ChipDropPayload | null;
+  selfBalance: number;
+  opponentBalance: number;
   onRequestDrop: () => void;
-}> = ({ room, myUid, lastDrop, onRequestDrop }) => {
+  onOpenCashShop?: () => void;
+}> = ({ room, myUid, selfBalance, opponentBalance, onRequestDrop, onOpenCashShop }) => {
   const leftRef = useRef<ChipSimulationHandle | null>(null);
   const rightRef = useRef<ChipSimulationHandle | null>(null);
-  const seenDropIdsRef = useRef<Set<string>>(new Set());
-  const selfCountRef = useRef(0);
-  const theirCountRef = useRef(0);
-  const [selfCount, setSelfCount] = React.useState(0);
-  const [theirCount, setTheirCount] = React.useState(0);
 
   const opponentUid = Object.keys(room.players).find((uid) => uid !== myUid) ?? null;
   const me = room.players[myUid];
@@ -408,44 +431,43 @@ export const ChipDropperTest: React.FC<{
   const myPalette = tokenPalette(me?.role);
   const oppPalette = tokenPalette(opponent?.role);
 
-  useEffect(() => {
-    if (!lastDrop || seenDropIdsRef.current.has(lastDrop.dropId)) return;
-    seenDropIdsRef.current.add(lastDrop.dropId);
-    const mine = lastDrop.uid === myUid;
-    if (mine) {
-      rightRef.current?.spawn();
-      selfCountRef.current += 1;
-      setSelfCount(selfCountRef.current);
-    } else {
-      leftRef.current?.spawn();
-      theirCountRef.current += 1;
-      setTheirCount(theirCountRef.current);
-    }
-  }, [lastDrop, myUid]);
+  useChipPileSync(rightRef, selfBalance);
+  useChipPileSync(leftRef, opponentBalance);
 
   return (
     <>
       {/* Below results / panic overlays (z-[300]+); above main table (z-[20]) */}
       <div className="pointer-events-none fixed inset-0 z-[40]" aria-hidden>
         <div
-          className={`absolute top-[41%] left-[calc(50%-24vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${oppPalette.border} shadow-[inset_0_0_0_1px_rgba(248,113,113,0.16)]`}
+          className="absolute top-[41%] left-[calc(50%-24vw)] flex h-[min(40vh,25rem)] w-[min(22vw,19rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl shadow-[0_18px_44px_rgba(0,0,0,0.35)]"
           title="Their token catchment"
           style={{ filter: tokenHueFilter(opponent?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
-            Their tokens: {theirCount}
+            Their tokens: {opponentBalance}
           </div>
           <ChipSimulationCanvas ref={leftRef} chipColor={oppPalette.chipColor} chipEmissive={oppPalette.chipEmissive} className="min-h-0 flex-1" />
         </div>
         <div
-          className={`absolute top-1/2 left-[calc(50%+35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border ${myPalette.border} shadow-[inset_0_0_0_1px_rgba(96,165,250,0.16)]`}
+          className="absolute top-1/2 left-[calc(50%+35vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl shadow-[0_22px_52px_rgba(0,0,0,0.38)]"
           title="Your token catchment"
           style={{ filter: tokenHueFilter(me?.role) }}
         >
           <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
-            Your tokens: {selfCount}
+            Your tokens: {selfBalance}
           </div>
           <ChipSimulationCanvas ref={rightRef} chipColor={myPalette.chipColor} chipEmissive={myPalette.chipEmissive} className="min-h-0 flex-1" />
+          {onOpenCashShop ? (
+            <div className="pointer-events-auto mt-auto flex w-full justify-center px-2 pb-2 pt-1">
+              <button
+                type="button"
+                onClick={onOpenCashShop}
+                className="rounded-lg border border-amber-500/75 bg-amber-400/95 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-950 shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-colors hover:bg-amber-300"
+              >
+                Cash Chips
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
       <button
