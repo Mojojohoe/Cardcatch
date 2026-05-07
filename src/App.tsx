@@ -2497,9 +2497,13 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   useEffect(() => {
     handDealStartedForRef.current = '';
     setHandDealVisibleCount(null);
-  }, [room.code]);
+  }, [room?.code]);
 
   useEffect(() => {
+    if (!room) {
+      setHandDealVisibleCount(null);
+      return;
+    }
     const self = room.players[myUid];
     if (!self || room.status !== 'playing' || room.currentTurn !== 1 || self.hand.length === 0) {
       setHandDealVisibleCount(null);
@@ -2520,7 +2524,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       setHandDealVisibleCount(count);
     }, 200);
     return () => window.clearInterval(timer);
-  }, [room.status, room.currentTurn, room.code, room.players, myUid]);
+  }, [room, myUid]);
 
   useEffect(() => {
     return () => {
