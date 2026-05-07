@@ -134,6 +134,7 @@ import { panicDiceSeatAllowed } from './services/panicDiceSeat';
 import { warmCardArtImages } from './cardArt/preload';
 import { shippedPlayingCardBackRasterUrl } from './cardArt/shippedRasterFallbacks';
 import { CardCreator } from './cardCreator/CardCreator';
+import { CardAnimationPreview } from './cardCreator/CardAnimationPreview';
 import { PlayerSettingsMenu } from './components/PlayerSettingsMenu';
 import { usePlayerDisplayPreferences } from './playerDisplayPreferences';
 import {
@@ -756,6 +757,7 @@ const RulesSheet: React.FC<{ settings: GameSettings; onClose: () => void }> = ({
 const DevPowerMenu: React.FC<{
   onSelect: (id: number) => void;
   onClose: () => void;
+  onOpenAnimationPreview?: () => void;
   curseControlsEnabled?: boolean;
   onActivateCurseOnTable?: (curseId: number) => void;
   onClearActiveCurses?: () => void;
@@ -766,6 +768,7 @@ const DevPowerMenu: React.FC<{
 }> = ({
   onSelect,
   onClose,
+  onOpenAnimationPreview,
   curseControlsEnabled = false,
   onActivateCurseOnTable,
   onClearActiveCurses,
@@ -807,6 +810,18 @@ const DevPowerMenu: React.FC<{
         >
           <Layers className="h-4 w-4 shrink-0" strokeWidth={2} />
           Open card creator
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (onOpenAnimationPreview) onOpenAnimationPreview();
+            else window.location.hash = '#card-anim-preview';
+            onClose();
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-600/55 bg-violet-900/35 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-violet-100 transition-colors hover:border-violet-400/75 hover:bg-violet-800/65"
+        >
+          <Sparkles className="h-4 w-4 shrink-0" strokeWidth={2} />
+          Open animation preview lab
         </button>
       </div>
 
@@ -3550,6 +3565,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         <DevPowerMenu 
           onSelect={(id) => serviceRef.current.cheatPowerCard(id)} 
           onClose={() => setIsDevMenuOpen(false)} 
+          onOpenAnimationPreview={() => {
+            window.location.hash = '#card-anim-preview';
+          }}
           curseControlsEnabled={Boolean(
             room.settings.enableCurseCards !== false &&
               (room.status === 'playing' || room.status === 'powering' || room.status === 'results'),
@@ -4830,6 +4848,31 @@ function CardCreatorHashOverlay() {
   );
 }
 
+function CardAnimationPreviewHashOverlay() {
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setPreviewOpen(window.location.hash === '#card-anim-preview');
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  if (!previewOpen) return null;
+
+  return (
+    <CardAnimationPreview
+      onOpenCreator={() => {
+        window.location.hash = '#card-creator';
+      }}
+      onClose={() => {
+        window.location.hash = '';
+        setPreviewOpen(false);
+      }}
+    />
+  );
+}
+
 export default function App() {
   const [isDual, setIsDual] = useState(false);
 
@@ -4837,6 +4880,7 @@ export default function App() {
     <>
       {/* CardCreator is fixed full-screen; keep outside overflow-hidden so it is not clipped. */}
       <CardCreatorHashOverlay />
+      <CardAnimationPreviewHashOverlay />
     <div className="min-h-screen overflow-x-visible overflow-y-hidden bg-emerald-950 font-sans text-white selection:bg-yellow-400 selection:text-black">
       {/* Dev Toggle */}
       <div className="fixed top-4 left-4 z-[220] flex gap-2">
