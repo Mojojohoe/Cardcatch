@@ -252,6 +252,13 @@ export const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
   greedJointDiamondCoinGlyphs = false,
   artworkTable = false,
 }) => {
+  const [compactHeight, setCompactHeight] = useState(false);
+  useEffect(() => {
+    const check = () => setCompactHeight(window.innerHeight < 1100);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
   const wheelDef = useMemo(
     () =>
       buildTargetSuitWheelDefinition(availableSuits, {
@@ -277,7 +284,7 @@ export const TargetSuitWheel: React.FC<TargetSuitWheelProps> = ({
 
   return (
     <div className="relative flex flex-col items-center pt-5">
-      <div className="relative z-10 aspect-square w-[min(14.4rem,92vw)] shrink-0 sm:w-[14.4rem]">
+      <div className={`relative z-10 aspect-square w-[min(14.4rem,92vw)] shrink-0 sm:w-[14.4rem] ${compactHeight ? 'scale-[0.9] sm:scale-[0.84]' : ''}`}>
         <div className="pointer-events-none absolute inset-0 z-[5] rounded-full bg-linear-to-tr from-white/10 to-transparent" />
         <ConfigurableWheel
           definition={wheelDef}

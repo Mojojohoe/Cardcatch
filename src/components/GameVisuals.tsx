@@ -41,7 +41,6 @@ import {
 } from 'lucide-react';
 import { playingCardEntranceMotion, type CardPresentationMode, type DeckPullSide, type PresentationPace } from '../animations/cardMotion';
 import { useOptionalCardArt } from '../cardArt/cardArtContext';
-import { isAssembledRasterCardId } from '../cardArt/assembledRaster';
 import { cardArtAssetUrl } from '../cardArt/paths';
 import { isShopPackPlaceholder } from '../shopPack';
 import {
@@ -463,9 +462,6 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   const { suit, value, isJoker } = useMemo(() => (revealed ? parseCard(card) : { suit: '', value: '', isJoker: false }), [card, revealed]);
   const cardArt = useOptionalCardArt();
   const cardArtOverride = cardArt?.manifest[card];
-  const hasCustomRasterFace = Boolean(
-    cardArtOverride?.customDataUrl || (cardArtOverride?.customImageFile && cardArtOverride.customImageFile.trim()),
-  );
   const panicVec =
     panicBladeFace &&
     revealed &&
@@ -476,8 +472,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     !panicVec &&
       cardArt &&
       cardArt.mode === 'raster' &&
-      revealed &&
-      (hasCustomRasterFace || isAssembledRasterCardId(card)),
+      revealed,
   );
   const transformMorphActive = resolutionMorph === 'transform_out' || resolutionMorph === 'transform_in';
   const playEmpowerWiggle = (resolutionWiggleTick ?? 0) > 0 && !transformMorphActive;
@@ -750,20 +745,18 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         style={{ transformStyle: 'preserve-3d' }}
         initial={
           resolutionMorph === 'transform_in'
-            ? { rotateY: 90, scaleY: 0.82, filter: 'brightness(1.2)' }
+            ? { rotateY: 90, filter: 'brightness(1.2)' }
             : false
         }
         animate={
           resolutionMorph === 'transform_out'
             ? {
                 rotateY: [0, 0, -90],
-                scaleY: [1, 1, 0.82],
                 filter: ['brightness(1)', 'brightness(1)', 'brightness(1.2)'],
               }
             : resolutionMorph === 'transform_in'
               ? {
                   rotateY: [90, 0],
-                  scaleY: [0.82, 1],
                   filter: ['brightness(1.2)', 'brightness(1)'],
                 }
             : playEmpowerWiggle

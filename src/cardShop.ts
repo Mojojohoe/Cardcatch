@@ -94,7 +94,7 @@ function rollDiscountOffer(): CardShopOffer {
 
 export function createInitialCardShop(): CardShopState {
   const majors = shuffle(Array.from({ length: 22 }, (_, i) => i));
-  const cursePick = shuffle([...CURSE_IDS])[0]!;
+  const cursePick = shuffle(CURSE_IDS.filter((id) => id !== CURSE_GREEN_EYED_MONSTER))[0]!;
   const jokerId = Math.random() < 0.5 ? 'Joker-1' : 'Joker-2';
 
   const slots: Record<string, CardShopSlot> = {

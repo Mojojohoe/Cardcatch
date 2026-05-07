@@ -1188,6 +1188,7 @@ const ResolutionSequence: React.FC<{
   /** Bumped after each empower step so `CardVisual` replays a short wiggle without dropping artwork mode. */
   const [resolutionEmpowerWiggleTick, setResolutionEmpowerWiggleTick] = useState<Record<string, number>>({});
   const [resolutionEmpowerCaption, setResolutionEmpowerCaption] = useState<{ uid: string; text: string } | null>(null);
+  const [resolutionPowerOverlay, setResolutionPowerOverlay] = useState<{ uid?: string; powerCardId: number } | null>(null);
 
   const lustHeartParticles = useMemo(() => {
     if (!outcome.lustRoundFx?.contributions.length) return [] as { uid: string; k: string }[];
@@ -1314,6 +1315,11 @@ const ResolutionSequence: React.FC<{
               }),
             );
           }
+        }
+        if (event.type === 'POWER_TRIGGER' && typeof event.powerCardId === 'number') {
+          setResolutionPowerOverlay({ uid: event.uid, powerCardId: event.powerCardId });
+        } else {
+          setResolutionPowerOverlay(null);
         }
 
         switch (event.type) {
@@ -1541,6 +1547,7 @@ const ResolutionSequence: React.FC<{
           setSlothDreamWheel(null);
         }
         setResolutionFx(null);
+        if (event.type !== 'POWER_TRIGGER') setResolutionPowerOverlay(null);
       }
       
       setCurrentCards(prev => {
@@ -1564,6 +1571,7 @@ const ResolutionSequence: React.FC<{
       setResolutionEmpowerCaption(null);
       setWrathAnim(null);
       setWrathRevealDone(false);
+      setResolutionPowerOverlay(null);
     };
   }, [outcome.events, outcome.cardsPlayed, outcome.slothDreamFx, outcome.wrathFx, room.hostUid, room.players]);
 
@@ -1699,6 +1707,20 @@ const ResolutionSequence: React.FC<{
             </motion.div>
           ))}
         </div>
+      )}
+      {resolutionPowerOverlay && (
+        <motion.div
+          key={`power-overlay-${resolutionPowerOverlay.powerCardId}-${resolutionPowerOverlay.uid ?? 'table'}`}
+          className="pointer-events-none absolute inset-0 z-[82] flex items-center justify-center"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.96 }}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="rounded-2xl border border-violet-500/35 bg-black/45 p-2 shadow-[0_16px_44px_rgba(0,0,0,0.6)]">
+            <PowerCardVisual cardId={resolutionPowerOverlay.powerCardId} matchHandCard revealed />
+          </div>
+        </motion.div>
       )}
       <AnimatePresence>
         {resolutionFx?.kind === 'judgement_flash' && (
@@ -1954,60 +1976,6 @@ const ResolutionSequence: React.FC<{
                     />
                   </div>
                 )}
-                <div className="relative inline-block shrink-0">
-                  {outcome.powerCardIdsPlayed[uid] !== null && (
-                    <PowerTuckedUnderSuit side={idx === 0 ? 'left' : 'right'}>
-                      <div className="relative h-full w-full">
-                        <motion.div
-                          animate={
-                            towerScorch[uid]
-                              ? {
-                                  scale: [1, 1.08, 0.92],
-                                  filter: [
-                                    'brightness(1) grayscale(0)',
-                                    'brightness(1.35) sepia(0.35)',
-                                    'brightness(0.75) grayscale(1)',
-                                  ],
-                                }
-                              : { scale: 1, filter: 'brightness(1) grayscale(0)' }
-                          }
-                          transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
-                          className={`overflow-visible rounded-xl shadow-[0_14px_32px_rgba(0,0,0,0.42)] ${
-                            outcome.powerCardIdsPlayed[uid] === 15 ? 'ring-2 ring-red-500 animate-pulse' : ''
-                          }`}
-                        >
-                          <PowerCardVisual
-                            cardId={outcome.powerCardIdsPlayed[uid]!}
-                            matchHandCard
-                            destroyed={Boolean(
-                              towerScorch[uid] ||
-                                (isDone && outcome.powerCardTowerBlocked?.[uid])
-                            )}
-                          />
-                        </motion.div>
-                        <AnimatePresence>
-                          {resolutionFx?.kind === 'power_tear' && resolutionFx.uid === uid && (
-                            <ResolutionTearOverlay>
-                              <PowerCardVisual
-                                cardId={outcome.powerCardIdsPlayed[uid]!}
-                                matchHandCard
-                                destroyed
-                              />
-                            </ResolutionTearOverlay>
-                          )}
-                          {devilStolen[uid] !== undefined && (
-                            <motion.div
-                              initial={{ scale: 0, x: -5, opacity: 0 }}
-                              animate={{ scale: 0.5, x: -12, opacity: 1 }}
-                              className="absolute -right-0.5 -top-0.5 z-[2] rounded-full border border-red-500 bg-slate-900 p-0.5 shadow-2xl"
-                            >
-                              <PowerCardVisual cardId={devilStolen[uid]} small />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </PowerTuckedUnderSuit>
-                  )}
                 <motion.div 
                   className="relative z-10 rounded-xl shadow-[0_0_32px_rgba(250,204,21,0.18)] overflow-visible"
                   animate={resolutionColumnMotion(resolutionFx, uid)}
@@ -2025,6 +1993,17 @@ const ResolutionSequence: React.FC<{
                     resolutionMorphTick={resolutionCardMorphTick[uid] ?? 0}
                     resolutionWiggleTick={resolutionEmpowerWiggleTick[uid] ?? 0}
                   />
+                  <AnimatePresence>
+                    {resolutionFx?.kind === 'power_tear' && resolutionFx.uid === uid && outcome.powerCardIdsPlayed[uid] !== null && (
+                      <ResolutionTearOverlay>
+                        <PowerCardVisual
+                          cardId={outcome.powerCardIdsPlayed[uid]!}
+                          matchHandCard
+                          destroyed
+                        />
+                      </ResolutionTearOverlay>
+                    )}
+                  </AnimatePresence>
                   <AnimatePresence>
                     {resolutionFx?.kind === 'clash_shatter' && resolutionFx.uid === uid && (
                       <ResolutionTearOverlay>
@@ -2157,7 +2136,6 @@ const ResolutionSequence: React.FC<{
                 )}
               </div>
             </div>
-          </div>
             {idx === 0 && wrathTripleColumn && (
               <div
                 className="flex w-[5.5rem] shrink-0 flex-col items-center justify-end self-end pb-4 min-h-[9.5rem] sm:min-h-[10.5rem] sm:w-[6.5rem] sm:pb-6"
@@ -2508,11 +2486,41 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [handHudNeedsStack, setHandHudNeedsStack] = useState(false);
   const handRowRef = useRef<HTMLDivElement>(null);
   const [handRowW, setHandRowW] = useState(400);
+  const [handDealVisibleCount, setHandDealVisibleCount] = useState<number | null>(null);
+  const handDealStartedForRef = useRef<string>('');
   const famineActivePrev = useRef(false);
   const dualSnapRef = useRef({ instanceId, isDual, playerName, roomId, room });
   dualSnapRef.current = { instanceId, isDual, playerName, roomId, room };
   const dualResumeStartedRef = useRef(false);
   const { highVisibilityMode } = usePlayerDisplayPreferences();
+
+  useEffect(() => {
+    handDealStartedForRef.current = '';
+    setHandDealVisibleCount(null);
+  }, [room.code]);
+
+  useEffect(() => {
+    const self = room.players[myUid];
+    if (!self || room.status !== 'playing' || room.currentTurn !== 1 || self.hand.length === 0) {
+      setHandDealVisibleCount(null);
+      return;
+    }
+    const handSig = `${room.code}:${self.uid}:${room.currentTurn}:${self.hand.length}`;
+    if (handDealStartedForRef.current === handSig) return;
+    handDealStartedForRef.current = handSig;
+    setHandDealVisibleCount(0);
+    let count = 0;
+    const timer = window.setInterval(() => {
+      count += 1;
+      if (count >= self.hand.length) {
+        setHandDealVisibleCount(null);
+        window.clearInterval(timer);
+        return;
+      }
+      setHandDealVisibleCount(count);
+    }, 200);
+    return () => window.clearInterval(timer);
+  }, [room.status, room.currentTurn, room.code, room.players, myUid]);
 
   useEffect(() => {
     return () => {
@@ -4531,14 +4539,16 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               }`}
               style={{ transform: 'translateY(-8px)' }}
             >
-              {me.hand.map((card, i) => {
+              {(handDealVisibleCount === null ? me.hand : me.hand.slice(0, handDealVisibleCount)).map((card, i) => {
+                const initialDealAnimating = handDealVisibleCount !== null;
+                const visibleHandLen = handDealVisibleCount === null ? me.hand.length : Math.max(1, handDealVisibleCount);
                 const selected = selectedCardIndex === i;
-                const fan = playerHandFanMotion(i, me.hand.length, fanSqueeze);
+                const fan = playerHandFanMotion(i, visibleHandLen, fanSqueeze);
                 const dragGapActive =
                   handDragFromIndex !== null &&
                   handDragHoverIndex !== null &&
                   handDragFromIndex !== handDragHoverIndex;
-                const gapPush = dragGapActive ? 18 : 0;
+                const gapPush = dragGapActive ? 30 : 0;
                 let gapShift = 0;
                 if (
                   dragGapActive &&
@@ -4588,24 +4598,24 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     }
                     transition={{ type: 'tween', duration: 0.22, ease: 'easeOut' }}
                     layout={false}
-                    className={`relative ${!me.confirmed && !isShopPack ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                    draggable={!me.confirmed && !isShopPack}
+                    className={`relative ${!me.confirmed && !isShopPack && !initialDealAnimating ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                    draggable={!me.confirmed && !isShopPack && !initialDealAnimating}
                     onDragStart={(e) => {
-                      if (me.confirmed || isShopPack) return;
+                      if (me.confirmed || isShopPack || initialDealAnimating) return;
                       setHandDragFromIndex(i);
                       setHandDragHoverIndex(i);
                       e.dataTransfer.effectAllowed = 'move';
                       e.dataTransfer.setData('text/plain', String(i));
                     }}
                     onDragOver={(e) => {
-                      if (me.confirmed || isShopPack) return;
+                      if (me.confirmed || isShopPack || initialDealAnimating) return;
                       e.preventDefault();
                       setHandDragHoverIndex(i);
                       e.dataTransfer.dropEffect = 'move';
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      if (me.confirmed || isShopPack) return;
+                      if (me.confirmed || isShopPack || initialDealAnimating) return;
                       const from = Number(e.dataTransfer.getData('text/plain'));
                       setHandDragFromIndex(null);
                       setHandDragHoverIndex(null);
@@ -4646,9 +4656,9 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       envyCovetedGlow={Boolean(envyCovetedHere && !envyMuted)}
                       detailTooltip={detailTooltip}
                       lustHeartRulesActive={lustHeartUi}
-                      onClick={() => !me.confirmed && !combinedMuted && !isShopPack && setSelectedCardIndex(i)}
+                      onClick={() => !me.confirmed && !combinedMuted && !isShopPack && !initialDealAnimating && setSelectedCardIndex(i)}
                       role={me.role}
-                      presentation="none"
+                      presentation={initialDealAnimating ? 'deckPull' : 'none'}
                       delay={0}
                       motionLayout={false}
                       handUniformRasterScale={handUniformRasterScale}
