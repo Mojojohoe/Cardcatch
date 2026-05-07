@@ -2,11 +2,18 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 let unlocked = false;
 const queued: Array<{ path: string; volumePercent: number }> = [];
 
+function resolveAssetPath(path: string): string {
+  const clean = path.replace(/^\/+/, '');
+  const base = import.meta.env.BASE_URL || '/';
+  const prefix = base.endsWith('/') ? base : `${base}/`;
+  return `${prefix}${clean}`;
+}
+
 function markUnlocked() {
   unlocked = true;
   while (queued.length) {
     const next = queued.shift()!;
-    const audio = new Audio(next.path);
+    const audio = new Audio(resolveAssetPath(next.path));
     audio.volume = clamp01(next.volumePercent / 100);
     void audio.play().catch(() => {});
   }
@@ -31,7 +38,7 @@ export function playSfx(path: string, volumePercent: number) {
     queued.push({ path, volumePercent: vol * 100 });
     return;
   }
-  const audio = new Audio(path);
+  const audio = new Audio(resolveAssetPath(path));
   audio.volume = vol;
   void audio.play().catch(() => {});
 }

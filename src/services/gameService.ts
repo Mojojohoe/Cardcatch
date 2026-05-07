@@ -3442,7 +3442,7 @@ export class GameService {
     });
     const nextCardsPlayedVisual = {
       ...prev.cardsPlayed,
-      [oppUid]: tableauDisplay.opponentDisplayed,
+      [oppUid]: combat.opponentDestroyed ? '' : tableauDisplay.opponentDisplayed,
     };
 
     const clashDestroyed: Record<string, boolean> = { ...(prev.clashDestroyedByPenalty ?? {}) };
@@ -3520,11 +3520,23 @@ export class GameService {
       const tn = tokenByUid[nw] ?? 0;
       if (tn > 0) finalMessage += ` (+${tn} token${tn === 1 ? '' : 's'})`;
     }
+    if (combat.opponentDestroyed) {
+      finalMessage += ` ${room.players[oppUid].name}'s card was destroyed!`;
+    }
 
     const panicLine: ResolutionEvent = {
       type: 'POWER_TRIGGER',
       message: `${room.players[uid].name} rolls panic dice (${d1}+${d2}=${total}) — ${compactCardLabel(panicCard)} clashes with ${room.players[oppUid].name}'s play (${combat.exchanges} exchanges).`,
     };
+    const panicDestroyEvents: ResolutionEvent[] = [];
+    if (combat.opponentDestroyed) {
+      panicDestroyEvents.push({
+        type: 'CLASH_DESTROYED',
+        uid: oppUid,
+        cardId: oppCard,
+        message: `${room.players[oppUid].name}'s card was destroyed by panic clash.`,
+      });
+    }
 
     const nextOutcome: NonNullable<RoomData['lastOutcome']> = {
       ...prev,
@@ -3533,7 +3545,7 @@ export class GameService {
       gains,
       cardsPlayed: nextCardsPlayedVisual,
       clashDestroyedByPenalty: clashDestroyed,
-      events: [...prev.events, panicLine],
+      events: [...prev.events, panicLine, ...panicDestroyEvents],
       panicFx: {
         attackerUid: uid,
         opponentUid: oppUid,

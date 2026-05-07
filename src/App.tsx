@@ -4334,17 +4334,6 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         </motion.div>
                       )}
                       <div className="relative inline-block">
-                        {room.lastOutcome?.powerCardIdsPlayed?.[uid] != null && (
-                          <PowerTuckedUnderSuit side={seatIdx === 0 ? 'left' : 'right'}>
-                            <div className="overflow-visible rounded-xl shadow-[0_14px_32px_rgba(0,0,0,0.42)]">
-                              <PowerCardVisual
-                                cardId={room.lastOutcome!.powerCardIdsPlayed[uid]!}
-                                matchHandCard
-                                destroyed={Boolean(room.lastOutcome.powerCardTowerBlocked?.[uid])}
-                              />
-                            </div>
-                          </PowerTuckedUnderSuit>
-                        )}
                         <div className="relative z-10">
                           <CardVisual
                             card={room.lastOutcome!.cardsPlayed[uid]}

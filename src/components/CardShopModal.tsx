@@ -14,6 +14,7 @@ const MAIN_GRID_IDS = [
   'pow_a',
   'pow_b',
   'joker',
+  'discount',
   'ace_Hearts',
   'ace_Diamonds',
   'ace_Clubs',
@@ -103,7 +104,7 @@ const ShopTile: React.FC<{
 
   return (
     <div
-      className={`relative flex flex-col items-center gap-2 rounded-2xl border border-slate-700/80 bg-slate-950/90 p-3 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.08)] ${
+      className={`relative flex flex-col items-center gap-2 rounded-2xl border border-slate-700/80 ${slotId === 'discount' ? 'bg-violet-950/85' : 'bg-slate-950/90'} p-3 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.08)] ${
         slot.soldOut || !canAfford ? 'opacity-[0.42] saturate-[0.35]' : ''
       } ${interactive ? 'transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[0_16px_44px_rgba(250,204,21,0.12)] hover:ring-2 hover:ring-amber-400/45' : ''}`}
       onMouseEnter={() => {
@@ -144,6 +145,9 @@ const ShopTile: React.FC<{
           <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">tokens</span>
         </div>
       </button>
+      {slotId === 'discount' ? (
+        <DiscountSticker className="pointer-events-none absolute -right-2 -top-2 z-[30] h-10 w-10 drop-shadow-[0_8px_20px_rgba(239,68,68,0.45)]" />
+      ) : null}
       {hover && interactive ? (
         <p
           className={`pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-30 max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 ${EMERALD_STRIP_TOOLTIP_PANEL}`}
@@ -155,41 +159,6 @@ const ShopTile: React.FC<{
   );
 };
 
-function DiscountOfferBlock({
-  discountSlot,
-  tokenBalance,
-  onBuy,
-  purchaseMode,
-  pendingPurchases,
-  myUid,
-}: {
-  discountSlot: CardShopSlot;
-  tokenBalance: number;
-  onBuy: () => void;
-  purchaseMode: 'black_friday' | 'coin_flip';
-  pendingPurchases?: PendingCardShopPurchase[] | null;
-  myUid: string;
-}) {
-  return (
-    <div className="flex max-w-full flex-1 flex-wrap items-end gap-4 sm:flex-nowrap">
-      <div className="relative">
-        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-rose-300/95">Round special — 25% off</p>
-        <DiscountSticker className="pointer-events-none absolute -right-3 -top-2 z-[30] h-14 w-14 drop-shadow-[0_8px_20px_rgba(239,68,68,0.45)]" />
-        <ShopTile
-          slotId="discount"
-          slot={discountSlot}
-          tokenBalance={tokenBalance}
-          onBuy={onBuy}
-          compact
-          purchaseMode={purchaseMode}
-          pendingPurchases={pendingPurchases}
-          myUid={myUid}
-        />
-      </div>
-    </div>
-  );
-}
-
 export const CardShopModal: React.FC<{
   cardShop: CardShopState;
   tokenBalance: number;
@@ -199,8 +168,6 @@ export const CardShopModal: React.FC<{
   pendingPurchases?: PendingCardShopPurchase[] | null;
   myUid: string;
 }> = ({ cardShop, tokenBalance, onBuy, onClose, purchaseMode, pendingPurchases, myUid }) => {
-  const discountSlot = cardShop.slots.discount;
-
   return (
     <div
       className="fixed inset-0 z-[520] flex flex-col bg-emerald-950/[0.97] backdrop-blur-md"
@@ -247,16 +214,6 @@ export const CardShopModal: React.FC<{
           Close
         </button>
 
-        {discountSlot ? (
-          <DiscountOfferBlock
-            discountSlot={discountSlot}
-            tokenBalance={tokenBalance}
-            onBuy={() => onBuy('discount')}
-            purchaseMode={purchaseMode}
-            pendingPurchases={pendingPurchases}
-            myUid={myUid}
-          />
-        ) : null}
       </footer>
     </div>
   );

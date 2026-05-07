@@ -50,6 +50,30 @@ const PanicStrikeCut: React.FC = () => (
   </motion.div>
 );
 
+const PanicTearFx: React.FC = () => (
+  <motion.div
+    className="pointer-events-none absolute inset-0 z-[34]"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+  >
+    <motion.div
+      className="absolute inset-0"
+      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+      animate={{ x: -44, y: 58, rotate: -16, opacity: [1, 1, 0.05] }}
+      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+      style={{ clipPath: 'polygon(0% 0%, 53% 0%, 49% 12%, 55% 24%, 47% 38%, 56% 50%, 48% 64%, 54% 79%, 50% 100%, 0% 100%)' }}
+    />
+    <motion.div
+      className="absolute inset-0"
+      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+      animate={{ x: 44, y: 58, rotate: 16, opacity: [1, 1, 0.05] }}
+      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+      style={{ clipPath: 'polygon(47% 0%, 100% 0%, 100% 100%, 50% 100%, 54% 82%, 46% 66%, 53% 50%, 45% 34%, 51% 17%)' }}
+    />
+  </motion.div>
+);
+
 const INTRO_REVEAL_MS = 580;
 /** Card stays centered after reveal (before reposition / exchange loop). */
 const INTRO_HOLD_MS = 1000;
@@ -108,6 +132,8 @@ export const PanicClashResolution: React.FC<{
   const [frameIdx, setFrameIdx] = useState(0);
   const [showCut, setShowCut] = useState(false);
   const [strikeKey, setStrikeKey] = useState(0);
+  const [tearPanic, setTearPanic] = useState(false);
+  const [tearOpp, setTearOpp] = useState(false);
   const initialPanic = frames[0]?.panicRemaining ?? panicSwordStrikeStrength(panicCardId);
   const initialOpponent = frames[0]?.opponentEffective ?? 0;
   const f = frames[Math.min(frameIdx, Math.max(0, frames.length - 1))] ?? {
@@ -150,12 +176,13 @@ export const PanicClashResolution: React.FC<{
           idx += 1;
           setStrikeKey((k) => k + 1);
           setShowCut(true);
-          await sleep(200);
-          if (cancelled) return;
-          setFrameIdx(idx);
-          await sleep(280);
+          await sleep(480);
           if (cancelled) return;
           setShowCut(false);
+          setFrameIdx(idx);
+          const next = frames[Math.min(idx, frames.length - 1)];
+          if (next && next.opponentEffective <= 0 && !tearOpp) setTearOpp(true);
+          if (next && next.panicRemaining <= 0 && !tearPanic) setTearPanic(true);
         }
       }
 
@@ -223,7 +250,10 @@ export const PanicClashResolution: React.FC<{
               <AnimatePresence mode="wait">
                 {showCut ? <PanicStrikeCut key={`panic-cut-${strikeKey}`} /> : null}
               </AnimatePresence>
-              <CardVisual card={panicCardFx} revealed noAnimate presentation="none" lustHeartRulesActive={false} />
+              <AnimatePresence>{tearPanic ? <PanicTearFx key="panic-tear" /> : null}</AnimatePresence>
+              {!tearPanic && (
+                <CardVisual card={panicCardFx} revealed noAnimate presentation="none" lustHeartRulesActive={false} />
+              )}
             </div>
             <StatBadge tone="panic" label="Panic" value={f.panicRemaining} />
           </motion.div>
@@ -234,14 +264,17 @@ export const PanicClashResolution: React.FC<{
               <AnimatePresence mode="wait">
                 {showCut ? <PanicStrikeCut key={`opp-cut-${strikeKey}`} /> : null}
               </AnimatePresence>
-              <CardVisual
-                card={opponentCardFx}
-                revealed
-                noAnimate
-                presentation="none"
-                lustHeartRulesActive={false}
-                clashGhost={Boolean(outcome.clashDestroyedByPenalty?.[opponentUid])}
-              />
+              <AnimatePresence>{tearOpp ? <PanicTearFx key="opp-tear" /> : null}</AnimatePresence>
+              {!tearOpp && (
+                <CardVisual
+                  card={opponentCardFx}
+                  revealed
+                  noAnimate
+                  presentation="none"
+                  lustHeartRulesActive={false}
+                  clashGhost={Boolean(outcome.clashDestroyedByPenalty?.[opponentUid])}
+                />
+              )}
             </div>
             <StatBadge tone="opp" label="Clash stamina" value={f.opponentEffective} />
           </div>
