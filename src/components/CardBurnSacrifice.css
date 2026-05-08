@@ -72,8 +72,7 @@
 }
 
 .card-burn-image__cardMount > * {
-  max-height: 94%;
-  width: auto;
+  flex-shrink: 0;
 }
 
 .card-burn-image__burnline {

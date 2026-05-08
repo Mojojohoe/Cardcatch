@@ -72,7 +72,14 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
           className={`card-burn-image__layer card-burn-image__original ${hideFace ? 'card-burn-image__original--hidden' : ''}`}
         >
           <div className="card-burn-image__cardMount">
-            <CardVisual card={cardId} revealed noAnimate presentation="none" small={variant === 'compact'} />
+            <CardVisual
+              card={cardId}
+              revealed
+              noAnimate
+              presentation="none"
+              fillParent
+              small={variant === 'compact'}
+            />
           </div>
         </div>
         <div
