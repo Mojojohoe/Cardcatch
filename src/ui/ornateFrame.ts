@@ -9,12 +9,16 @@ function assetUrl(path: string): string {
 /** 9-slice source regions — must match the shipped border PNG artwork. */
 const ORNATE_SLICE = '120 100 140 fill';
 
+/** Drawn border thickness for `border-image` (larger = visibly heavier gold frame in raster HUD). */
+const ORNATE_GOLD_BORDER_PX = 32;
+const ORNATE_PURPLE_BORDER_PX = 36;
+
 /**
  * Golden tooltip / popup frame for **raster (art) mode only**.
  * Uses `round` tiling so tall/wide panels keep corner scale consistent; middles repeat instead of stretching.
  */
 export function ornateGreenTooltipRasterStyle(): CSSProperties {
-  const w = 18;
+  const w = ORNATE_GOLD_BORDER_PX;
   return {
     color: '#ecfdf5',
     background: '#081210',
@@ -25,7 +29,20 @@ export function ornateGreenTooltipRasterStyle(): CSSProperties {
     borderImageRepeat: 'round',
     borderImageWidth: `${w}px`,
     borderImageOutset: 0,
-    borderRadius: 18,
+    borderRadius: Math.round(w * 0.85),
+  };
+}
+
+/**
+ * Same frame as {@link ornateGreenTooltipRasterStyle} but does not clip the sacrificial-bowl flame
+ * (blend + tall fire particles). Use on the HUD bowl `HoldDelayTooltip` root only.
+ */
+export function ornateGreenSacrificialBowlHudWrapStyle(): CSSProperties {
+  return {
+    ...ornateGreenTooltipRasterStyle(),
+    overflow: 'visible',
+    padding: 0,
+    isolation: 'auto',
   };
 }
 
@@ -33,7 +50,7 @@ export function ornateGreenTooltipRasterStyle(): CSSProperties {
  * Purple panel frame (desperation HUD, wheel shell) for **raster mode only**.
  */
 export function ornatePurplePanelRasterStyle(): CSSProperties {
-  const w = 20;
+  const w = ORNATE_PURPLE_BORDER_PX;
   return {
     color: '#f8fafc',
     background: '#1a1030',
@@ -44,6 +61,6 @@ export function ornatePurplePanelRasterStyle(): CSSProperties {
     borderImageRepeat: 'round',
     borderImageWidth: `${w}px`,
     borderImageOutset: 0,
-    borderRadius: 22,
+    borderRadius: Math.round(w * 0.82),
   };
 }

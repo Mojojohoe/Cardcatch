@@ -146,7 +146,11 @@ import { CardAnimationPreview } from './cardCreator/CardAnimationPreview';
 import { PlayerSettingsMenu } from './components/PlayerSettingsMenu';
 import { usePlayerDisplayPreferences } from './playerDisplayPreferences';
 import { playSfx } from './audio/sfx';
-import { ornateGreenTooltipRasterStyle, ornatePurplePanelRasterStyle } from './ui/ornateFrame';
+import {
+  ornateGreenSacrificialBowlHudWrapStyle,
+  ornateGreenTooltipRasterStyle,
+  ornatePurplePanelRasterStyle,
+} from './ui/ornateFrame';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -4066,8 +4070,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   {room.status === 'playing' && !me.confirmed && opponent && !sacrificialBowlExpandedUi ? (
                     <HoldDelayTooltip
                       caption={HUD_HOLD_SACRIFICIAL_BOWL_CAPTION}
-                      className="pointer-events-auto shrink-0 self-center sm:self-start"
-                      style={displayCardArt?.mode === 'raster' ? ornateGreenTooltipRasterStyle() : undefined}
+                      className="pointer-events-auto shrink-0 self-center sm:self-start isolation-auto !overflow-visible !p-0"
+                      style={
+                        displayCardArt?.mode === 'raster'
+                          ? ornateGreenSacrificialBowlHudWrapStyle()
+                          : { overflow: 'visible', padding: 0, isolation: 'auto' }
+                      }
                     >
                       <div
                         onDragOver={handleSacrificialBowlDragOver}

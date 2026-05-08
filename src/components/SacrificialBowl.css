@@ -5,7 +5,13 @@
 .sacrificial-bowl-ui {
   --sb-bowl-frame-size: 7rem;
   --sb-fire-design: 500px;
-  --sb-burn-design: 100px;
+  /** Ember/smoke sprites — larger pool + keyed animation travel (see `@keyframes sacrificial-bowl-burning`). */
+  --sb-burn-design: 300px;
+  /**
+   * Fire column vertical placement: aligns flame base toward the bowl rim.
+   * Tied to frame size (same basis as %-offset) instead of an arbitrary `-340%`.
+   */
+  --sb-fire-host-top: calc(-3.4 * var(--sb-bowl-frame-size));
 }
 
 @media (min-width: 640px) {
@@ -22,7 +28,7 @@
 .sacrificial-bowl-fire-host {
   position: absolute;
   left: 50%;
-  top: -60%;
+  top: var(--sb-fire-host-top);
   z-index: 5;
   display: flex;
   width: var(--sb-fire-design);
@@ -30,6 +36,7 @@
   align-items: flex-end;
   justify-content: center;
   pointer-events: none;
+  mix-blend-mode: difference;
   transform: translateX(-50%);
   transform-origin: 50% 100%;
 }
@@ -57,7 +64,8 @@
 
 .sacrificial-bowl-smoke {
   position: absolute;
-  top: var(--sb-fire-design);
+  /** Sits in the amber body so `mix-blend-mode` on particles reads against the flame. */
+  top: 200px;
   left: calc(-1 * var(--sb-burn-design) / 2);
   width: var(--sb-burn-design);
   height: var(--sb-burn-design);

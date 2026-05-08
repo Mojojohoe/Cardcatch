@@ -132,6 +132,13 @@ export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(
         className={`sacrificial-bowl-breathe-ring relative flex flex-col items-center rounded-full p-1.5 transition-[box-shadow,transform] duration-200 ${glowRing} ${breathe ? 'sacrificial-bowl-breathe-ring--pulse' : ''}`}
       >
         <div className={bowlFrameClass}>
+          <div className="pointer-events-none absolute inset-x-2 top-1 z-[32] flex justify-center">
+            <span className="font-mono text-[clamp(14px,3.8vmin,20px)] font-black tabular-nums leading-none text-amber-200/95 drop-shadow-[0_0_10px_rgba(0,0,0,0.9),0_0_12px_rgba(251,191,36,0.45)]">
+              {burnsRemaining}
+              <span className="text-[0.72em] font-bold text-amber-200/65">/2</span>
+            </span>
+          </div>
+
           <div className="pointer-events-none absolute inset-[8%] z-0 translate-y-[40%]">{bowlInner}</div>
 
           <div className="sacrificial-bowl-fire-host overflow-visible">
@@ -148,10 +155,6 @@ export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(
 
           <div className="pointer-events-none absolute inset-[6%] z-10 translate-y-[40%]">{bowlOuter}</div>
         </div>
-      </div>
-
-      <div className="mt-1 font-mono text-[11px] font-black tabular-nums text-amber-200/95 drop-shadow-[0_0_8px_rgba(251,191,36,0.35)]">
-        {burnsRemaining}
       </div>
     </div>
   );
