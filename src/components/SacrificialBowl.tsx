@@ -68,11 +68,13 @@ export interface SacrificialBowlProps {
   burnsRemaining: number;
   /** Short post-burn emphasis pulse (expanded overlay). */
   breathe?: boolean;
+  /** Curse Lust on the table: pink-tint flame and rejects Heart burns (rules enforced in `gameService`). */
+  lustFire?: boolean;
   className?: string;
 }
 
 export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(function SacrificialBowl(
-  { rasterMode, expanded, catchGlow, burnsRemaining, breathe = false, className },
+  { rasterMode, expanded, catchGlow, burnsRemaining, breathe = false, lustFire = false, className },
   ref,
 ) {
   const uid = useId().replace(/:/g, '');
@@ -141,7 +143,7 @@ export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(
 
           <div className="pointer-events-none absolute inset-[8%] z-0 translate-y-[40%]">{bowlInner}</div>
 
-          <div className="sacrificial-bowl-fire-host">
+          <div className={`sacrificial-bowl-fire-host ${lustFire ? 'sacrificial-bowl-fire-host--lust' : ''}`}>
             <div className="sacrificial-bowl-fire">
               {burnStyles.map((st, i) => (
                 <div

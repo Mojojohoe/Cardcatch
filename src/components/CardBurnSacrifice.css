@@ -44,7 +44,7 @@
 .card-burn-sacrifice__sizer {
   position: relative;
   overflow: hidden;
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
 }
 
 /**
@@ -54,13 +54,13 @@
 .card-burn-image {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
   height: 100%;
-  aspect-ratio: 770 / 430;
   width: auto;
+  aspect-ratio: 770 / 430;
+  transform: translateX(-50%);
   overflow: hidden;
-  /** Under the lighten burnline blend, opaque backing removes white letterboxing bands. */
+  /** Pin to card box top edge so the sprite height matches the sizer exactly (no vertical centering bleed). */
   background-color: #050506;
   isolation: isolate;
 }
@@ -100,7 +100,8 @@
 }
 
 .card-burn-image__cardMount > * {
-  max-height: 94%;
+  max-height: 100%;
+  max-width: 100%;
   width: auto;
   flex-shrink: 0;
 }

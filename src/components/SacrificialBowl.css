@@ -67,6 +67,11 @@
   transform: scale(0.4, 1);
 }
 
+/** Curse Lust — pink flame (hue shift on authored orange core). */
+.sacrificial-bowl-fire-host--lust .sacrificial-bowl-fire {
+  filter: blur(20px) contrast(30) hue-rotate(-70deg);
+}
+
 .sacrificial-bowl-smoke {
   position: absolute;
   /** Sits in the amber body so `mix-blend-mode` on particles reads against the flame. */

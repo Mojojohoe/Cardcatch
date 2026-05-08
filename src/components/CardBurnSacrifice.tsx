@@ -2,9 +2,12 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CardVisual } from './GameVisuals';
 import { cardArtAssetUrl } from '../cardArt/paths';
 import { PC_HAND } from '../cardUiDimensions';
+import { playSfx } from '../audio/sfx';
+import { usePlayerDisplayPreferences } from '../playerDisplayPreferences';
 import './CardBurnSacrifice.css';
 
 const BURN_START_DELAY_MS = 100;
+const CARD_BURN_SFX = '/assets/sounds/Card-Burn.mp3';
 /** Sprite run is 2s; hide face slightly before strip end. */
 const HIDE_CARD_AFTER_MS = 1900;
 
@@ -31,6 +34,7 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
   const [hideFace, setHideFace] = useState(false);
   const measureRef = useRef<HTMLDivElement>(null);
   const [stripEndPx, setStripEndPx] = useState(STRIP_END_OFFSET_PX);
+  const { sfxVolume } = usePlayerDisplayPreferences();
 
   const burnUrl = cardArtAssetUrl('burn.jpg');
   const burnLineUrl = cardArtAssetUrl('burnline.jpg');
@@ -55,11 +59,13 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
   useEffect(() => {
     const t0 = window.setTimeout(() => setBurnOn(true), BURN_START_DELAY_MS);
     const t1 = window.setTimeout(() => setHideFace(true), HIDE_CARD_AFTER_MS);
+    const ts = window.setTimeout(() => playSfx(CARD_BURN_SFX, sfxVolume), BURN_START_DELAY_MS);
     return () => {
       window.clearTimeout(t0);
       window.clearTimeout(t1);
+      window.clearTimeout(ts);
     };
-  }, [cardId]);
+  }, [cardId, sfxVolume]);
 
   const burnStack = (
     <div ref={measureRef} className={`card-burn-sacrifice__sizer relative ${sizerClass}`}>

@@ -4,10 +4,17 @@ import type { ChipPileHandle } from '../hooks/useChipPileSync';
 
 const MAX_VISIBLE = 140;
 const SPAWN_STAGGER_MS = 72;
-/** Vertical offset between disc centers in the tipped stack (screen px before rotateX). */
-const STACK_STEP_PX = 5.5;
-const DISC_W_PX = 52;
-const DISC_H_PX = 13;
+/** Vertical spacing between stacked chips (screen space, pre-stage rotate). */
+const STACK_STEP_PX = 10;
+
+/** Top face — wider reads as a chip, not a sticker. */
+const FACE_W_PX = 60;
+const FACE_H_PX = 22;
+/**
+ * Distance between top face and bottom rim = visible “thickness” before the parent tilt.
+ * Larger = fatter poker-chip feel.
+ */
+const CHIP_THICKNESS_PX = 16;
 
 function hexToRgb(hex: number): { r: number; g: number; b: number } {
   return { r: (hex >> 16) & 255, g: (hex >> 8) & 255, b: hex & 255 };
@@ -21,8 +28,8 @@ type TokenTowerStackProps = {
 };
 
 /**
- * Deterministic “poker chip” tower: fake-3D via CSS perspective + stacked ellipses.
- * Drops settle in tight sequence ({@link SPAWN_STAGGER_MS}); {@link ChipPileHandle.resetToCount} snaps instantly.
+ * Stacked “poker chips”: top face + darker bottom rim reads as a short cylinder instead of a paper-thin ellipse.
+ * Gentler perspective (moderate rotateX + slight rotateY) avoids the old sheared-paper look.
  */
 export const TokenTowerStack = forwardRef<ChipPileHandle, TokenTowerStackProps>(function TokenTowerStack(
   { chipColor, chipEmissive, className, pileAccent = false },
@@ -33,6 +40,15 @@ export const TokenTowerStack = forwardRef<ChipPileHandle, TokenTowerStackProps>(
 
   const base = useMemo(() => hexToRgb(chipColor), [chipColor]);
   const glow = useMemo(() => hexToRgb(chipEmissive), [chipEmissive]);
+
+  const darker = useMemo(
+    () => ({
+      r: Math.max(0, Math.round(base.r * 0.52)),
+      g: Math.max(0, Math.round(base.g * 0.52)),
+      b: Math.max(0, Math.round(base.b * 0.52)),
+    }),
+    [base.r, base.g, base.b],
+  );
 
   useImperativeHandle(
     ref,
@@ -57,6 +73,11 @@ export const TokenTowerStack = forwardRef<ChipPileHandle, TokenTowerStackProps>(
 
   const dropTravel = Math.min(220, 140 + visible * 0.35);
 
+  const faceGrad = `radial-gradient(120% 165% at 32% 24%, rgba(255,255,255,0.42), rgba(${base.r},${base.g},${base.b},0.08)),
+    linear-gradient(188deg, rgba(${base.r},${base.g},${base.b},1) 0%, rgba(${Math.max(base.r - 28, 0)},${Math.max(base.g - 28, 0)},${Math.max(base.b - 28, 0)},1) 55%, rgba(${darker.r},${darker.g},${darker.b},1) 100%)`;
+
+  const rimGrad = `linear-gradient(180deg, rgba(${darker.r},${darker.g},${darker.b},0.55) 0%, rgba(8,8,12,0.92) 100%)`;
+
   return (
     <div
       className={`pointer-events-none relative h-full min-h-[120px] w-full overflow-hidden touch-none ${className ?? ''}`}
@@ -64,50 +85,94 @@ export const TokenTowerStack = forwardRef<ChipPileHandle, TokenTowerStackProps>(
     >
       <div
         className="absolute inset-0 flex items-end justify-center"
-        style={{ perspective: '820px', perspectiveOrigin: '50% 88%' }}
+        style={{ perspective: '980px', perspectiveOrigin: '50% 92%' }}
       >
         <div
-          className="relative mx-auto mb-[8%] w-[min(7rem,38%)] max-w-none"
+          className="relative mx-auto mb-[7%] w-[min(7.5rem,40%)] max-w-none"
           style={{
-            aspectRatio: '1 / 1.15',
-            transform: 'rotateX(66deg) rotateZ(-11deg)',
+            aspectRatio: '1 / 1.12',
+            /** ~isometric: enough depth to read stack, not so much that ellipses squash to ribbons. */
+            transform: 'rotateX(44deg) rotateY(-14deg) rotateZ(-4deg)',
             transformOrigin: '50% 100%',
             transformStyle: 'preserve-3d',
           }}
         >
-          <div className="absolute inset-x-0 bottom-0 h-[78%]">
+          <div className="absolute inset-x-0 bottom-0 h-[82%]">
             {Array.from({ length: visible }).map((_, i) => {
               const lift = i * STACK_STEP_PX;
               const isTop = i === visible - 1;
-              const outerBlur = pileAccent ? 15 : 8;
-              const alpha = 0.45 + (pileAccent ? 0.08 : 0);
+              const outerBlur = pileAccent ? 16 : 9;
+              const alpha = 0.48 + (pileAccent ? 0.08 : 0);
               return (
                 <motion.div
                   key={i}
-                  className="absolute left-1/2 rounded-[999px] border border-black/35"
+                  className="absolute left-1/2"
                   style={{
-                    width: DISC_W_PX,
-                    height: DISC_H_PX,
-                    marginLeft: -DISC_W_PX / 2,
+                    width: FACE_W_PX,
+                    height: FACE_H_PX + CHIP_THICKNESS_PX + 6,
+                    marginLeft: -FACE_W_PX / 2,
                     bottom: lift,
                     zIndex: i,
-                    background: `radial-gradient(120% 180% at 28% 22%, rgba(255,255,255,0.38), rgba(${base.r},${base.g},${base.b},0.05)),
-                      linear-gradient(185deg, rgba(${base.r},${base.g},${base.b},1) 0%, rgba(${Math.max(base.r - 35, 0)},${Math.max(base.g - 35, 0)},${Math.max(base.b - 35, 0)},1) 48%, rgba(12,12,18,1) 100%)`,
-                    boxShadow:
-                      `0 ${2 + i * 0.06}px ${outerBlur}px rgba(0,0,0,${alpha}), ` +
-                      `inset 0 1px 1px rgba(255,255,255,${0.22 + (pileAccent && isTop ? 0.2 : 0)}), ` +
-                      `inset 0 -2px 4px rgba(0,0,0,0.52)` +
-                      (pileAccent && isTop ? `, 0 0 18px rgba(${glow.r},${glow.g},${glow.b},0.85)` : ''),
                   }}
-                  initial={{ y: -dropTravel, opacity: 0.45, scaleX: 0.88, scaleY: 0.78 }}
-                  animate={{ y: 0, opacity: 1, scaleX: 1, scaleY: 1 }}
+                  initial={{ y: -dropTravel, opacity: 0.5, scale: 0.92 }}
+                  animate={{ y: 0, opacity: 1, scale: 1 }}
                   transition={{
                     type: 'spring',
                     stiffness: 420,
                     damping: 26,
                     mass: 0.72,
                   }}
-                />
+                >
+                  {/* Bottom rim — reads as the far edge of the cylinder. */}
+                  <div
+                    className="pointer-events-none absolute left-1/2 rounded-full border border-black/40"
+                    style={{
+                      width: FACE_W_PX * 0.92,
+                      height: FACE_H_PX * 0.72,
+                      marginLeft: -(FACE_W_PX * 0.92) / 2,
+                      bottom: 2,
+                      background: rimGrad,
+                      boxShadow:
+                        'inset 0 2px 3px rgba(0,0,0,0.45), inset 0 -1px 0 rgba(255,255,255,0.06)',
+                    }}
+                    aria-hidden
+                  />
+                  {/* Side wall — short band between rims for “fat” chip body. */}
+                  <div
+                    className="pointer-events-none absolute left-1/2 overflow-hidden rounded-[10px] border-x border-black/30"
+                    style={{
+                      width: FACE_W_PX * 0.88,
+                      height: CHIP_THICKNESS_PX * 0.72,
+                      marginLeft: -(FACE_W_PX * 0.88) / 2,
+                      bottom: FACE_H_PX * 0.38,
+                      background: `linear-gradient(90deg,
+                        rgba(0,0,0,0.35) 0%,
+                        rgba(${darker.r},${darker.g},${darker.b},0.95) 22%,
+                        rgba(${base.r},${base.g},${base.b},0.85) 50%,
+                        rgba(${darker.r},${darker.g},${darker.b},0.95) 78%,
+                        rgba(0,0,0,0.35) 100%)`,
+                      boxShadow: 'inset 0 0 6px rgba(0,0,0,0.35)',
+                    }}
+                    aria-hidden
+                  />
+                  {/* Top face */}
+                  <div
+                    className="pointer-events-none absolute left-1/2 rounded-full border border-black/35"
+                    style={{
+                      width: FACE_W_PX,
+                      height: FACE_H_PX,
+                      marginLeft: -FACE_W_PX / 2,
+                      bottom: CHIP_THICKNESS_PX * 0.92,
+                      background: faceGrad,
+                      boxShadow:
+                        `0 ${1.5 + i * 0.05}px ${outerBlur}px rgba(0,0,0,${alpha}), ` +
+                        `inset 0 2px 2px rgba(255,255,255,${0.26 + (pileAccent && isTop ? 0.18 : 0)}), ` +
+                        `inset 0 -3px 5px rgba(0,0,0,0.5)` +
+                        (pileAccent && isTop ? `, 0 0 20px rgba(${glow.r},${glow.g},${glow.b},0.88)` : ''),
+                    }}
+                    aria-hidden
+                  />
+                </motion.div>
               );
             })}
           </div>

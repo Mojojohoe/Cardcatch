@@ -155,10 +155,12 @@ const SACRIFICE_BOWL_REWARD_DRAW_SFX = [
   '/assets/sounds/Card-Draw-Small-4.mp3',
 ] as const;
 import {
+  ornateGoldCompactButtonRasterStyle,
   ornateGreenSacrificialBowlHudWrapStyle,
   ornateGreenTooltipRasterStyle,
   ornatePurplePanelRasterStyle,
 } from './ui/ornateFrame';
+import { sacrificialBowlHoldCaption } from './ui/hudTooltipCopy';
 import {
   CURSE_GLUTTONY,
   CURSE_GREED,
@@ -2422,9 +2424,6 @@ const HUD_HOLD_OPPONENT_TOKENS_CAPTION =
 const HUD_HOLD_TARGET_SUIT_CAPTION =
   'This is the target suit for this round. This suit trumps all other suits. A 2 of the target suit will trump an Ace of a non-target suit.';
 
-const HUD_HOLD_SACRIFICIAL_BOWL_CAPTION =
-  'The Sacrificial Bowl gives you one free draw from the deck for every two cards you burn. Drag a card to the bowl to burn it.';
-
 const HUD_HOLD_OPPONENT_DESPERATION_CAPTION =
   'The current Desperation tier for the opponent. If they lose the game, this is the effect they will suffer.';
 
@@ -2518,6 +2517,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [handRowW, setHandRowW] = useState(400);
   const [handDealVisibleCount, setHandDealVisibleCount] = useState<number | null>(null);
   const handDealStartedForRef = useRef<string>('');
+  const handDealStaggerIntervalRef = useRef<number | null>(null);
+  const handDealStaggerTimeoutRef = useRef<number | null>(null);
   const famineActivePrev = useRef(false);
   const dualSnapRef = useRef({ instanceId, isDual, playerName, roomId, room });
   dualSnapRef.current = { instanceId, isDual, playerName, roomId, room };
@@ -2560,25 +2561,85 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     if (handDealStartedForRef.current === handSig) return;
     handDealStartedForRef.current = handSig;
 
+    /** When the tab sleeps, timeouts/RAF backlog can leave stagger + Motion stuck on opacity‑0 deck pulls; skip timer work while hidden. */
+    let dealCompletedNaturally = false;
+
     if (self.hand.length <= 1) {
       setHandDealVisibleCount(1);
-      const done = window.setTimeout(() => setHandDealVisibleCount(null), 620);
-      return () => window.clearTimeout(done);
+      const tick = () => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        dealCompletedNaturally = true;
+        handDealStaggerTimeoutRef.current = null;
+        setHandDealVisibleCount(null);
+      };
+      const done = window.setTimeout(tick, 620);
+      handDealStaggerTimeoutRef.current = done as unknown as number;
+      return () => {
+        window.clearTimeout(done);
+        if (handDealStaggerTimeoutRef.current === (done as unknown as number))
+          handDealStaggerTimeoutRef.current = null;
+        if (!dealCompletedNaturally) setHandDealVisibleCount(null);
+      };
     }
 
     setHandDealVisibleCount(1);
     let shown = 1;
-    const timer = window.setInterval(() => {
+    let timer = 0 as unknown as number;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       shown += 1;
       if (shown >= self.hand.length) {
+        dealCompletedNaturally = true;
+        handDealStaggerIntervalRef.current = null;
         setHandDealVisibleCount(null);
         window.clearInterval(timer);
       } else {
         setHandDealVisibleCount(shown);
       }
-    }, 200);
-    return () => window.clearInterval(timer);
+    };
+    timer = window.setInterval(tick, 200);
+    handDealStaggerIntervalRef.current = timer as unknown as number;
+    return () => {
+      window.clearInterval(timer);
+      if (handDealStaggerIntervalRef.current === (timer as unknown as number))
+        handDealStaggerIntervalRef.current = null;
+      /** Room updates during turn 1 (P2P) were clearing this interval mid-stagger once `handSig` pinned — stranded count left deck-pull faces invisible until refocused. */
+      if (!dealCompletedNaturally) setHandDealVisibleCount(null);
+    };
   }, [room, myUid, isWheelSpinning]);
+
+  /**
+   * Tab sleep minimises RAF: deck-pull entrances can freeze on initial opacity 0 — finish the staged deal when returning.
+   * Also covers bfcache restores where timers did not replay predictably.
+   */
+  useEffect(() => {
+    const flushDealIfStale = () => {
+      const iid = handDealStaggerIntervalRef.current;
+      if (iid !== null) {
+        window.clearInterval(iid);
+        handDealStaggerIntervalRef.current = null;
+      }
+      const tid = handDealStaggerTimeoutRef.current;
+      if (tid !== null) {
+        window.clearTimeout(tid);
+        handDealStaggerTimeoutRef.current = null;
+      }
+      setHandDealVisibleCount((c) => (c != null ? null : c));
+    };
+    const onVis = () => {
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+      flushDealIfStale();
+    };
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) flushDealIfStale();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -3472,6 +3533,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       setSacrificialBowlCatchHover(false);
       return;
     }
+    const lustRejectHearts =
+      room.settings.enableCurseCards !== false && lustCurseActive(room.activeCurses ?? []);
+    if (lustRejectHearts && parseCard(card).suit === 'Hearts') {
+      setHandDragFromIndex(null);
+      setHandDragHoverIndex(null);
+      setSacrificialBowlFocused(false);
+      setSacrificialBowlCatchHover(false);
+      return;
+    }
     clearSacrificialBowlTimers();
     /** So `dragend` (same tick as drop) sees active burn before React re-renders. */
     sacrificeBurnAnimRef.current = card;
@@ -3690,19 +3760,16 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         {sacrificialBowlExpandedUi && room.status === 'playing' && !me.confirmed && (
           <motion.div
             key="sacrificial-bowl-focus"
-            className="fixed inset-0 z-[446] pointer-events-none flex flex-col items-center justify-start bg-black/72 px-4 pt-[min(6vh,3.5rem)] backdrop-blur-[2px] sm:pt-[min(8vh,4.5rem)]"
+            className="fixed inset-0 z-[446] pointer-events-none flex flex-col items-center justify-center gap-6 bg-black/72 px-4 pt-[max(5rem,14vh)] pb-[min(22vh,9rem)] backdrop-blur-[2px] sm:gap-8 sm:pt-[max(6rem,16vh)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12 }}
           >
-            <p className="pointer-events-none mb-3 mt-10 max-w-sm pt-[min(2vh,1rem)] text-center text-[10px] font-black uppercase tracking-widest text-stone-300/95 sm:mb-4 sm:pt-[min(3vh,1.25rem)]">
-              {sacrificeBurnAnimCard ? 'Burning…' : 'Release over the flame to sacrifice'}
-            </p>
             <div
               onDragOver={handleSacrificialBowlDragOver}
               onDrop={handleSacrificialBowlDrop}
-              className="pointer-events-auto -mt-[min(4vh,2rem)] flex flex-col items-center sm:-mt-[min(5vh,2.5rem)]"
+              className="pointer-events-auto flex flex-col items-center"
             >
               <SacrificialBowl
                 ref={sacrificialBowlOverlayDropRef}
@@ -3711,8 +3778,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 breathe={sacrificialBowlBreathe}
                 catchGlow={sacrificialBowlCatchHover}
                 burnsRemaining={me.sacrificialBowlBurnsRemaining ?? 2}
+                lustFire={lustTripleWheel}
               />
             </div>
+            <p className="pointer-events-none max-w-sm px-2 text-center text-[10px] font-black uppercase tracking-widest text-stone-300/95 sm:text-[11px]">
+              {sacrificeBurnAnimCard ? 'Burning…' : 'Release over the flame to sacrifice'}
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -3783,10 +3854,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         const playActionLocked = loading || me.confirmed || playBlocked;
         const playMuted =
           me.confirmed || !selectedCard || playBlocked || loading;
+        const rasterDock = displayCardArt?.mode === 'raster';
         const playReadyStyle =
           !playMuted && selectedCard
             ? 'rounded-xl border-2 border-amber-500/90 bg-amber-400/95 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-emerald-950 shadow-[0_8px_26px_rgba(0,0,0,0.38)] transition-[filter,transform] hover:brightness-105 active:scale-[0.98] sm:px-8 sm:py-3 sm:text-[11px]'
             : 'rounded-xl border-2 border-slate-600/80 bg-slate-800/90 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 shadow-none transition-[filter,transform] sm:px-8 sm:py-3 sm:text-[11px]';
+        const playRasterStyle =
+          rasterDock && !playMuted && selectedCard ? ornateGoldCompactButtonRasterStyle() : undefined;
+        const playRasterClass =
+          rasterDock && !playMuted && selectedCard
+            ? 'rounded-xl border-0 px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-emerald-950 shadow-none transition-[filter,transform] hover:brightness-105 active:scale-[0.98] sm:px-9 sm:py-3 sm:text-[11px]'
+            : '';
         let playLabel = 'Play card';
         if (me.confirmed) playLabel = 'Waiting for opponent';
         else if (selectedCard && selectedPowerCard !== null) {
@@ -3800,7 +3878,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                   type="button"
                   onClick={() => void handlePlayCard()}
                   disabled={playActionLocked}
-                  className={`${playReadyStyle} disabled:pointer-events-none disabled:opacity-50`}
+                  style={playRasterStyle}
+                  className={`${playRasterClass || playReadyStyle} disabled:pointer-events-none disabled:opacity-50`}
                 >
                   {playLabel}
                 </button>
@@ -3818,7 +3897,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                     setCashShopOpen(true);
                     void serviceRef.current.setCardShopOpen(true);
                   }}
-                  className={`${HUD_TABLE_ACTION_BTN} absolute right-0 top-1/2 -translate-y-1/2 disabled:pointer-events-none disabled:opacity-40 disabled:grayscale`}
+                  style={rasterDock && !me.confirmed ? ornateGoldCompactButtonRasterStyle() : undefined}
+                  className={`${
+                    rasterDock && !me.confirmed
+                      ? 'absolute right-0 top-1/2 -translate-y-1/2 rounded-xl border-0 px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-emerald-950 shadow-none transition-[filter,transform] hover:brightness-105 active:scale-[0.98] sm:px-8 sm:py-3 sm:text-[11px]'
+                      : HUD_TABLE_ACTION_BTN
+                  } absolute right-0 top-1/2 -translate-y-1/2 disabled:pointer-events-none disabled:opacity-40 disabled:grayscale`}
                 >
                   Cash Chips
                 </button>
@@ -4200,7 +4284,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                 <div className="relative z-10 mt-[5%] flex w-full min-w-0 flex-row flex-wrap items-start justify-center gap-x-3 gap-y-2 sm:gap-x-5">
                   {room.status === 'playing' && opponent && !sacrificialBowlExpandedUi ? (
                     <HoldDelayTooltip
-                      caption={HUD_HOLD_SACRIFICIAL_BOWL_CAPTION}
+                      caption={sacrificialBowlHoldCaption(room)}
                       className="pointer-events-auto shrink-0 self-center sm:self-start isolation-auto !overflow-visible !p-0"
                       style={
                         displayCardArt?.mode === 'raster'
@@ -4219,6 +4303,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                           expanded={false}
                           catchGlow={me.confirmed ? false : sacrificialBowlCatchHover}
                           burnsRemaining={me.sacrificialBowlBurnsRemaining ?? 2}
+                          lustFire={lustTripleWheel}
                         />
                       </div>
                     </HoldDelayTooltip>
@@ -4851,12 +4936,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       </motion.div>
                     )}
                     {selected && !me.confirmed && (
-                      <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.65)]">
+                      <span className="absolute -top-10 left-1/2 z-40 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.65)]">
                         choosing
                       </span>
                     )}
                     {selected && me.confirmed && (
-                      <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,0.55)]">
+                      <span className="absolute -top-10 left-1/2 z-40 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,0.55)]">
                         committed
                       </span>
                     )}

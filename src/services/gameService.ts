@@ -2182,6 +2182,29 @@ export class GameService {
     this.broadcastState();
   }
 
+  /**
+   * Sacrificial Bowl reward while Curse Lust is on the table: draw the first Heart still in the deck
+   * (searching from the top). If none remain, behaves like a normal top-of-deck pull.
+   */
+  private pullSacrificialBowlRewardFromDeck(deck: string[], lustActive: boolean): { card: string; nextDeck: string[] } {
+    const next = [...deck];
+    if (next.length === 0) return { card: GROVEL_CARD_ID, nextDeck: next };
+    if (!lustActive) {
+      const card = next.shift()!;
+      return { card, nextDeck: next };
+    }
+    const heartIdx = next.findIndex((id) => {
+      const pc = parseCard(id);
+      return !pc.isJoker && pc.suit === 'Hearts';
+    });
+    if (heartIdx < 0) {
+      const card = next.shift()!;
+      return { card, nextDeck: next };
+    }
+    const [card] = next.splice(heartIdx, 1);
+    return { card, nextDeck: next };
+  }
+
   private processSacrificialBowlBurn(uid: string, handIndex: number) {
     if (!this.state || !this.state.players[uid]) return;
     if (this.state.status !== 'playing') return;
@@ -2192,6 +2215,10 @@ export class GameService {
     const burnedId = hand[handIndex];
     if (!burnedId || burnedId === GROVEL_CARD_ID || isShopPackPlaceholder(burnedId)) return;
 
+    const curseOk = this.state.settings.enableCurseCards !== false;
+    const lustOnTable = curseOk && lustCurseActive(this.state.activeCurses ?? []);
+    if (lustOnTable && parseCard(burnedId).suit === 'Hearts') return;
+
     const nextHand = [...hand];
     nextHand.splice(handIndex, 1);
 
@@ -2200,7 +2227,8 @@ export class GameService {
 
     let deck = [...this.state.deck];
     if (burns === 0) {
-      const reward = deck.length > 0 ? deck.shift()! : GROVEL_CARD_ID;
+      const { card: reward, nextDeck } = this.pullSacrificialBowlRewardFromDeck(deck, lustOnTable);
+      deck = nextDeck;
       nextHand.push(reward);
       burns = 2;
     }

@@ -68,7 +68,7 @@ export const ActiveCurseBackgroundTints = memo(function ActiveCurseBackgroundTin
         return (
           <div
             key={c.id}
-            className="pointer-events-none absolute inset-y-0 left-1/2 z-[1] w-screen max-w-none -translate-x-1/2 mix-blend-color"
+            className="pointer-events-none absolute inset-0 z-[1] mix-blend-color"
             aria-hidden
           >
             <svg className="block h-full w-full" preserveAspectRatio="none">

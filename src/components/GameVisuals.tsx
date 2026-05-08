@@ -66,7 +66,9 @@ import {
 import {
   HEART_GOD_RANK,
   displaySuitCardValue,
+  getCardValue,
   getWrathMagnitude,
+  lustBumpHeartIfApplicable,
   parseCard,
   tooltipPrintedStrengthLabel,
 } from '../services/gameService';
@@ -431,8 +433,19 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     if (revealed && card && isShopPackPlaceholder(card)) {
       return 'Cash Chips — delivers after this trick resolves. If two players queued the same shelf, dice settle who unwraps (coin-flip lobby mode).';
     }
-    return revealed && card ? playingCardHoverCaption(card) : null;
-  }, [card, revealed]);
+    if (!revealed || !card) return null;
+    let line = playingCardHoverCaption(card);
+    if (!line) return null;
+    if (lustHeartRulesActive) {
+      const p = parseCard(card);
+      if (!p.isJoker && p.suit === 'Hearts') {
+        const bumpedId = lustBumpHeartIfApplicable(card) ?? card;
+        const v = getCardValue(bumpedId, true, false);
+        line = `${line} Lust will raise this Heart to clash value ${v} if played.`;
+      }
+    }
+    return line;
+  }, [card, revealed, lustHeartRulesActive]);
 
   const HOVER_HOLD_MS = 700;
 
@@ -517,6 +530,13 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     presentationPace,
     delay,
   });
+  /** Remount surface when exiting `deckPull` so Motion doesn’t resume from a stale opacity‑0 frame after tab sleep. */
+  const playingFaceSurfaceKey =
+    revealed && presentation === 'deckPull'
+      ? `dp-${deckPullSide}-${delay}-${card}`
+      : revealed
+        ? `up-${card}`
+        : '';
 
   /** Assembled faces use full-bleed art — outer border/white frame clips edges; selection uses ring only. */
   const faceWrap = useAssembledFace
@@ -572,9 +592,9 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     if (backRasterUrl) {
       return (
         <motion.div
+          key={`brk-${presentation}-${deckPullSide}-${delay}`}
           {...(motionLayout ? { layout: true as const } : {})}
           {...entrance}
-          transition={{ type: 'spring', stiffness: 720, damping: 38 }}
           whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
         className={`${backSizing} relative overflow-visible rounded-lg shadow-xl flex items-center justify-center border-0 transition-colors`}
         >
@@ -584,9 +604,9 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     }
     return (
       <motion.div
+        key={`brk-${presentation}-${deckPullSide}-${delay}`}
         {...(motionLayout ? { layout: true as const } : {})}
         {...entrance}
-        transition={{ type: 'spring', stiffness: 720, damping: 38 }}
         whileHover={!disabled ? { y: -8, zIndex: 50 } : {}}
         className={`${backSizing} rounded-lg shadow-xl flex items-center justify-center p-1.5 border-2 transition-colors relative ${backClasses}`}
       >
@@ -622,9 +642,9 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
         onBlur={clearHoldTip}
       >
         <motion.div
+          key={`pak-${presentation}-${deckPullSide}-${delay}`}
           {...(motionLayout ? { layout: true as const } : {})}
           {...entrance}
-          transition={{ type: 'spring', stiffness: 720, damping: 38 }}
           whileHover={{ y: -9, zIndex: 50 }}
           className="h-full w-full overflow-hidden rounded-[inherit]"
         >
@@ -675,6 +695,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
       tabIndex={detailTooltip ? 0 : undefined}
     >
       <motion.div
+        key={playingFaceSurfaceKey || undefined}
         {...(motionLayout ? { layout: true as const } : {})}
         {...entrance}
         style={{
@@ -685,7 +706,6 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
               ? 900
               : undefined,
         }}
-        transition={{ type: 'spring', stiffness: 720, damping: 38 }}
         whileHover={!allowHoverMotion ? {} : { y: -9, zIndex: 50 }}
         whileTap={{}}
         onClick={muted ? undefined : onClick}

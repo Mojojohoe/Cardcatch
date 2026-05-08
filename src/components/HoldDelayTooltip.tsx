@@ -18,7 +18,13 @@ export const HUD_HOLD_TOOLTIP_RASTER_PANEL_CLASS =
 export const HUD_INSTANT_TOOLTIP_PANEL_CLASS = HUD_HOLD_TOOLTIP_PANEL_CLASS;
 
 type Props = {
+  /** Default caption when `tooltipCaption` is not provided. */
   caption: string;
+  /**
+   * Full replacement caption (curse phases, specials). Lets parents push temporary HUD copy without
+   * branching every callsite — when set, overrides `caption`.
+   */
+  tooltipCaption?: string;
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
@@ -27,7 +33,7 @@ type Props = {
 /**
  * Context help that appears after ~700ms hover (same cadence as playing-card hold captions).
  */
-export const HoldDelayTooltip: React.FC<Props> = ({ caption, children, className = '', style }) => {
+export const HoldDelayTooltip: React.FC<Props> = ({ caption, tooltipCaption, children, className = '', style }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,7 +77,7 @@ export const HoldDelayTooltip: React.FC<Props> = ({ caption, children, className
               style={ornateRaster ? { ...tooltipStyle, ...ornateGreenTooltipRasterStyle() } : tooltipStyle}
               className={ornateRaster ? HUD_HOLD_TOOLTIP_RASTER_PANEL_CLASS : HUD_HOLD_TOOLTIP_PANEL_CLASS}
             >
-              {caption}
+              {tooltipCaption ?? caption}
             </div>,
             document.body,
           )

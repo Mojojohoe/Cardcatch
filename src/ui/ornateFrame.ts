@@ -74,3 +74,22 @@ export function ornatePurplePanelRasterStyle(): CSSProperties {
     borderRadius: Math.round(w * 0.82),
   };
 }
+
+/** Tighter gold frame for primary HUD action buttons (`border-button.png`) in raster mode. */
+const ORNATE_BUTTON_BORDER_PX = 22;
+
+export function ornateGoldCompactButtonRasterStyle(): CSSProperties {
+  const w = ORNATE_BUTTON_BORDER_PX;
+  return {
+    color: '#022c22',
+    background: 'linear-gradient(180deg, rgba(253, 224, 71, 0.35), rgba(245, 158, 11, 0.55))',
+    backgroundClip: 'padding-box',
+    border: `${w}px solid transparent`,
+    borderImageSource: `url("${assetUrl('assets/images/border-button.png')}")`,
+    borderImageSlice: ORNATE_SLICE,
+    borderImageRepeat: 'round',
+    borderImageWidth: `${w}px`,
+    borderImageOutset: 0,
+    borderRadius: Math.round(w * 0.72),
+  };
+}
