@@ -1,41 +1,51 @@
 /**
- * Sprite-strip burn (CodePen jcoulterdesign / YbBoNb): burn + burnline layers, no ash.
- * Container matches pen dimensions; scale wrapper shrinks to card-sized footprint.
+ * Sprite-strip burn: design viewport 770×430px at height {@link CARD_BURN_DESIGN_VIEWPORT_H}.
+ * Stage clips to playing-card aspect; inner strip keeps 770:430 so JPG height matches card height.
  */
-.card-burn-sacrifice {
+
+.card-burn-sacrifice__stage {
   position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-}
-
-.card-burn-sacrifice__scale {
-  transform-origin: top center;
-}
-
-/* Pen: $maskWidth 770px, $height 430px */
-.card-burn-image {
-  width: 770px;
-  height: 430px;
+  margin-inline: auto;
   overflow: hidden;
-  position: relative;
+  border-radius: 0.75rem;
+  background: transparent;
+  aspect-ratio: 24 / 37;
+  height: min(58vmin, 28rem);
+  width: auto;
+  max-width: min(92vw, 420px);
+  max-height: min(78vh, 32rem);
+}
+
+.card-burn-sacrifice__stage--compact {
+  height: min(34vmin, 13rem);
+  max-width: min(88vw, 220px);
+  max-height: min(42vh, 15rem);
+}
+
+/**
+ * Sprite aperture: same aspect as pen (770:430). Height = stage height → JPG strips scale by height.
+ * Strip is wider than the card stage → left/right overflow hidden on stage.
+ */
+.card-burn-image {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 100%;
+  aspect-ratio: 770 / 430;
+  width: auto;
+  overflow: hidden;
 }
 
 .card-burn-image__layer {
   position: absolute;
   left: 0;
   top: 0;
-  width: 770px;
-  height: 430px;
+  width: 100%;
+  height: 100%;
   background-size: auto 100%;
   background-position: 0 0;
   background-repeat: no-repeat;
-}
-
-/** Strip “smoke” layers scaled down ~60% vs pen baseline */
-.card-burn-image__smoke-sprite {
-  transform: scale(0.4);
-  transform-origin: center center;
 }
 
 .card-burn-image__burn {
@@ -55,13 +65,15 @@
 
 .card-burn-image__cardMount {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 700px;
-  transform: translate(-50%, -50%) scale(0.9);
+  inset: 0;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+}
+
+.card-burn-image__cardMount > * {
+  max-height: 94%;
+  width: auto;
 }
 
 .card-burn-image__burnline {
@@ -69,13 +81,13 @@
   mix-blend-mode: lighten;
 }
 
-/* Pen: $totalTransitionTime 1.3s, $frames 50, end X -38145px */
+/* Pen: $totalTransitionTime ~2s, $frames 50 — end X scales with viewport height via inline --burn-strip-end */
 @keyframes card-burn-strip {
   0% {
     background-position: 0 0;
   }
   100% {
-    background-position: -38145px 0;
+    background-position: var(--burn-strip-end, -38145px) 0;
   }
 }
 

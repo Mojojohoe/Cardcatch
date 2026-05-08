@@ -146,6 +146,14 @@ import { CardAnimationPreview } from './cardCreator/CardAnimationPreview';
 import { PlayerSettingsMenu } from './components/PlayerSettingsMenu';
 import { usePlayerDisplayPreferences } from './playerDisplayPreferences';
 import { playSfx } from './audio/sfx';
+
+/** Matches {@link CardVisual} deck-pull shorts — reward draw after bowl burns #2. */
+const SACRIFICE_BOWL_REWARD_DRAW_SFX = [
+  '/assets/sounds/Card-Draw-Small-1.mp3',
+  '/assets/sounds/Card-Draw-Small-2.mp3',
+  '/assets/sounds/Card-Draw-Small-3.mp3',
+  '/assets/sounds/Card-Draw-Small-4.mp3',
+] as const;
 import {
   ornateGreenSacrificialBowlHudWrapStyle,
   ornateGreenTooltipRasterStyle,
@@ -2480,6 +2488,12 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const sacrificialBowlBreatheRef = useRef(false);
   sacrificialBowlBreatheRef.current = sacrificialBowlBreathe;
   const lastSacrificeToastAtRef = useRef<number | null>(null);
+  /** Burn RPC deferred until burn FX + bowl overlay finish — holds resolve targets at drop time. */
+  const pendingSacrificeBurnRef = useRef<{
+    handIndex: number;
+    cardId: string;
+    playRewardDrawSfx: boolean;
+  } | null>(null);
   const handHudLayoutRef = useRef<HTMLDivElement>(null);
   const [handHudNeedsStack, setHandHudNeedsStack] = useState(false);
   const handRowRef = useRef<HTMLDivElement>(null);
@@ -2490,7 +2504,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const dualSnapRef = useRef({ instanceId, isDual, playerName, roomId, room });
   dualSnapRef.current = { instanceId, isDual, playerName, roomId, room };
   const dualResumeStartedRef = useRef(false);
-  const { highVisibilityMode } = usePlayerDisplayPreferences();
+  const { highVisibilityMode, sfxVolume } = usePlayerDisplayPreferences();
 
   useEffect(() => {
     handDealStartedForRef.current = '';
@@ -2855,6 +2869,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const clearSacrificialBowlTimers = useCallback(() => {
     sacrificialBowlTimersRef.current.forEach((id) => window.clearTimeout(id));
     sacrificialBowlTimersRef.current = [];
+    pendingSacrificeBurnRef.current = null;
   }, []);
 
   useEffect(() => () => clearSacrificialBowlTimers(), [clearSacrificialBowlTimers]);
@@ -3402,13 +3417,19 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     clearSacrificialBowlTimers();
     /** So `dragend` (same tick as drop) sees active burn before React re-renders. */
     sacrificeBurnAnimRef.current = card;
+    const burnsTick = me.sacrificialBowlBurnsRemaining ?? 2;
+    pendingSacrificeBurnRef.current = {
+      handIndex: idx,
+      cardId: card,
+      /** Second burn in the pair grants a deck card — play draw SFX when state applies after FX. */
+      playRewardDrawSfx: burnsTick === 1,
+    };
     setSacrificeBurnAnimCard(card);
     setSacrificialBowlFocused(true);
     setSacrificialBowlBreathe(false);
     setHandDragFromIndex(null);
     setHandDragHoverIndex(null);
     setSacrificialBowlCatchHover(false);
-    void serviceRef.current.burnSacrificialBowlCard(idx);
     const burnStripMs = 2000;
     const breatheMs = 500;
     const tBurnEnd = window.setTimeout(() => {
@@ -3416,6 +3437,25 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       setSacrificialBowlBreathe(true);
     }, burnStripMs);
     const tAllDone = window.setTimeout(() => {
+      const pending = pendingSacrificeBurnRef.current;
+      pendingSacrificeBurnRef.current = null;
+      const liveRoom = dualSnapRef.current.room;
+      const self = liveRoom?.players[myUid];
+      if (pending && self) {
+        let burnIdx = pending.handIndex;
+        const h = self.hand;
+        if (burnIdx < 0 || burnIdx >= h.length || h[burnIdx] !== pending.cardId) {
+          burnIdx = h.indexOf(pending.cardId);
+        }
+        if (burnIdx >= 0) {
+          void serviceRef.current.burnSacrificialBowlCard(burnIdx);
+          if (pending.playRewardDrawSfx) {
+            const src =
+              SACRIFICE_BOWL_REWARD_DRAW_SFX[Math.floor(Math.random() * SACRIFICE_BOWL_REWARD_DRAW_SFX.length)]!;
+            playSfx(src, sfxVolume);
+          }
+        }
+      }
       setSacrificialBowlFocused(false);
       setSacrificialBowlBreathe(false);
     }, burnStripMs + breatheMs);
@@ -3597,7 +3637,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             exit={{ opacity: 0 }}
           >
             <div className="relative flex justify-center">
-              <CardBurnSacrifice cardId={sacrificeBurnAnimCard} scale={0.34} />
+              <CardBurnSacrifice cardId={sacrificeBurnAnimCard} variant="compact" />
             </div>
           </motion.div>
         )}

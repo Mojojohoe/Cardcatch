@@ -7,7 +7,14 @@ import { SUITS, VALUES } from '../types';
 import { usePlayerDisplayPreferences } from '../playerDisplayPreferences';
 import { playSfx } from '../audio/sfx';
 
-type PreviewAnimationId = 'deckPull' | 'upgradeWiggle' | 'transformFlip' | 'tear' | 'cutSlash' | 'heartPulse';
+type PreviewAnimationId =
+  | 'deckPull'
+  | 'upgradeWiggle'
+  | 'transformFlip'
+  | 'tear'
+  | 'cutSlash'
+  | 'heartPulse'
+  | 'sacrificeBurn';
 type TearHalfProps = { cardId: string; side: 'left' | 'right'; loopTick: number };
 
 const CARD_CHOICES: string[] = [];
@@ -208,7 +215,7 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
 
             {animationId === 'sacrificeBurn' ? (
               <div key={`sacrifice-burn-${cardId}-${loopTick}`} className="flex justify-center">
-                <CardBurnSacrifice cardId={cardId} scale={0.34} />
+                <CardBurnSacrifice cardId={cardId} variant="preview" />
               </div>
             ) : (animationId === 'cutSlash' || animationId === 'heartPulse') ? (
               <motion.div
