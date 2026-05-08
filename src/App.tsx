@@ -2481,7 +2481,23 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [sacrificialBowlBreathe, setSacrificialBowlBreathe] = useState(false);
   const [sacrificeBurnAnimCard, setSacrificeBurnAnimCard] = useState<string | null>(null);
   const [sacrificeOpponentBanner, setSacrificeOpponentBanner] = useState<string | null>(null);
-  const sacrificialBowlDropRef = useRef<HTMLDivElement>(null);
+  /** Expanded overlay vs HUD compact — must not share one ref during AnimatePresence overlap / detach races. */
+  const sacrificialBowlCompactDropRef = useRef<HTMLDivElement | null>(null);
+  const sacrificialBowlOverlayDropRef = useRef<HTMLDivElement | null>(null);
+
+  function pickSacrificialBowlHitEl(): HTMLElement | null {
+    const o = sacrificialBowlOverlayDropRef.current;
+    const c = sacrificialBowlCompactDropRef.current;
+    const connected = [o, c].filter((el): el is HTMLElement => Boolean(el && el.isConnected));
+    if (connected.length === 0) return null;
+    if (connected.length === 1) return connected[0];
+    /** Exit animation can mount both briefly — prefer the larger expanded hit target. */
+    return connected.reduce((best, el) => {
+      const rb = best.getBoundingClientRect();
+      const re = el.getBoundingClientRect();
+      return rb.width * rb.height >= re.width * re.height ? best : el;
+    });
+  }
   const sacrificialBowlTimersRef = useRef<number[]>([]);
   const sacrificeBurnAnimRef = useRef<string | null>(null);
   sacrificeBurnAnimRef.current = sacrificeBurnAnimCard;
@@ -2526,6 +2542,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       (room.status === 'playing' && isWheelSpinning && room.currentTurn === 1);
     if (suppressed) {
       setHandDealVisibleCount(null);
+      /** Lets the deal restart once overlays / wheel clear (fixes one-frame stagger before spinning state exists). */
+      handDealStartedForRef.current = '';
       return;
     }
 
@@ -2728,13 +2746,23 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
 
   const [lastSeenIntelTurn, setLastSeenIntelTurn] = useState(-1);
 
-  useEffect(() => {
-    if (room?.status === 'playing' && lastTurnRef.current !== room.currentTurn) {
-      setIsWheelSpinning(true);
-      const timer = setTimeout(() => setIsWheelSpinning(false), 5000);
-      lastTurnRef.current = room.currentTurn;
-      return () => clearTimeout(timer);
-    }
+  const wheelSpinClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Layout-phase so `isWheelSpinning` is true before passive effects — opening hand stagger must not complete while hidden. */
+  useLayoutEffect(() => {
+    if (room?.status !== 'playing' || lastTurnRef.current === room.currentTurn) return undefined;
+    lastTurnRef.current = room.currentTurn;
+    setIsWheelSpinning(true);
+    if (wheelSpinClearTimerRef.current) clearTimeout(wheelSpinClearTimerRef.current);
+    wheelSpinClearTimerRef.current = setTimeout(() => {
+      setIsWheelSpinning(false);
+      wheelSpinClearTimerRef.current = null;
+    }, 5000);
+    return () => {
+      if (wheelSpinClearTimerRef.current) {
+        clearTimeout(wheelSpinClearTimerRef.current);
+        wheelSpinClearTimerRef.current = null;
+      }
+    };
   }, [room?.currentTurn, room?.status]);
 
   const [lastResolvedTurn, setLastResolvedTurn] = useState(-1);
@@ -2909,7 +2937,7 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     /** `drag` fires sparsely in Chromium; `dragover` on document is reliable for cursor tracking. */
     const onDragOver = (e: DragEvent) => {
       if (e.clientY === 0 && e.clientX === 0) return;
-      const el = sacrificialBowlDropRef.current;
+      const el = pickSacrificialBowlHitEl();
       if (!el) return;
       const r = el.getBoundingClientRect();
       const x = e.clientX;
@@ -3636,7 +3664,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               className="pointer-events-auto -mt-[min(4vh,2rem)] flex flex-col items-center sm:-mt-[min(5vh,2.5rem)]"
             >
               <SacrificialBowl
-                ref={sacrificialBowlDropRef}
+                ref={sacrificialBowlOverlayDropRef}
                 rasterMode={displayCardArt?.mode === 'raster'}
                 expanded
                 breathe={sacrificialBowlBreathe}
@@ -4145,7 +4173,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                         className="flex flex-col items-center"
                       >
                         <SacrificialBowl
-                          ref={sacrificialBowlDropRef}
+                          ref={sacrificialBowlCompactDropRef}
                           rasterMode={displayCardArt?.mode === 'raster'}
                           expanded={false}
                           catchGlow={me.confirmed ? false : sacrificialBowlCatchHover}
