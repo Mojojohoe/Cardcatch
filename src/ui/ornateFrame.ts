@@ -21,7 +21,8 @@ export function ornateGreenTooltipRasterStyle(): CSSProperties {
   const w = ORNATE_GOLD_BORDER_PX;
   return {
     color: '#ecfdf5',
-    background: '#081210',
+    /** Border PNG includes interior fill — avoid double green panel behind it. */
+    background: 'transparent',
     backgroundClip: 'padding-box',
     border: `${w}px solid transparent`,
     borderImageSource: `url("${assetUrl('assets/images/border-gold.png')}")`,

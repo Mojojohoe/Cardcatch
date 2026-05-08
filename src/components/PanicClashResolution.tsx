@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { cloneElement, isValidElement, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RoomData } from '../types';
 import {
@@ -10,10 +10,58 @@ import {
 } from '../services/gameService';
 import { greedCurseActive } from '../curses';
 import { CardVisual } from './GameVisuals';
+import { playSfx } from '../audio/sfx';
+import { usePlayerDisplayPreferences } from '../playerDisplayPreferences';
 
 function sleep(ms: number) {
   return new Promise<void>((r) => window.setTimeout(r, ms));
 }
+
+const TEAR_LEFT_CLIP =
+  'polygon(0% 0%, 53% 0%, 49% 12%, 55% 24%, 47% 38%, 56% 50%, 48% 64%, 54% 79%, 50% 100%, 0% 100%)';
+const TEAR_RIGHT_CLIP =
+  'polygon(47% 0%, 100% 0%, 100% 100%, 50% 100%, 54% 82%, 46% 66%, 53% 50%, 45% 34%, 51% 17%)';
+
+/** Same tear geometry as round-resolution overlay — card face duplicated into clipped halves. */
+const PanicCardTearHalves: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const leftFace =
+    isValidElement(children) ? cloneElement(children as React.ReactElement) : children;
+  const rightFace =
+    isValidElement(children) ? cloneElement(children as React.ReactElement) : children;
+  return (
+  <motion.div
+    className="pointer-events-none absolute inset-0 z-[34]"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+  >
+    <motion.div
+      className="absolute inset-0 overflow-hidden rounded-xl"
+      style={{ clipPath: TEAR_LEFT_CLIP }}
+      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+      animate={{ x: -44, y: 58, rotate: -16, opacity: [1, 1, 0.05] }}
+      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">{leftFace}</div>
+    </motion.div>
+    <motion.div
+      className="absolute inset-0 overflow-hidden rounded-xl"
+      style={{ clipPath: TEAR_RIGHT_CLIP }}
+      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+      animate={{ x: 44, y: 58, rotate: 16, opacity: [1, 1, 0.05] }}
+      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">{rightFace}</div>
+    </motion.div>
+    <motion.div
+      className="absolute inset-y-[10%] left-1/2 z-[36] w-[2px] -translate-x-1/2 bg-white/85 shadow-[0_0_12px_rgba(255,255,255,0.65)]"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 0.95, 0] }}
+      transition={{ duration: 0.6, ease: 'easeOut' }}
+    />
+  </motion.div>
+  );
+};
 
 const PanicStrikeCut: React.FC = () => (
   <motion.div
@@ -50,30 +98,6 @@ const PanicStrikeCut: React.FC = () => (
   </motion.div>
 );
 
-const PanicTearFx: React.FC = () => (
-  <motion.div
-    className="pointer-events-none absolute inset-0 z-[34]"
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-  >
-    <motion.div
-      className="absolute inset-0"
-      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-      animate={{ x: -44, y: 58, rotate: -16, opacity: [1, 1, 0.05] }}
-      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-      style={{ clipPath: 'polygon(0% 0%, 53% 0%, 49% 12%, 55% 24%, 47% 38%, 56% 50%, 48% 64%, 54% 79%, 50% 100%, 0% 100%)' }}
-    />
-    <motion.div
-      className="absolute inset-0"
-      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-      animate={{ x: 44, y: 58, rotate: 16, opacity: [1, 1, 0.05] }}
-      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-      style={{ clipPath: 'polygon(47% 0%, 100% 0%, 100% 100%, 50% 100%, 54% 82%, 46% 66%, 53% 50%, 45% 34%, 51% 17%)' }}
-    />
-  </motion.div>
-);
-
 const INTRO_REVEAL_MS = 580;
 /** Card stays centered after reveal (before reposition / exchange loop). */
 const INTRO_HOLD_MS = 1000;
@@ -94,6 +118,7 @@ export const PanicClashResolution: React.FC<{
   room,
   onComplete,
 }) => {
+  const { sfxVolume } = usePlayerDisplayPreferences();
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
   const outcome = room.lastOutcome!;
@@ -145,6 +170,19 @@ export const PanicClashResolution: React.FC<{
     oppCardId == null ? '' : reduceCardRankForPanicDisplay(oppCardId, Math.max(0, initialOpponent - f.opponentEffective));
 
   useEffect(() => {
+    if (!showCut) return;
+    playSfx('/assets/sounds/Card-Slice.mp3', sfxVolume);
+  }, [showCut, sfxVolume]);
+
+  useEffect(() => {
+    if (tearPanic) playSfx('/assets/sounds/Card-Tear.mp3', sfxVolume);
+  }, [tearPanic, sfxVolume]);
+
+  useEffect(() => {
+    if (tearOpp) playSfx('/assets/sounds/Card-Tear.mp3', sfxVolume);
+  }, [tearOpp, sfxVolume]);
+
+  useEffect(() => {
     if (!oppCardId || frames.length === 0) {
       onCompleteRef.current('aborted');
       return;
@@ -181,9 +219,16 @@ export const PanicClashResolution: React.FC<{
           setShowCut(false);
           setFrameIdx(idx);
           const next = frames[Math.min(idx, frames.length - 1)];
-          if (next && next.opponentEffective <= 0 && !tearOpp) setTearOpp(true);
-          if (next && next.panicRemaining <= 0 && !tearPanic) setTearPanic(true);
+          if (next && next.opponentEffective <= 0) setTearOpp(true);
+          if (next && next.panicRemaining <= 0) setTearPanic(true);
         }
+      }
+
+      /** Covers exchanges===0 and any edge where stamina hits 0 without the loop updating tear flags. */
+      const fin = frames[frames.length - 1];
+      if (fin) {
+        if (fin.opponentEffective <= 0) setTearOpp(true);
+        if (fin.panicRemaining <= 0) setTearPanic(true);
       }
 
       setPhase('done');
@@ -250,7 +295,13 @@ export const PanicClashResolution: React.FC<{
               <AnimatePresence mode="wait">
                 {showCut ? <PanicStrikeCut key={`panic-cut-${strikeKey}`} /> : null}
               </AnimatePresence>
-              <AnimatePresence>{tearPanic ? <PanicTearFx key="panic-tear" /> : null}</AnimatePresence>
+              <AnimatePresence>
+                {tearPanic ? (
+                  <PanicCardTearHalves key="panic-tear">
+                    <CardVisual card={panicCardFx} revealed noAnimate presentation="none" lustHeartRulesActive={false} />
+                  </PanicCardTearHalves>
+                ) : null}
+              </AnimatePresence>
               {!tearPanic && (
                 <CardVisual card={panicCardFx} revealed noAnimate presentation="none" lustHeartRulesActive={false} />
               )}
@@ -264,7 +315,20 @@ export const PanicClashResolution: React.FC<{
               <AnimatePresence mode="wait">
                 {showCut ? <PanicStrikeCut key={`opp-cut-${strikeKey}`} /> : null}
               </AnimatePresence>
-              <AnimatePresence>{tearOpp ? <PanicTearFx key="opp-tear" /> : null}</AnimatePresence>
+              <AnimatePresence>
+                {tearOpp ? (
+                  <PanicCardTearHalves key="opp-tear">
+                    <CardVisual
+                      card={opponentCardFx}
+                      revealed
+                      noAnimate
+                      presentation="none"
+                      lustHeartRulesActive={false}
+                      clashGhost={Boolean(outcome.clashDestroyedByPenalty?.[opponentUid])}
+                    />
+                  </PanicCardTearHalves>
+                ) : null}
+              </AnimatePresence>
               {!tearOpp && (
                 <CardVisual
                   card={opponentCardFx}

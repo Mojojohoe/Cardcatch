@@ -1258,7 +1258,7 @@ const ResolutionSequence: React.FC<{
         const event = events[i];
         const fx = deriveResolutionFx(event, hostUid, guestUid);
         setResolutionFx(fx);
-        if (fx?.kind === 'power_tear' || fx?.kind === 'clash_shatter') {
+        if (fx?.kind === 'clash_shatter') {
           playSfx('/assets/sounds/Card-Tear.mp3', sfxVolume);
         }
         if (fx?.kind === 'death_slash' || fx?.kind === 'wrath_cut') {
@@ -1520,7 +1520,6 @@ const ResolutionSequence: React.FC<{
           pauseMs = Math.max(pauseMs, 1380);
         if (fx?.kind === 'envy_lunge') pauseMs = Math.max(pauseMs, 1380);
         if (fx?.kind === 'clash_shatter') pauseMs = Math.max(pauseMs, 1640);
-        if (fx?.kind === 'power_tear') pauseMs = Math.max(pauseMs, 1640);
         if (fx?.kind === 'gluttony_bite') pauseMs = Math.max(pauseMs, 3400);
         if (fx?.kind === 'greed_coin_drain') pauseMs = Math.max(pauseMs, 1280);
         if (fx?.kind === 'judgement_flash' || fx?.kind === 'temperance_balance') pauseMs = Math.max(pauseMs, 1240);
@@ -1992,17 +1991,6 @@ const ResolutionSequence: React.FC<{
                     resolutionWiggleTick={resolutionEmpowerWiggleTick[uid] ?? 0}
                   />
                   <AnimatePresence>
-                    {resolutionFx?.kind === 'power_tear' && resolutionFx.uid === uid && outcome.powerCardIdsPlayed[uid] !== null && (
-                      <ResolutionTearOverlay>
-                        <PowerCardVisual
-                          cardId={outcome.powerCardIdsPlayed[uid]!}
-                          matchHandCard
-                          destroyed
-                        />
-                      </ResolutionTearOverlay>
-                    )}
-                  </AnimatePresence>
-                  <AnimatePresence>
                     {resolutionFx?.kind === 'clash_shatter' && resolutionFx.uid === uid && (
                       <ResolutionTearOverlay>
                         <CardVisual
@@ -2047,18 +2035,6 @@ const ResolutionSequence: React.FC<{
                             transition={{ delay: 0.15, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                           />
                         </motion.div>
-                      </motion.div>
-                    )}
-                    {resolutionFx?.kind === 'star_sparkle' && resolutionFx.uid === uid && (
-                      <motion.div
-                        key="star-sparkle"
-                        className="pointer-events-none absolute inset-0 z-[24] flex items-center justify-center"
-                        initial={{ opacity: 0, scale: 0.6 }}
-                        animate={{ opacity: 1, scale: 1, rotate: [0, 8, -6, 0] }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.65 }}
-                      >
-                        <Sparkles className="w-[3.1rem] h-[3.1rem] text-amber-300 drop-shadow-[0_0_16px_rgba(253,224,71,0.88)]" />
                       </motion.div>
                     )}
                     {resolutionFx?.kind === 'moon_glow' && resolutionFx.uid === uid && (
@@ -2499,6 +2475,10 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [sacrificeOpponentBanner, setSacrificeOpponentBanner] = useState<string | null>(null);
   const sacrificialBowlDropRef = useRef<HTMLDivElement>(null);
   const sacrificialBowlTimersRef = useRef<number[]>([]);
+  const sacrificeBurnAnimRef = useRef<string | null>(null);
+  sacrificeBurnAnimRef.current = sacrificeBurnAnimCard;
+  const sacrificialBowlBreatheRef = useRef(false);
+  sacrificialBowlBreatheRef.current = sacrificialBowlBreathe;
   const lastSacrificeToastAtRef = useRef<number | null>(null);
   const handHudLayoutRef = useRef<HTMLDivElement>(null);
   const [handHudNeedsStack, setHandHudNeedsStack] = useState(false);
@@ -2890,16 +2870,18 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       }
       return;
     }
-    const onDrag = (e: DragEvent) => {
+    /** `drag` fires sparsely in Chromium; `dragover` on document is reliable for cursor tracking. */
+    const onDragOver = (e: DragEvent) => {
       if (e.clientY === 0 && e.clientX === 0) return;
       const el = sacrificialBowlDropRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
       const x = e.clientX;
       const y = e.clientY;
-      /** Proximity to brazier only — no full-screen “upper band” catchment. */
-      const expandPadPx = 88;
-      const glowPadPx = 22;
+      /** Proximity to brazier only — pad scales with ref rect so compact bowl stays usable. */
+      const base = Math.min(r.width, r.height);
+      const expandPadPx = Math.max(72, Math.round(base * 0.55));
+      const glowPadPx = Math.max(28, Math.round(base * 0.22));
       const inExpandProximity =
         x >= r.left - expandPadPx &&
         x <= r.right + expandPadPx &&
@@ -2913,9 +2895,20 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
       setSacrificialBowlFocused(inExpandProximity);
       setSacrificialBowlCatchHover(overBurnTarget);
     };
-    document.addEventListener('drag', onDrag);
-    return () => document.removeEventListener('drag', onDrag);
+    document.addEventListener('dragover', onDragOver, true);
+    return () => document.removeEventListener('dragover', onDragOver, true);
   }, [handDragFromIndex, sacrificeBurnAnimCard, sacrificialBowlBreathe]);
+
+  /** Reset bowl proximity highlight after every drag ends — avoids stuck “expanded” state where overlay/table swap breaks hover on later drags. Refs avoid racing the burn drop handler. */
+  useEffect(() => {
+    const onDragEndClear = () => {
+      if (sacrificeBurnAnimRef.current || sacrificialBowlBreatheRef.current) return;
+      setSacrificialBowlFocused(false);
+      setSacrificialBowlCatchHover(false);
+    };
+    document.addEventListener('dragend', onDragEndClear, true);
+    return () => document.removeEventListener('dragend', onDragEndClear, true);
+  }, []);
 
   /** Opponent-only banner when the other player burns a card. */
   useEffect(() => {
@@ -3407,6 +3400,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       return;
     }
     clearSacrificialBowlTimers();
+    /** So `dragend` (same tick as drop) sees active burn before React re-renders. */
+    sacrificeBurnAnimRef.current = card;
     setSacrificeBurnAnimCard(card);
     setSacrificialBowlFocused(true);
     setSacrificialBowlBreathe(false);
@@ -3498,6 +3493,12 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       : null;
 
   const artworkFelt = displayCardArt?.mode === 'raster';
+
+  /** No cards in hand strip until drafting + power resolution finish and first-trick table suit wheel finishes (avoids leaking through blurred overlays). */
+  const suppressHandCardsUi =
+    room.status === 'drafting' ||
+    room.status === 'powering' ||
+    (room.status === 'playing' && isWheelSpinning && room.currentTurn === 1);
 
   return (
     <CardArtSessionBridge room={room} myUid={myUid} serviceRef={serviceRef}>
@@ -4067,7 +4068,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
 
               <div className="relative z-0 col-span-full flex min-h-0 min-w-0 flex-col items-center justify-self-center rounded-3xl px-1 pb-2 pt-1 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:w-full sm:max-w-[min(100%,min(94vw,44rem))] md:max-w-[min(100%,min(92vw,52rem))] xl:max-w-[min(100%,min(92vw,64rem))] sm:px-3">
                 <div className="relative z-10 mt-[5%] flex w-full min-w-0 flex-row flex-wrap items-start justify-center gap-x-3 gap-y-2 sm:gap-x-5">
-                  {room.status === 'playing' && !me.confirmed && opponent && !sacrificialBowlExpandedUi ? (
+                  {room.status === 'playing' && opponent && !sacrificialBowlExpandedUi ? (
                     <HoldDelayTooltip
                       caption={HUD_HOLD_SACRIFICIAL_BOWL_CAPTION}
                       className="pointer-events-auto shrink-0 self-center sm:self-start isolation-auto !overflow-visible !p-0"
@@ -4078,15 +4079,15 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       }
                     >
                       <div
-                        onDragOver={handleSacrificialBowlDragOver}
-                        onDrop={handleSacrificialBowlDrop}
+                        onDragOver={me.confirmed ? undefined : handleSacrificialBowlDragOver}
+                        onDrop={me.confirmed ? undefined : handleSacrificialBowlDrop}
                         className="flex flex-col items-center"
                       >
                         <SacrificialBowl
                           ref={sacrificialBowlDropRef}
                           rasterMode={displayCardArt?.mode === 'raster'}
                           expanded={false}
-                          catchGlow={sacrificialBowlCatchHover}
+                          catchGlow={me.confirmed ? false : sacrificialBowlCatchHover}
                           burnsRemaining={me.sacrificialBowlBurnsRemaining ?? 2}
                         />
                       </div>
@@ -4597,9 +4598,17 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
               }`}
               style={{ transform: 'translateY(-8px)' }}
             >
-              {(handDealVisibleCount === null ? me.hand : me.hand.slice(0, handDealVisibleCount)).map((card, i) => {
-                const initialDealAnimating = handDealVisibleCount !== null;
-                const visibleHandLen = handDealVisibleCount === null ? me.hand.length : Math.max(1, handDealVisibleCount);
+              {(suppressHandCardsUi
+                ? []
+                : handDealVisibleCount === null
+                  ? me.hand
+                  : me.hand.slice(0, handDealVisibleCount)
+              ).map((card, i) => {
+                const initialDealAnimating = handDealVisibleCount !== null && !suppressHandCardsUi;
+                const visibleHandLen =
+                  suppressHandCardsUi || handDealVisibleCount === null
+                    ? me.hand.length
+                    : Math.max(1, handDealVisibleCount);
                 const selected = selectedCardIndex === i;
                 const fan = playerHandFanMotion(i, visibleHandLen, fanSqueeze);
                 const dragGapActive =

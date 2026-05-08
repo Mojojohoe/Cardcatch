@@ -24,6 +24,15 @@
   --sb-bowl-frame-size: min(72vmin, 28rem);
 }
 
+/**
+ * Expanded bowl: do NOT use `calc(-3.4 * frame-size)` — that scaled with large vmin and pushed fire off-screen.
+ * Anchor flame inside the circular clip; slightly smaller scale keeps the column in frame.
+ */
+.sacrificial-bowl-ui--expanded .sacrificial-bowl-fire-host {
+  top: -38%;
+  transform: translateX(-50%) scale(0.78);
+}
+
 /* Fire is authored at design resolution, then scaled into the frame (fixes compact-mode filters). */
 .sacrificial-bowl-fire-host {
   position: absolute;
@@ -43,10 +52,6 @@
 
 .sacrificial-bowl-ui:not(.sacrificial-bowl-ui--expanded) .sacrificial-bowl-fire-host {
   transform: translateX(-50%) scale(var(--sb-fire-compact-scale, 0.36));
-}
-
-.sacrificial-bowl-ui--expanded .sacrificial-bowl-fire-host {
-  transform: translateX(-50%) scale(1);
 }
 
 .sacrificial-bowl-fire {

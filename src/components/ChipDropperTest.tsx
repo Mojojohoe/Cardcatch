@@ -47,11 +47,11 @@ const STACK_SPAWN_JITTER = 0.18;
 const SIM_SPEED = 2;
 const REST_LINEAR_V2 = 0.00018;
 const REST_ANGULAR_W2 = 0.0003;
-const REST_FLATNESS_MIN = 0.82;
-const REST_TIME_FLAT_S = 1.1;
+const REST_FLATNESS_MIN = 0.9;
+const REST_TIME_FLAT_S = 0.95;
 const REST_TIME_ANY_S = 2.6;
-const UPRIGHT_BIAS_TORQUE = 2.35;
-const UPRIGHT_BIAS_DAMP = 1.05;
+const UPRIGHT_BIAS_TORQUE = 3.45;
+const UPRIGHT_BIAS_DAMP = 1.42;
 const NEAR_REST_LATERAL_DAMP = 0.86;
 const CHIP_GLTF_URL = `${import.meta.env.BASE_URL}assets/models/poker_chip.glb`;
 
@@ -171,13 +171,13 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
       mass: 0.45,
       shape,
       material: pm.chip,
-      linearDamping: 0.46,
-      angularDamping: 0.88,
+      linearDamping: 0.52,
+      angularDamping: 0.94,
       position: new Vec3((Math.random() - 0.5) * 2 * sx, DROP_Y, (Math.random() - 0.5) * 2 * sz),
     });
     body.quaternion.setFromAxisAngle(new Vec3(0, 1, 0), Math.random() * Math.PI * 2);
     body.velocity.set(0, -0.75, 0);
-    body.angularVelocity.set((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.2);
+    body.angularVelocity.set((Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.12);
     body.allowSleep = true;
     body.sleepSpeedLimit = 0.03;
     body.sleepTimeLimit = 2.8;
@@ -231,10 +231,10 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     const scene = new Scene();
     sceneRef.current = scene;
 
-    /** Higher / tighter view reduces depth foreshortening vs a low wide camera. */
-    const camera = new PerspectiveCamera(40, 1, 0.1, 500);
-    camera.position.set(0, 36, 54);
-    camera.lookAt(0, 3.2, 0);
+    /** Side-heavy angle so stacks read as flat piles; slight Z keeps perspective (not orthographic side-on). */
+    const camera = new PerspectiveCamera(34, 1, 0.1, 500);
+    camera.position.set(46, 22, 14);
+    camera.lookAt(0, 2.4, 0);
     cameraRef.current = camera;
 
     const renderer = new WebGLRenderer({ antialias: true, alpha: true });
@@ -249,13 +249,14 @@ export const ChipSimulationCanvas = forwardRef<ChipSimulationHandle, SimulationP
     root.appendChild(renderer.domElement);
 
     const world = new World({ gravity: new Vec3(0, -24, 0) });
-    world.defaultContactMaterial.friction = 0.58;
-    world.defaultContactMaterial.restitution = 0.06;
+    world.defaultContactMaterial.friction = 0.62;
+    world.defaultContactMaterial.restitution = 0.045;
     worldRef.current = world;
 
     const chipMat = new Material('chip');
     const feltMat = new Material('felt');
-    world.addContactMaterial(new ContactMaterial(chipMat, feltMat, { friction: 0.84, restitution: 0.02 }));
+    world.addContactMaterial(new ContactMaterial(chipMat, feltMat, { friction: 0.92, restitution: 0.015 }));
+    world.addContactMaterial(new ContactMaterial(chipMat, chipMat, { friction: 0.9, restitution: 0.012 }));
     const wallMat = new Material('chip-wall');
     world.addContactMaterial(new ContactMaterial(chipMat, wallMat, { friction: 0.9, restitution: 0.005 }));
     world.addContactMaterial(new ContactMaterial(feltMat, wallMat, { friction: 0.86, restitution: 0.005 }));

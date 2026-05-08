@@ -119,8 +119,8 @@ export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(
     : 'ring-2 ring-stone-500/55 ring-offset-2 ring-offset-emerald-950/30';
 
   const bowlFrameClass = expanded
-    ? 'sacrificial-bowl-ui sacrificial-bowl-ui--expanded relative h-[min(72vmin,28rem)] w-[min(72vmin,28rem)]'
-    : 'sacrificial-bowl-ui relative h-[7rem] w-[7rem] sm:h-[7.5rem] sm:w-[7.5rem]';
+    ? 'sacrificial-bowl-ui sacrificial-bowl-ui--expanded relative h-[min(72vmin,28rem)] w-[min(72vmin,28rem)] overflow-hidden rounded-full'
+    : 'sacrificial-bowl-ui relative h-[7rem] w-[7rem] overflow-hidden rounded-full sm:h-[7.5rem] sm:w-[7.5rem]';
 
   return (
     <div
@@ -141,7 +141,7 @@ export const SacrificialBowl = forwardRef<HTMLDivElement, SacrificialBowlProps>(
 
           <div className="pointer-events-none absolute inset-[8%] z-0 translate-y-[40%]">{bowlInner}</div>
 
-          <div className="sacrificial-bowl-fire-host overflow-visible">
+          <div className="sacrificial-bowl-fire-host">
             <div className="sacrificial-bowl-fire">
               {burnStyles.map((st, i) => (
                 <div

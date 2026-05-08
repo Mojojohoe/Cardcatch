@@ -12,7 +12,7 @@ export const HUD_HOLD_TOOLTIP_PANEL_CLASS =
 
 /** Raster / art mode: ornate border only — no flat border or fill (see {@link ornateGreenTooltipRasterStyle}). */
 export const HUD_HOLD_TOOLTIP_RASTER_PANEL_CLASS =
-  'max-w-[min(20rem,calc(100vw-2rem))] px-[1.45rem] pb-[1.15rem] pt-[1.05rem] text-left text-[11px] font-semibold leading-snug text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-sm sm:text-[12px]';
+  'max-w-[min(20rem,calc(100vw-2rem))] px-[1.45rem] pb-[1.15rem] pt-[1.05rem] text-left text-[11px] font-semibold leading-snug text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.65)] sm:max-w-sm sm:text-[12px]';
 
 /** Same palette for instant hover panels (e.g. panic dice) so they match hold hints. */
 export const HUD_INSTANT_TOOLTIP_PANEL_CLASS = HUD_HOLD_TOOLTIP_PANEL_CLASS;
