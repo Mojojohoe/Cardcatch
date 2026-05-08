@@ -2511,33 +2511,54 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     setHandDealVisibleCount(null);
   }, [room?.code]);
 
+  /**
+   * Opening deal: reveal hand slots one-by-one (200ms) with deck-pull + draw SFX only after the hand strip is visible.
+   * Gated the same way as `suppressHandCardsUi` — if we stagger while hidden (draft / wheel), the timer finishes before reveal and all cards pop in at once.
+   */
   useEffect(() => {
     if (!room) {
       setHandDealVisibleCount(null);
       return;
     }
+    const suppressed =
+      room.status === 'drafting' ||
+      room.status === 'powering' ||
+      (room.status === 'playing' && isWheelSpinning && room.currentTurn === 1);
+    if (suppressed) {
+      setHandDealVisibleCount(null);
+      return;
+    }
+
     const self = room.players[myUid];
     if (!self || room.status !== 'playing' || room.currentTurn !== 1 || self.hand.length === 0) {
       setHandDealVisibleCount(null);
       return;
     }
+
     /** Exclude `hand.length` — mid-round burns/draws change count and must not replay the opening deal stagger + SFX. */
     const handSig = `${room.code}:${self.uid}:${room.currentTurn}`;
     if (handDealStartedForRef.current === handSig) return;
     handDealStartedForRef.current = handSig;
-    setHandDealVisibleCount(0);
-    let count = 0;
+
+    if (self.hand.length <= 1) {
+      setHandDealVisibleCount(1);
+      const done = window.setTimeout(() => setHandDealVisibleCount(null), 620);
+      return () => window.clearTimeout(done);
+    }
+
+    setHandDealVisibleCount(1);
+    let shown = 1;
     const timer = window.setInterval(() => {
-      count += 1;
-      if (count >= self.hand.length) {
+      shown += 1;
+      if (shown >= self.hand.length) {
         setHandDealVisibleCount(null);
         window.clearInterval(timer);
-        return;
+      } else {
+        setHandDealVisibleCount(shown);
       }
-      setHandDealVisibleCount(count);
     }, 200);
     return () => window.clearInterval(timer);
-  }, [room, myUid]);
+  }, [room, myUid, isWheelSpinning]);
 
   useEffect(() => {
     return () => {
@@ -3600,7 +3621,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
         {sacrificialBowlExpandedUi && room.status === 'playing' && !me.confirmed && (
           <motion.div
             key="sacrificial-bowl-focus"
-            className="fixed inset-0 z-[446] flex flex-col items-center justify-start bg-black/72 px-4 pt-[min(6vh,3.5rem)] backdrop-blur-[2px] sm:pt-[min(8vh,4.5rem)]"
+            className="fixed inset-0 z-[446] pointer-events-none flex flex-col items-center justify-start bg-black/72 px-4 pt-[min(6vh,3.5rem)] backdrop-blur-[2px] sm:pt-[min(8vh,4.5rem)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -3612,7 +3633,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             <div
               onDragOver={handleSacrificialBowlDragOver}
               onDrop={handleSacrificialBowlDrop}
-              className="-mt-[min(4vh,2rem)] flex flex-col items-center sm:-mt-[min(5vh,2.5rem)]"
+              className="pointer-events-auto -mt-[min(4vh,2rem)] flex flex-col items-center sm:-mt-[min(5vh,2.5rem)]"
             >
               <SacrificialBowl
                 ref={sacrificialBowlDropRef}

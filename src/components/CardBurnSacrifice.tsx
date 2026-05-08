@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CardVisual } from './GameVisuals';
 import { cardArtAssetUrl } from '../cardArt/paths';
+import { PC_HAND, PC_HAND_VEC_SM } from '../cardUiDimensions';
 import './CardBurnSacrifice.css';
 
 const BURN_START_DELAY_MS = 100;
@@ -20,21 +21,24 @@ export interface CardBurnSacrificeProps {
 
 /**
  * Chernobyl-style horizontal sprite burn (burn.jpg + burnline.jpg strips).
- * Stage is card-shaped (24:37); sprite viewport (770×430 design) is scaled so **strip height = stage height**,
- * wider strip overflows horizontally and is clipped — matches card silhouette.
+ * The JPG strips are scaled to **hand-card height** ({@link PC_HAND} / {@link PC_HAND_VEC_SM}), not the other way around.
+ * Wider 770:430 viewport overflows horizontally and is clipped to the card silhouette.
+ * Preview mode wraps the stack in a uniform CSS scale so the lab stays readable.
  * @see https://codepen.io/jcoulterdesign/pen/YbBoNb
  */
 export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, variant = 'preview' }) => {
   const [burnOn, setBurnOn] = useState(false);
   const [hideFace, setHideFace] = useState(false);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   const [stripEndPx, setStripEndPx] = useState(STRIP_END_OFFSET_PX);
 
   const burnUrl = cardArtAssetUrl('burn.jpg');
   const burnLineUrl = cardArtAssetUrl('burnline.jpg');
 
+  const sizerClass = variant === 'compact' ? PC_HAND_VEC_SM : PC_HAND;
+
   useLayoutEffect(() => {
-    const el = stageRef.current;
+    const el = measureRef.current;
     if (!el) return;
     const sync = () => {
       const h = el.getBoundingClientRect().height;
@@ -56,12 +60,8 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
     };
   }, [cardId]);
 
-  return (
-    <div
-      ref={stageRef}
-      className={`card-burn-sacrifice__stage ${variant === 'compact' ? 'card-burn-sacrifice__stage--compact' : ''}`}
-      style={{ ['--burn-strip-end' as string]: `${stripEndPx}px` }}
-    >
+  const burnStack = (
+    <div ref={measureRef} className={`card-burn-sacrifice__sizer relative ${sizerClass}`}>
       <div className={`card-burn-image ${burnOn ? 'card-burn-image--burn' : ''}`}>
         <div
           className="card-burn-image__layer card-burn-image__burn"
@@ -72,14 +72,7 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
           className={`card-burn-image__layer card-burn-image__original ${hideFace ? 'card-burn-image__original--hidden' : ''}`}
         >
           <div className="card-burn-image__cardMount">
-            <CardVisual
-              card={cardId}
-              revealed
-              noAnimate
-              presentation="none"
-              fillParent
-              small={variant === 'compact'}
-            />
+            <CardVisual card={cardId} revealed noAnimate presentation="none" small={variant === 'compact'} />
           </div>
         </div>
         <div
@@ -88,6 +81,15 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
           aria-hidden
         />
       </div>
+    </div>
+  );
+
+  return (
+    <div
+      className={`card-burn-sacrifice__stage ${variant === 'preview' ? 'card-burn-sacrifice__stage--preview' : ''} ${variant === 'compact' ? 'card-burn-sacrifice__stage--compact' : ''}`}
+      style={{ ['--burn-strip-end' as string]: `${stripEndPx}px` }}
+    >
+      {variant === 'preview' ? <div className="card-burn-sacrifice__zoom">{burnStack}</div> : burnStack}
     </div>
   );
 };

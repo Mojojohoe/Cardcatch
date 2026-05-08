@@ -364,8 +364,6 @@ export interface CardVisualProps {
   noAnimate?: boolean;
   /** Compact footprint (e.g. Priestess swap row). */
   small?: boolean;
-  /** Fill a sized parent (height-driven) instead of fixed {@link PC_HAND} — e.g. sacrifice burn sprite stage. */
-  fillParent?: boolean;
   /** Round-resolution entrance: card lifts from below like drawing from the deck. */
   presentation?: CardPresentationMode;
   deckPullSide?: DeckPullSide;
@@ -408,7 +406,6 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     delay = 0,
     noAnimate = false,
     small = false,
-    fillParent = false,
     presentation = 'default',
     deckPullSide = 'left',
     presentationPace = 'normal',
@@ -522,19 +519,13 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
   });
 
   /** Assembled faces use full-bleed art — outer border/white frame clips edges; selection uses ring only. */
-  const faceWrap = fillParent
-    ? useAssembledFace
-      ? 'h-full max-h-[94%] w-auto aspect-[24/37] border-0 rounded-lg p-0 shadow-lg'
-      : small
-        ? 'h-full max-h-[94%] w-auto aspect-[24/37] border-2 rounded-lg p-1.5'
-        : 'h-full max-h-[94%] w-auto aspect-[24/37] border-2 rounded-lg p-2'
-    : useAssembledFace
-      ? small
-        ? `${PC_HAND_VEC_SM} border-0 rounded-lg p-0 shadow-lg`
-        : `${PC_HAND} border-0 rounded-lg p-0 shadow-lg`
-      : small
-        ? `${PC_HAND_VEC_SM} border-2 rounded-lg p-1.5`
-        : `${PC_HAND} border-2 rounded-lg p-2`;
+  const faceWrap = useAssembledFace
+    ? small
+      ? `${PC_HAND_VEC_SM} border-0 rounded-lg p-0 shadow-lg`
+      : `${PC_HAND} border-0 rounded-lg p-0 shadow-lg`
+    : small
+      ? `${PC_HAND_VEC_SM} border-2 rounded-lg p-1.5`
+      : `${PC_HAND} border-2 rounded-lg p-2`;
   const cornerText = small ? 'text-xs sm:text-base' : 'text-sm sm:text-xl';
   const cornerGlyph = small ? 'w-5 h-5 sm:w-7 sm:h-7' : 'w-6 h-6 sm:w-9 sm:h-9';
   const centerGlyph = small ? 'w-14 h-14 sm:w-[4.25rem] sm:h-[4.25rem]' : 'w-[4.25rem] h-[4.25rem] sm:w-[7.25rem] sm:h-[7.25rem]';
@@ -672,7 +663,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
     <div
       ref={rootRef}
       style={{ isolation: 'isolate' }}
-      className={`relative ${fillParent ? 'flex h-full min-h-0 w-full min-w-0 items-center justify-center' : 'shrink-0'} select-none outline-none ${muted || disabled ? 'cursor-not-allowed' : holdCaption || detailTooltip || onClick ? 'cursor-pointer' : ''}`}
+      className={`relative shrink-0 select-none outline-none ${muted || disabled ? 'cursor-not-allowed' : holdCaption || detailTooltip || onClick ? 'cursor-pointer' : ''}`}
       onMouseEnter={syncHoldTip}
       onMouseLeave={clearHoldTip}
       onFocus={() => {
@@ -751,7 +742,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
             ? `${cardArt?.mode ?? 'vec'}-${resolutionMorph}-${resolutionMorphTick}`
             : `${cardArt?.mode ?? 'vec'}-${resolutionMorph ?? 'idle'}-${card}-${resolutionWiggleTick}`
         }
-        className={`relative z-[1] flex flex-1 flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-[inherit] ${useAssembledFace ? 'min-h-0' : fillParent ? 'min-h-0' : small ? '' : PC_FACE_MINH}`}
+        className={`relative z-[1] flex flex-1 flex-col justify-between ${useAssembledFace ? 'overflow-visible' : 'overflow-hidden'} rounded-[inherit] ${useAssembledFace ? 'min-h-0' : small ? '' : PC_FACE_MINH}`}
         style={{ transformStyle: 'preserve-3d' }}
         initial={
           resolutionMorph === 'transform_in'

@@ -1,30 +1,55 @@
 /**
  * Sprite-strip burn: design viewport 770×430px at height {@link CARD_BURN_DESIGN_VIEWPORT_H}.
- * Stage clips to playing-card aspect; inner strip keeps 770:430 so JPG height matches card height.
+ * Sizer uses {@link PC_HAND} — JPG strips height-match that card box (masks scale down to the card).
  */
 
 .card-burn-sacrifice__stage {
   position: relative;
   margin-inline: auto;
-  overflow: hidden;
-  border-radius: 0.75rem;
-  background: transparent;
-  aspect-ratio: 24 / 37;
-  height: min(58vmin, 28rem);
-  width: auto;
-  max-width: min(92vw, 420px);
-  max-height: min(78vh, 32rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  padding: 1rem;
+}
+
+/** Readable preview: uniform scale of card + masks together (does not change mask vs card ratio). */
+.card-burn-sacrifice__stage--preview {
+  min-height: min(72vh, 26rem);
+}
+
+.card-burn-sacrifice__zoom {
+  transform-origin: center center;
+  /* Uniform enlargement for the lab only; card ↔ mask ratio unchanged (see .card-burn-sacrifice__sizer). */
+  transform: scale(2.15);
+}
+
+@media (max-width: 520px) {
+  .card-burn-sacrifice__zoom {
+    transform: scale(1.55);
+  }
+}
+
+@media (max-height: 680px) {
+  .card-burn-sacrifice__zoom {
+    transform: scale(1.65);
+  }
 }
 
 .card-burn-sacrifice__stage--compact {
-  height: min(34vmin, 13rem);
-  max-width: min(88vw, 220px);
-  max-height: min(42vh, 15rem);
+  padding: 0;
+  min-height: unset;
+}
+
+.card-burn-sacrifice__sizer {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
 }
 
 /**
- * Sprite aperture: same aspect as pen (770:430). Height = stage height → JPG strips scale by height.
- * Strip is wider than the card stage → left/right overflow hidden on stage.
+ * Sprite aperture: pen aspect (770:430). Height = sizer (hand card) → JPG strips align to card height.
+ * Strip is wider than the card → horizontal overflow hidden on sizer.
  */
 .card-burn-image {
   position: absolute;
@@ -72,6 +97,8 @@
 }
 
 .card-burn-image__cardMount > * {
+  max-height: 94%;
+  width: auto;
   flex-shrink: 0;
 }
 
@@ -80,7 +107,7 @@
   mix-blend-mode: lighten;
 }
 
-/* Pen: $totalTransitionTime ~2s, $frames 50 — end X scales with viewport height via inline --burn-strip-end */
+/* Pen: $totalTransitionTime ~2s, $frames 50 — end X scales with sizer height via inline --burn-strip-end */
 @keyframes card-burn-strip {
   0% {
     background-position: 0 0;
