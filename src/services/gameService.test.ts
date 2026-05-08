@@ -299,7 +299,7 @@ test('host accepts valid draft selection from current set only', () => {
   assert.equal(service.state.players.guest.powerCards.includes(2), true);
 });
 
-test('applyRoundResults does not duplicate Chariot saved card', () => {
+test('applyRoundResults applies Chariot echo copies without duplicating lines', () => {
   const service = new GameService() as any;
   service.myUid = 'host';
 
@@ -322,14 +322,18 @@ test('applyRoundResults does not duplicate Chariot saved card', () => {
     coinFlip: 'Host',
     events: [],
     gains: {
-      host: [{ type: 'card', id: 'Frogs-2' }],
+      host: [
+        { type: 'card', id: 'Hearts-5', fromChariot: true },
+        { type: 'power', id: 1, fromChariot: true },
+      ],
       guest: [{ type: 'draw', id: 'standard' }],
     },
   } as any;
 
   const next = service.applyRoundResults(room, room.players);
-  const frogs2 = next.players.host.hand.filter((c: string) => c === 'Frogs-2');
-  assert.equal(frogs2.length, 1);
+  const heartsCopies = next.players.host.hand.filter((c: string) => c === 'Hearts-5');
+  assert.equal(heartsCopies.length, 1);
+  assert.equal(next.players.host.powerCards.includes(1), true);
 });
 
 test('Magician frogify on Frog card increments Frog value by 1', () => {

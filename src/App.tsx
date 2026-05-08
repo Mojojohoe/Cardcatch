@@ -1991,7 +1991,7 @@ const ResolutionSequence: React.FC<{
                     revealed
                     presentation="deckPull"
                     deckPullSide={idx === 0 ? 'left' : 'right'}
-                    delay={idx * 0.07}
+                    delay={idx * 0.5}
                     lustHeartRulesActive={lustHeartResolution}
                     clashGhost={Boolean(postClashGhost[uid])}
                     resolutionMorph={resolutionCardMorph[uid] ?? null}
@@ -2472,6 +2472,8 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const [panicDiceStripHover, setPanicDiceStripHover] = useState(false);
   const [panicDiceResultsHover, setPanicDiceResultsHover] = useState(false);
   const [panicClashOpen, setPanicClashOpen] = useState(false);
+  /** When panic dice rewrote the tableau, keep static result cards on `initialCardsPlayed` until clash FX finishes. */
+  const [panicOutcomeCardsRevealedDiceId, setPanicOutcomeCardsRevealedDiceId] = useState<string | null>(null);
   /** Avoid scheduling duplicate timers (React Strict dev double-mount clears the first timeout). */
   const panicClashPlayedRollIdsRef = useRef<Set<string>>(new Set());
   const [handDragFromIndex, setHandDragFromIndex] = useState<number | null>(null);
@@ -2792,6 +2794,11 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
     if (room?.status === 'playing') panicClashPlayedRollIdsRef.current.clear();
   }, [room?.status]);
 
+  const panicOutcomeDiceRollId = room?.lastOutcome?.panicFx?.diceRollId ?? null;
+  useEffect(() => {
+    setPanicOutcomeCardsRevealedDiceId(null);
+  }, [panicOutcomeDiceRollId]);
+
   useEffect(() => {
     const fx = room?.lastOutcome?.panicFx;
     if (!fx || room?.status !== 'results') return;
@@ -3079,11 +3086,13 @@ const GameInstance: React.FC<GameInstanceProps> = ({ instanceId, isDual }) => {
   const dismissPanicClash = useCallback(
     (reason: PanicClashDismissReason) => {
       setPanicClashOpen(false);
+      const diceId = room?.lastOutcome?.panicFx?.diceRollId;
+      if (diceId) setPanicOutcomeCardsRevealedDiceId(diceId);
       if (reason !== 'complete' || room?.status !== 'results') return;
       setResolutionReplayNonce((n) => n + 1);
       setShowResolutionSequence(true);
     },
-    [room?.status],
+    [room?.status, room?.lastOutcome?.panicFx?.diceRollId],
   );
 
   /** Must run before any conditional return — same rule as other table hooks (React #310). */
@@ -3589,6 +3598,38 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
     room.status === 'powering' ||
     (room.status === 'playing' && isWheelSpinning && room.currentTurn === 1);
 
+  const initialDealDragBlocked = handDealVisibleCount !== null && !suppressHandCardsUi;
+
+  const handleTablePlayTargetDragOver = (e: React.DragEvent) => {
+    if (suppressHandCardsUi || handDragFromIndex === null || room.status !== 'playing') return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+  const handleTablePlayTargetDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (
+      suppressHandCardsUi ||
+      room.status !== 'playing' ||
+      me.confirmed ||
+      initialDealDragBlocked ||
+      handDragFromIndex === null
+    ) {
+      setHandDragFromIndex(null);
+      setHandDragHoverIndex(null);
+      return;
+    }
+    const from = handDragFromIndex;
+    setHandDragFromIndex(null);
+    setHandDragHoverIndex(null);
+    if (from < 0 || from >= me.hand.length) return;
+    const card = me.hand[from];
+    if (!card || card === GROVEL_CARD_ID || isShopPackPlaceholder(card)) return;
+    const prideMuted = prideBlocksCard(room, myUid, card);
+    const envyMuted = envySealBlocksHandIndex(room, myUid, me.hand, from);
+    if (prideMuted || envyMuted) return;
+    setSelectedCardIndex(from);
+  };
+
   return (
     <CardArtSessionBridge room={room} myUid={myUid} serviceRef={serviceRef}>
     <DisplayCardArtModeOverride highVisibilityMode={highVisibilityMode}>
@@ -3655,7 +3696,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12 }}
           >
-            <p className="pointer-events-none mb-3 max-w-sm pt-[min(2vh,1rem)] text-center text-[10px] font-black uppercase tracking-widest text-stone-300/95 sm:mb-4 sm:pt-[min(3vh,1.25rem)]">
+            <p className="pointer-events-none mb-3 mt-10 max-w-sm pt-[min(2vh,1rem)] text-center text-[10px] font-black uppercase tracking-widest text-stone-300/95 sm:mb-4 sm:pt-[min(3vh,1.25rem)]">
               {sacrificeBurnAnimCard ? 'Burning…' : 'Release over the flame to sacrifice'}
             </p>
             <div
@@ -4228,6 +4269,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                      className="flex flex-col items-center gap-3"
                    >
                      <HoldDelayTooltip caption={HUD_HOLD_TARGET_SUIT_CAPTION} className="flex flex-col items-center gap-3">
+                     <div
+                       className="flex flex-col items-center gap-3"
+                       onDragOver={handleTablePlayTargetDragOver}
+                       onDrop={handleTablePlayTargetDrop}
+                     >
                      {(() => {
                        const ts = (room.status === 'results'
                          ? room.lastOutcome?.targetSuit || room.targetSuit
@@ -4312,6 +4358,7 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                          </>
                        );
                      })()}
+                     </div>
                      </HoldDelayTooltip>
                    </motion.div>
                  )}
@@ -4486,7 +4533,14 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
                       <div className="relative inline-block">
                         <div className="relative z-10">
                           <CardVisual
-                            card={room.lastOutcome!.cardsPlayed[uid]}
+                            card={
+                              (room.lastOutcome.panicFx &&
+                              room.lastOutcome.initialCardsPlayed &&
+                              panicOutcomeDiceRollId &&
+                              panicOutcomeCardsRevealedDiceId !== panicOutcomeDiceRollId
+                                ? room.lastOutcome.initialCardsPlayed
+                                : room.lastOutcome.cardsPlayed)[uid]!
+                            }
                             revealed
                             presentation="none"
                             noAnimate

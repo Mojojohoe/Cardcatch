@@ -17,6 +17,10 @@ const ORNATE_PURPLE_BORDER_PX = 36;
  * Golden tooltip / popup frame for **raster (art) mode only**.
  * Uses `round` tiling so tall/wide panels keep corner scale consistent; middles repeat instead of stretching.
  */
+/** Soft shadow follows the ornate border silhouette (works with `border-image`); avoid `box-shadow` on the rectangular box. */
+const ORNATE_TOOLTIP_DROP_SHADOW =
+  'drop-shadow(0 14px 32px rgba(0, 0, 0, 0.55)) drop-shadow(0 4px 14px rgba(0, 0, 0, 0.38))';
+
 export function ornateGreenTooltipRasterStyle(): CSSProperties {
   const w = ORNATE_GOLD_BORDER_PX;
   return {
@@ -31,6 +35,9 @@ export function ornateGreenTooltipRasterStyle(): CSSProperties {
     borderImageWidth: `${w}px`,
     borderImageOutset: 0,
     borderRadius: Math.round(w * 0.85),
+    filter: ORNATE_TOOLTIP_DROP_SHADOW,
+    WebkitFilter: ORNATE_TOOLTIP_DROP_SHADOW,
+    willChange: 'filter',
   };
 }
 
@@ -41,6 +48,8 @@ export function ornateGreenTooltipRasterStyle(): CSSProperties {
 export function ornateGreenSacrificialBowlHudWrapStyle(): CSSProperties {
   return {
     ...ornateGreenTooltipRasterStyle(),
+    filter: 'none',
+    WebkitFilter: 'none',
     overflow: 'visible',
     padding: 0,
     isolation: 'auto',

@@ -169,18 +169,36 @@ export const PanicClashResolution: React.FC<{
   const opponentCardFx =
     oppCardId == null ? '' : reduceCardRankForPanicDisplay(oppCardId, Math.max(0, initialOpponent - f.opponentEffective));
 
+  const slicePlayedForStrikeKeyRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!showCut) return;
+    if (slicePlayedForStrikeKeyRef.current === strikeKey) return;
+    slicePlayedForStrikeKeyRef.current = strikeKey;
     playSfx('/assets/sounds/Card-Slice.mp3', sfxVolume);
-  }, [showCut, sfxVolume]);
+  }, [showCut, strikeKey, sfxVolume]);
+
+  const tearPanicSfxPlayedRef = useRef(false);
+  const tearOppSfxPlayedRef = useRef(false);
 
   useEffect(() => {
-    if (tearPanic) playSfx('/assets/sounds/Card-Tear.mp3', sfxVolume);
-  }, [tearPanic, sfxVolume]);
+    tearPanicSfxPlayedRef.current = false;
+    tearOppSfxPlayedRef.current = false;
+  }, [oppCardId, exchanges, panicCardId]);
 
   useEffect(() => {
-    if (tearOpp) playSfx('/assets/sounds/Card-Tear.mp3', sfxVolume);
-  }, [tearOpp, sfxVolume]);
+    let triggered = false;
+    if (tearPanic && !tearPanicSfxPlayedRef.current) {
+      tearPanicSfxPlayedRef.current = true;
+      triggered = true;
+    }
+    if (tearOpp && !tearOppSfxPlayedRef.current) {
+      tearOppSfxPlayedRef.current = true;
+      triggered = true;
+    }
+    if (!triggered) return;
+    playSfx('/assets/sounds/Card-Tear.mp3', sfxVolume);
+  }, [tearPanic, tearOpp, sfxVolume]);
 
   useEffect(() => {
     if (!oppCardId || frames.length === 0) {

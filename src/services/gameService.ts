@@ -1062,6 +1062,45 @@ function cloneOutcomeGains(
   return out;
 }
 
+function stripChariotEchoLines(
+  list: OutcomeGain[],
+  echoSuitId: string | undefined,
+  echoPowerId: number | null | undefined,
+): OutcomeGain[] {
+  return list.filter((g) => {
+    const flagged = Boolean((g as { fromChariot?: boolean }).fromChariot);
+    if (!flagged) return true;
+    if (g.type === 'card' && echoSuitId && g.id === echoSuitId) return false;
+    if (g.type === 'power' && echoPowerId != null && g.id === echoPowerId) return false;
+    return true;
+  });
+}
+
+/** Chariot (7): losing seat echoes the winner’s committed suit + power (Tower still blocks *their* major). */
+function chariotEchoGainLines(params: {
+  loserUid: string | null;
+  winnerUid: string | 'draw';
+  snap: Pick<
+    NonNullable<RoomData['lastOutcome']>,
+    'initialCardsPlayed' | 'cardsPlayed' | 'powerCardIdsPlayed' | 'powerCardTowerBlocked'
+  >;
+}): OutcomeGain[] {
+  const { loserUid, winnerUid, snap } = params;
+  if (winnerUid === 'draw' || !loserUid) return [];
+  if (snap.powerCardIdsPlayed[loserUid] !== 7 || snap.powerCardTowerBlocked?.[loserUid]) return [];
+  const w = winnerUid as string;
+  const suitEcho = snap.initialCardsPlayed[w] ?? snap.cardsPlayed[w];
+  const majEcho = snap.powerCardIdsPlayed[w];
+  const out: OutcomeGain[] = [];
+  if (typeof suitEcho === 'string' && suitEcho.trim()) {
+    out.push({ type: 'card', id: suitEcho, fromChariot: true });
+  }
+  if (majEcho != null && typeof majEcho === 'number' && !snap.powerCardTowerBlocked?.[w]) {
+    out.push({ type: 'power', id: majEcho, fromChariot: true });
+  }
+  return out;
+}
+
 /** Re-stitch draw-based acquisitions after clash-only panic rerolls (standard ladder + famine penalty). */
 export function rebuildGainsAfterPanicWinnerChange(
   prevOutcome: NonNullable<RoomData['lastOutcome']>,
@@ -1094,22 +1133,6 @@ export function rebuildGainsAfterPanicWinnerChange(
     gains[nextWinner].push({ type: 'draw', id: 'standard' });
   }
 
-  const chariotPatch = (
-    loserUid: string | null,
-    winnerWas: typeof nextWinner | 'draw',
-  ): { uid: string; cardId: string } | null => {
-    if (winnerWas === 'draw' || !loserUid) return null;
-    const maj = prevOutcome.powerCardIdsPlayed[loserUid];
-    if (maj !== 7 || prevOutcome.powerCardTowerBlocked?.[loserUid]) return null;
-    const played = prevOutcome.cardsPlayed[loserUid];
-    const pc = parseCard(played);
-    if (pc.isJoker) return null;
-    const ix = (VALUES as readonly string[]).indexOf(pc.value as (typeof VALUES)[number]);
-    if (ix < 0) return null;
-    const newVal = VALUES[Math.min(ix + 1, VALUES.length - 1)];
-    return { uid: loserUid, cardId: `${pc.suit}-${newVal}` };
-  };
-
   const magicianPatch = (
     loserUid: string | null,
     winnerWas: typeof nextWinner | 'draw',
@@ -1127,19 +1150,26 @@ export function rebuildGainsAfterPanicWinnerChange(
       : prevOutcome.winnerUid === p1Uid
         ? p2Uid
         : p1Uid;
-  const oldChariot = chariotPatch(oldLoserUid, prevOutcome.winnerUid);
-  if (oldChariot) {
-    gains[oldChariot.uid] = gains[oldChariot.uid].filter(
-      (g) => !(g.type === 'card' && g.id === oldChariot.cardId),
-    );
+  const oldWinnerUid =
+    prevOutcome.winnerUid === 'draw' ? null : (prevOutcome.winnerUid as string);
+  if (
+    oldLoserUid &&
+    oldWinnerUid &&
+    prevOutcome.powerCardIdsPlayed[oldLoserUid] === 7 &&
+    !prevOutcome.powerCardTowerBlocked?.[oldLoserUid]
+  ) {
+    const echoSuit = prevOutcome.initialCardsPlayed[oldWinnerUid] ?? prevOutcome.cardsPlayed[oldWinnerUid];
+    const echoPow = prevOutcome.powerCardIdsPlayed[oldWinnerUid];
+    gains[oldLoserUid] = stripChariotEchoLines(gains[oldLoserUid], echoSuit, echoPow ?? null);
   }
   const oldMag = magicianPatch(oldLoserUid, prevOutcome.winnerUid);
   if (oldMag) {
     gains[oldMag] = gains[oldMag].filter((g) => !(g.type === 'draw' && g.id === 1));
   }
 
-  const nc = chariotPatch(newLoser, nextWinner);
-  if (nc) gains[nc.uid].push({ type: 'card', id: nc.cardId });
+  for (const line of chariotEchoGainLines({ loserUid: newLoser, winnerUid: nextWinner, snap: prevOutcome })) {
+    gains[newLoser].push(line);
+  }
   const nm = magicianPatch(newLoser, nextWinner);
   if (nm) gains[nm].push({ type: 'draw', id: 1 });
 
@@ -1161,6 +1191,9 @@ export function explainPlainClash(
   /** Optional clash stamina penalties (Wrath + panic), same order as winner/loser cards — mirrors evaluateTrickClash. */
   clashValuePenaltySides?: readonly [number, number],
 ): string {
+  if (!winningCardStr || !losingCardStr) {
+    return 'Panic clash rewrote this trick — outcome updated.';
+  }
   const prW = parseCard(winningCardStr);
   const prL = parseCard(losingCardStr);
   const targ = targetSuit;
@@ -3525,20 +3558,15 @@ export class GameService {
     if (nw === 'draw') {
       finalMessage = 'Panic dice — the field deadlocks again.';
     } else {
-      const winnerCard = panicFrozenCardsPlayed[nw];
       const loserUid = nw === hostUid ? guestUid : hostUid;
-      const loserCard = panicFrozenCardsPlayed[loserUid];
-      const wrathTar = prev.wrathFx?.targetUid ?? null;
-      const wrathMag =
-        wrathTar && prev.wrathFx?.minionCard ? getWrathMagnitude(prev.wrathFx.minionCard) : 0;
-      const clashPenFor = (cardUid: string, card: string) => {
-        let pen =
-          wrathTar === cardUid && wrathMag && !parseCard(card).isJoker && card !== GROVEL_CARD_ID
-            ? wrathMag
-            : 0;
-        pen += extras[cardUid] ?? 0;
-        return pen;
-      };
+      /** Tableau strings already encode post-panic printed ranks — do not double-apply clash penalties in the sentence. */
+      let winnerCard = panicFrozenCardsPlayed[nw];
+      let loserCard = panicFrozenCardsPlayed[loserUid];
+      if (nw === uid) winnerCard = tableauDisplay.panicDisplayed;
+      else if (nw === oppUid) winnerCard = combat.opponentDestroyed ? '' : tableauDisplay.opponentDisplayed;
+      if (loserUid === uid) loserCard = tableauDisplay.panicDisplayed;
+      else if (loserUid === oppUid) loserCard = combat.opponentDestroyed ? '' : tableauDisplay.opponentDisplayed;
+
       finalMessage = `${room.players[nw].name} wins — ${explainPlainClash(
         winnerCard,
         loserCard,
@@ -3547,7 +3575,7 @@ export class GameService {
         greedTaxActive,
         greedTaxActive && prev.targetSuit === 'Diamonds',
         [lustReplay.lhPlayed(winnerCard), lustReplay.lhPlayed(loserCard)],
-        [clashPenFor(nw, winnerCard), clashPenFor(loserUid, loserCard)],
+        [0, 0],
       )}`;
     }
     const clashPenByUid: Record<string, number> = {
@@ -4796,18 +4824,28 @@ export class GameService {
         }
 
         if (power1 === 7 && winnerUid === p2Uid) {
-          const played = c1;
-          const pc = parseCard(played);
-          const newVal = VALUES[Math.min(VALUES.indexOf(pc.value as any) + 1, VALUES.length - 1)];
-          gains[p1Uid].push({ type: 'card', id: `${pc.suit}-${newVal}` });
-          events.push({ type: 'POWER_TRIGGER', uid: p1Uid, powerCardId: 7, message: `${players[p1Uid].name}'s Chariot saves the card!` });
+          gains[p1Uid].push({ type: 'card', id: c2, fromChariot: true });
+          if (committedPower2 !== null && !blockedPowers[p2Uid]) {
+            gains[p1Uid].push({ type: 'power', id: committedPower2, fromChariot: true });
+          }
+          events.push({
+            type: 'POWER_TRIGGER',
+            uid: p1Uid,
+            powerCardId: 7,
+            message: `${players[p1Uid].name}'s Chariot echoes ${players[p2Uid].name}'s play into their hand.`,
+          });
         }
         if (power2 === 7 && winnerUid === p1Uid) {
-          const played = c2;
-          const pc = parseCard(played);
-          const newVal = VALUES[Math.min(VALUES.indexOf(pc.value as any) + 1, VALUES.length - 1)];
-          gains[p2Uid].push({ type: 'card', id: `${pc.suit}-${newVal}` });
-          events.push({ type: 'POWER_TRIGGER', uid: p2Uid, powerCardId: 7, message: `${players[p2Uid].name}'s Chariot saves the card!` });
+          gains[p2Uid].push({ type: 'card', id: c1, fromChariot: true });
+          if (committedPower1 !== null && !blockedPowers[p1Uid]) {
+            gains[p2Uid].push({ type: 'power', id: committedPower1, fromChariot: true });
+          }
+          events.push({
+            type: 'POWER_TRIGGER',
+            uid: p2Uid,
+            powerCardId: 7,
+            message: `${players[p2Uid].name}'s Chariot echoes ${players[p1Uid].name}'s play into their hand.`,
+          });
         }
 
         const bothHanged =

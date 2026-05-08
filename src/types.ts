@@ -46,7 +46,13 @@ export const MAJOR_ARCANA: PowerCard[] = [
   { id: 4, name: "The Emperor", description: "Changes your card to the target suit and adds 2 to its value.", icon: "Shield" },
   { id: 5, name: "The Hierophant", description: "Reveals half of the opponent's hand after the round, including power cards.", icon: "BookType" },
   { id: 6, name: "The Lovers", description: "Transforms both committed plays to Hearts (rank unchanged; Jokers untouched).", icon: "Heart" },
-  { id: 7, name: "The Chariot", description: "If the player loses the round, their suit card is returned to their hand with +1 value.", icon: "FastForward" },
+  {
+    id: 7,
+    name: 'The Chariot',
+    description:
+      'If you lose the round, you gain a copy of everything your opponent committed to this clash: their suit card, their Joker if they played one, and their power card (majors and playable curses included).',
+    icon: 'FastForward',
+  },
   { id: 8, name: "Strength", description: "Increases the played card value by 4.", icon: "BicepsFlexed" },
   { id: 9, name: "The Hermit", description: "Swaps your play for a hand card that wins or draws against the opponent after clash penalties (e.g. Wrath debuffs on effective rank).", icon: "Lamp" },
   { id: 10, name: "The Wheel of Fortune", description: "Spins seven weighted chaos outcomes—when two Wheels fire, initiative coin decides which resolves first.", icon: "RefreshCw" },
@@ -321,6 +327,13 @@ export interface ActiveCurseState {
   envyMonsterHp?: number;
 }
 
+/** Reward line on `lastOutcome.gains` — `fromChariot` tags copies so revisions can strip them safely. */
+export type OutcomeGainItem =
+  | { type: 'card'; id: string; fromChariot?: boolean }
+  | { type: 'power'; id: number; fromChariot?: boolean }
+  | { type: 'draw'; id: string | number | 'new-card' | 'world-curse' }
+  | { type: 'token'; id: number };
+
 export interface RoomData {
   code: string;
   status: 'waiting' | 'drafting' | 'playing' | 'powering' | 'results' | 'finished';
@@ -431,10 +444,7 @@ export interface RoomData {
     events: ResolutionEvent[];
     summonedCards?: Record<string, string>; // e.g. Justice summoned card
     initialCardsPlayed: Record<string, string>;
-    gains: Record<
-      string,
-      { type: 'card' | 'power' | 'draw' | 'token'; id: string | number | 'new-card' | 'world-curse' }[]
-    >;
+    gains: Record<string, OutcomeGainItem[]>;
     /** Lust meter animation + persistence helper. */
     lustRoundFx?: {
       /**

@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 
-/** Minimal surface for {@link ChipSimulationCanvas} imperative API. */
+/** Minimal surface for token pile components (`TokenTowerStack`). */
 export type ChipPileHandle = {
   spawn: () => void;
   resetToCount: (count: number) => void;

@@ -20,19 +20,19 @@
 
 .card-burn-sacrifice__zoom {
   transform-origin: center center;
-  /* Uniform enlargement for the lab only; card ↔ mask ratio unchanged (see .card-burn-sacrifice__sizer). */
-  transform: scale(2.15);
+  /* Lab-only scale — keep modest so the wide burn strip stays inside the preview stage (no hard clip). */
+  transform: scale(1.42);
 }
 
 @media (max-width: 520px) {
   .card-burn-sacrifice__zoom {
-    transform: scale(1.55);
+    transform: scale(1.12);
   }
 }
 
 @media (max-height: 680px) {
   .card-burn-sacrifice__zoom {
-    transform: scale(1.65);
+    transform: scale(1.18);
   }
 }
 
@@ -60,6 +60,9 @@
   aspect-ratio: 770 / 430;
   width: auto;
   overflow: hidden;
+  /** Under the lighten burnline blend, opaque backing removes white letterboxing bands. */
+  background-color: #050506;
+  isolation: isolate;
 }
 
 .card-burn-image__layer {

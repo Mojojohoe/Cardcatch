@@ -208,7 +208,11 @@ export const CardAnimationPreview: React.FC<{ onClose: () => void; onOpenCreator
             </button>
           </div>
 
-          <div className="relative flex min-h-[26rem] items-center justify-center overflow-hidden rounded-2xl border border-violet-900/40 bg-[radial-gradient(circle_at_50%_40%,rgba(109,40,217,0.2),transparent_58%)]">
+          <div
+            className={`relative flex min-h-[26rem] items-center justify-center rounded-2xl border border-violet-900/40 bg-[radial-gradient(circle_at_50%_40%,rgba(109,40,217,0.2),transparent_58%)] ${
+              animationId === 'sacrificeBurn' ? 'overflow-x-hidden overflow-y-visible px-6 py-8' : 'overflow-hidden'
+            }`}
+          >
             <div className="absolute top-3 left-3 rounded-full border border-violet-500/45 bg-violet-900/35 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-violet-100">
               Loop #{loopTick + 1}
             </div>

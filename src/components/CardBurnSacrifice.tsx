@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CardVisual } from './GameVisuals';
 import { cardArtAssetUrl } from '../cardArt/paths';
-import { PC_HAND, PC_HAND_VEC_SM } from '../cardUiDimensions';
+import { PC_HAND } from '../cardUiDimensions';
 import './CardBurnSacrifice.css';
 
 const BURN_START_DELAY_MS = 100;
@@ -35,7 +35,8 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
   const burnUrl = cardArtAssetUrl('burn.jpg');
   const burnLineUrl = cardArtAssetUrl('burnline.jpg');
 
-  const sizerClass = variant === 'compact' ? PC_HAND_VEC_SM : PC_HAND;
+  /** In-game overlay matches full hand-card footprint (not the narrow SM vector slot). */
+  const sizerClass = PC_HAND;
 
   useLayoutEffect(() => {
     const el = measureRef.current;
@@ -72,7 +73,7 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
           className={`card-burn-image__layer card-burn-image__original ${hideFace ? 'card-burn-image__original--hidden' : ''}`}
         >
           <div className="card-burn-image__cardMount">
-            <CardVisual card={cardId} revealed noAnimate presentation="none" small={variant === 'compact'} />
+            <CardVisual card={cardId} revealed noAnimate presentation="none" small={false} />
           </div>
         </div>
         <div

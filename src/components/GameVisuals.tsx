@@ -858,7 +858,7 @@ export const CardVisual: React.FC<CardVisualProps> = (props) => {
               }
               className={
                 cardArt?.mode === 'raster'
-                  ? 'max-w-[16rem] px-[1.45rem] pb-5 pt-[1.05rem] text-left text-[11px] font-semibold leading-snug text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px]'
+                  ? 'max-w-[16rem] px-[1.45rem] pb-5 pt-[1.05rem] text-left text-[11px] font-semibold leading-snug text-slate-100 backdrop-blur-md sm:max-w-xs sm:text-[12px]'
                   : 'max-w-[16rem] rounded-xl border border-yellow-500/40 bg-slate-950/98 px-3 py-2.5 text-left text-[11px] font-semibold leading-snug text-slate-100 shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs sm:text-[12px]'
               }
             >
@@ -1169,7 +1169,7 @@ export const PowerCardVisual: React.FC<{
             <div
               ref={popRef}
               style={{ ...tooltipStyle, ...ornateGreenTooltipRasterStyle() }}
-              className={`max-w-[min(18rem,calc(100vw-2rem))] px-[1.45rem] pb-5 pt-[1.05rem] shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+              className={`max-w-[min(18rem,calc(100vw-2rem))] px-[1.45rem] pb-5 pt-[1.05rem] backdrop-blur-md sm:max-w-xs ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
               aria-hidden={!tipOpen}
             >
               <div className="flex items-start gap-4 text-left">
@@ -1310,7 +1310,7 @@ export const PowerCardVisual: React.FC<{
             <div
               ref={popRef}
               style={{ ...tooltipStyle, ...ornateGreenTooltipRasterStyle() }}
-              className={`max-w-[min(18rem,calc(100vw-2rem))] px-[1.45rem] pb-5 pt-[1.05rem] shadow-[0_16px_50px_rgba(0,0,0,0.65)] backdrop-blur-md sm:max-w-xs ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
+              className={`max-w-[min(18rem,calc(100vw-2rem))] px-[1.45rem] pb-5 pt-[1.05rem] backdrop-blur-md sm:max-w-xs ${destroyed ? 'ring-1 ring-orange-500/35' : ''}`}
               aria-hidden={!tipOpen}
             >
               <div className="flex items-start gap-4 text-left">
