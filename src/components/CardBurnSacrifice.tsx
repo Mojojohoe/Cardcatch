@@ -8,9 +8,6 @@ import './CardBurnSacrifice.css';
 
 const BURN_START_DELAY_MS = 100;
 const CARD_BURN_SFX = '/assets/sounds/Card-Burn.mp3';
-/** Sprite run is 2s; hide face slightly before strip end. */
-const HIDE_CARD_AFTER_MS = 1900;
-
 /** Original CodePen viewport height — sprite keyframes authored at this height. */
 export const CARD_BURN_DESIGN_VIEWPORT_H = 430;
 /** Horizontal scroll extent of burn.jpg / burnline.jpg strip animation (50 steps). */
@@ -31,7 +28,6 @@ export interface CardBurnSacrificeProps {
  */
 export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, variant = 'preview' }) => {
   const [burnOn, setBurnOn] = useState(false);
-  const [hideFace, setHideFace] = useState(false);
   const measureRef = useRef<HTMLDivElement>(null);
   const [stripEndPx, setStripEndPx] = useState(STRIP_END_OFFSET_PX);
   const { sfxVolume } = usePlayerDisplayPreferences();
@@ -58,26 +54,25 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
 
   useEffect(() => {
     const t0 = window.setTimeout(() => setBurnOn(true), BURN_START_DELAY_MS);
-    const t1 = window.setTimeout(() => setHideFace(true), HIDE_CARD_AFTER_MS);
     const ts = window.setTimeout(() => playSfx(CARD_BURN_SFX, sfxVolume), BURN_START_DELAY_MS);
     return () => {
       window.clearTimeout(t0);
-      window.clearTimeout(t1);
       window.clearTimeout(ts);
     };
   }, [cardId, sfxVolume]);
 
   const burnStack = (
     <div ref={measureRef} className={`card-burn-sacrifice__sizer relative ${sizerClass}`}>
-      <div className={`card-burn-image ${burnOn ? 'card-burn-image--burn' : ''}`}>
+      <div
+        className={`card-burn-image ${burnOn ? 'card-burn-image--burn' : ''}`}
+        style={{ ['--burn-mask-url' as string]: `url("${burnUrl.replace(/\\/g, '/')}")` }}
+      >
         <div
           className="card-burn-image__layer card-burn-image__burn"
           style={{ backgroundImage: `url(${burnUrl})` }}
           aria-hidden
         />
-        <div
-          className={`card-burn-image__layer card-burn-image__original ${hideFace ? 'card-burn-image__original--hidden' : ''}`}
-        >
+        <div className="card-burn-image__layer card-burn-image__original">
           <div className="card-burn-image__cardMount">
             <CardVisual card={cardId} revealed noAnimate presentation="none" small={false} />
           </div>
@@ -96,7 +91,7 @@ export const CardBurnSacrifice: React.FC<CardBurnSacrificeProps> = ({ cardId, va
       className={`card-burn-sacrifice__stage ${variant === 'preview' ? 'card-burn-sacrifice__stage--preview' : ''} ${variant === 'compact' ? 'card-burn-sacrifice__stage--compact' : ''}`}
       style={{ ['--burn-strip-end' as string]: `${stripEndPx}px` }}
     >
-      {variant === 'preview' ? <div className="card-burn-sacrifice__zoom">{burnStack}</div> : burnStack}
+      {burnStack}
     </div>
   );
 };

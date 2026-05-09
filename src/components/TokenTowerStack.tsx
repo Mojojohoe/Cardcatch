@@ -5,16 +5,16 @@ import type { ChipPileHandle } from '../hooks/useChipPileSync';
 const MAX_VISIBLE = 140;
 const SPAWN_STAGGER_MS = 72;
 /** Vertical spacing between stacked chips (screen space, pre-stage rotate). */
-const STACK_STEP_PX = 10;
+const STACK_STEP_PX = 13;
 
 /** Top face — wider reads as a chip, not a sticker. */
-const FACE_W_PX = 60;
-const FACE_H_PX = 22;
+const FACE_W_PX = 78;
+const FACE_H_PX = 30;
 /**
  * Distance between top face and bottom rim = visible “thickness” before the parent tilt.
  * Larger = fatter poker-chip feel.
  */
-const CHIP_THICKNESS_PX = 16;
+const CHIP_THICKNESS_PX = 24;
 
 function hexToRgb(hex: number): { r: number; g: number; b: number } {
   return { r: (hex >> 16) & 255, g: (hex >> 8) & 255, b: hex & 255 };
@@ -85,14 +85,14 @@ export const TokenTowerStack = forwardRef<ChipPileHandle, TokenTowerStackProps>(
     >
       <div
         className="absolute inset-0 flex items-end justify-center"
-        style={{ perspective: '980px', perspectiveOrigin: '50% 92%' }}
+        style={{ perspective: '1100px', perspectiveOrigin: '50% 88%' }}
       >
         <div
-          className="relative mx-auto mb-[7%] w-[min(7.5rem,40%)] max-w-none"
+          className="relative mx-auto mb-[6%] w-[min(9.5rem,46%)] max-w-none"
           style={{
-            aspectRatio: '1 / 1.12',
-            /** ~isometric: enough depth to read stack, not so much that ellipses squash to ribbons. */
-            transform: 'rotateX(44deg) rotateY(-14deg) rotateZ(-4deg)',
+            aspectRatio: '1 / 1.08',
+            /** Head-on tilt: readable thickness without a strong slant. */
+            transform: 'rotateX(34deg) rotateY(-8deg) rotateZ(0deg)',
             transformOrigin: '50% 100%',
             transformStyle: 'preserve-3d',
           }}

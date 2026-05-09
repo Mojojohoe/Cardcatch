@@ -20,6 +20,12 @@ function tokenHueFilter(role: PlayerRole | undefined): string {
   return 'none';
 }
 
+/** Fixed footprint so both piles read at the same scale (HUD positioning only). */
+const CHIP_PANEL_FRAME =
+  'flex flex-col overflow-hidden rounded-xl border border-emerald-800/45 bg-emerald-950/40 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.12)] backdrop-blur-[2px]';
+
+const CHIP_PANEL_BOX = 'h-[min(42vh,24rem)] w-[min(13.5rem,31vw)] sm:h-[min(46vh,26rem)] sm:w-[min(14.5rem,28vw)]';
+
 export const ChipDropperTest: React.FC<{
   room: RoomData;
   myUid: string;
@@ -52,26 +58,26 @@ export const ChipDropperTest: React.FC<{
 
   return (
     <>
-      <div className="fixed inset-0 z-[26] pointer-events-none">
+      <div className="pointer-events-none fixed inset-0 z-[26]">
+        {/** Opponent pile — left of centre table / opponent hand rail */}
         <HoldDelayTooltip
           caption={opponentTokensHoldCaption}
-          className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-xl
-            bottom-[max(7rem,18vh)] left-[calc(50%-min(23rem,90vw))]
-            h-[min(52vh,30rem)] w-[min(88vw,26rem)] scale-[0.25] origin-bottom-left
-            lg:bottom-auto lg:top-1/2 lg:left-[calc(50%-28vw)] lg:h-[min(56vh,34rem)] lg:w-[min(32vw,28rem)] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100 lg:origin-center"
+          className={`pointer-events-auto absolute left-[max(0.5rem,calc(50%-min(44rem,94vw)/2-8.75rem))] top-[max(5.5rem,11vh)] ${CHIP_PANEL_FRAME} ${CHIP_PANEL_BOX}`}
           style={{ filter: tokenHueFilter(opponent?.role) }}
         >
-          <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
+          <div className="pointer-events-none absolute left-2 top-1 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
             Their tokens: {opponentBalance}
           </div>
           <TokenTowerStack ref={leftRef} chipColor={oppPalette.chipColor} chipEmissive={oppPalette.chipEmissive} className="min-h-0 flex-1" />
         </HoldDelayTooltip>
+
+        {/** Player pile — between centred hand and right panic-dice column */}
         <HoldDelayTooltip
           caption={selfTokensHoldCaption}
-          className="pointer-events-auto absolute top-1/2 left-[calc(50%+28vw)] flex h-[min(56vh,34rem)] w-[min(32vw,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl [@media(max-height:1100px)]:origin-center [@media(max-height:1100px)]:scale-[0.75]"
+          className={`pointer-events-auto absolute bottom-[max(7.25rem,15vh)] left-[calc(50%+min(10rem,23vw))] ${CHIP_PANEL_FRAME} ${CHIP_PANEL_BOX}`}
           style={{ filter: tokenHueFilter(me?.role) }}
         >
-          <div className="pointer-events-none absolute top-1 left-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
+          <div className="pointer-events-none absolute left-2 top-1 z-10 rounded-md bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-100">
             Your tokens: {selfBalance}
           </div>
           <TokenTowerStack

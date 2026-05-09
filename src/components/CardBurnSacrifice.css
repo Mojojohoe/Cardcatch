@@ -13,27 +13,9 @@
   padding: 1rem;
 }
 
-/** Readable preview: uniform scale of card + masks together (does not change mask vs card ratio). */
+/** Readable preview without CSS scale on the measured stack (avoids strip jitter vs ResizeObserver). */
 .card-burn-sacrifice__stage--preview {
-  min-height: min(72vh, 26rem);
-}
-
-.card-burn-sacrifice__zoom {
-  transform-origin: center center;
-  /* Lab-only scale — keep modest so the wide burn strip stays inside the preview stage (no hard clip). */
-  transform: scale(1.42);
-}
-
-@media (max-width: 520px) {
-  .card-burn-sacrifice__zoom {
-    transform: scale(1.12);
-  }
-}
-
-@media (max-height: 680px) {
-  .card-burn-sacrifice__zoom {
-    transform: scale(1.18);
-  }
+  min-height: min(72vh, 28rem);
 }
 
 .card-burn-sacrifice__stage--compact {
@@ -45,6 +27,8 @@
   position: relative;
   overflow: hidden;
   border-radius: 0.5rem;
+  /** Table felt behind burn — no flat black plate. */
+  background: radial-gradient(120% 90% at 50% 30%, rgba(6, 78, 59, 0.35), rgba(2, 18, 14, 0.72));
 }
 
 /**
@@ -60,8 +44,7 @@
   aspect-ratio: 770 / 430;
   transform: translateX(-50%);
   overflow: hidden;
-  /** Pin to card box top edge so the sprite height matches the sizer exactly (no vertical centering bleed). */
-  background-color: #050506;
+  background-color: transparent;
   isolation: isolate;
 }
 
@@ -76,19 +59,26 @@
   background-repeat: no-repeat;
 }
 
-.card-burn-image__burn {
-  z-index: 0;
-}
-
+/** Mask strip tracks burn.jpg so the face erodes with the sprite (matches compact + preview). */
 .card-burn-image__original {
   z-index: 1;
-  mix-blend-mode: darken;
   pointer-events: none;
+  -webkit-mask-image: var(--burn-mask-url);
+  mask-image: var(--burn-mask-url);
+  -webkit-mask-size: auto 100%;
+  mask-size: auto 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: 0 0;
+  mask-position: 0 0;
+  -webkit-mask-mode: luminance;
+  mask-mode: luminance;
 }
 
-.card-burn-image__original--hidden .card-burn-image__cardMount {
+.card-burn-image__burn {
+  z-index: 0;
   opacity: 0;
-  transition: opacity 0.15s ease-out;
+  mix-blend-mode: screen;
 }
 
 .card-burn-image__cardMount {
@@ -99,11 +89,14 @@
   justify-content: center;
 }
 
+/** Slight inset so raster faces aren’t cropped by the card silhouette. */
 .card-burn-image__cardMount > * {
-  max-height: 100%;
-  max-width: 100%;
+  max-height: 104%;
+  max-width: 104%;
   width: auto;
   flex-shrink: 0;
+  transform: scale(0.94);
+  transform-origin: center center;
 }
 
 .card-burn-image__burnline {
@@ -121,7 +114,22 @@
   }
 }
 
+@keyframes card-burn-mask-strip {
+  0% {
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+  }
+  100% {
+    -webkit-mask-position: var(--burn-strip-end, -38145px) 0;
+    mask-position: var(--burn-strip-end, -38145px) 0;
+  }
+}
+
 .card-burn-image--burn .card-burn-image__burn,
 .card-burn-image--burn .card-burn-image__burnline {
   animation: card-burn-strip 2s forwards steps(50, end);
+}
+
+.card-burn-image--burn .card-burn-image__original {
+  animation: card-burn-mask-strip 2s forwards steps(50, end);
 }

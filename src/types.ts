@@ -257,7 +257,10 @@ export type ResolutionEventType =
   | 'GLUTTONY_DIGEST'
   | 'TRANSFORM'
   | 'INTEL_REVEAL'
-  /** Clash rank floored to 0 by penalties (e.g. Wrath) — play shattered animation; not Grovel/Joker. */
+  /**
+   * Clash stamina hit 0 from penalties (e.g. Wrath) — shattered play animation; not Grovel/Joker.
+   * Not a CardMutation down-rank; printed id may still be the pre-penalty string — `cardMutation.ts`.
+   */
   | 'CLASH_DESTROYED'
   /** Envy: covet digest at resolution start. */
   | 'ENVY_COVET'
@@ -300,6 +303,8 @@ export interface ResolutionEvent {
   resolutionDice?: number[];
   /** Cash Chips coin flip: `dc` die value 1 = heads, 0 = tails (synced with `resolutionDice[0]`). */
   coinFlipSides?: { headsUid: string; tailsUid: string };
+  /** Token gain from clash margin — used for round-result log math only (hidden during animated resolution). */
+  tokenOverkillDetail?: { winnerVal: number; loserVal: number; tokens: number };
 }
 
 /** One chat line synced by host across the room (PeerJS clients). */
@@ -433,6 +438,12 @@ export interface RoomData {
     targetSuit: Suit;
     winnerUid: string | 'draw';
     message: string;
+    /**
+     * Final printed ids on the tableau **after** resolution identity mutations (`CardMutation` /
+     * empower / transform / swap). Effective clash can still differ: Wrath, panic, Greed tax, and
+     * Lust bumps are applied in clash evaluation — do not treat this map as stamina without those
+     * modifiers. See `services/cardMutation.ts`.
+     */
     cardsPlayed: Record<string, string>;
     powerCardsPlayed: Record<string, string>;
     powerCardIdsPlayed: Record<string, number | null>;
@@ -443,6 +454,11 @@ export interface RoomData {
     coinFlip?: string; // 'Host' | 'Opponent' winner of initiative
     events: ResolutionEvent[];
     summonedCards?: Record<string, string>; // e.g. Justice summoned card
+    /**
+     * Engage-locked card ids **before** resolution mutations (Star field, Lovers, Hermit swap,
+     * empowers, …). Penalties (Wrath, panic) usually leave these equal to post-resolution ids for
+     * that seat while still changing effective clash — see `services/cardMutation.ts`.
+     */
     initialCardsPlayed: Record<string, string>;
     gains: Record<string, OutcomeGainItem[]>;
     /** Lust meter animation + persistence helper. */
@@ -478,7 +494,10 @@ export interface RoomData {
       taxThisRound: number;
       removeReason: 'crown' | null;
     };
-    /** Wrath agent hovering the marked seat this resolution (for UI replay). */
+    /**
+     * Wrath agent + magnitude for replay UI; clash penalty is applied in evaluation, not via
+     * `CardMutation` — see `services/cardMutation.ts`.
+     */
     wrathFx?: {
       targetUid: string;
       minionCard: string;
@@ -512,7 +531,10 @@ export interface RoomData {
     devilForcedCurseId?: number;
     /** Devil pact: spin replay — both clients animate to the same curse. */
     devilCurseSpin?: { offset: number; curseId: number };
-    /** Post-resolution panic reroll applying an ephemeral Sword to chip the opponent's clash stamina. */
+    /**
+     * Post-resolution panic reroll: ephemeral Sword chips opponent **effective** stamina (see
+     * `computePanicCombatEffects`); not `CardMutation` — `services/cardMutation.ts`.
+     */
     panicFx?: {
       attackerUid: string;
       opponentUid: string;

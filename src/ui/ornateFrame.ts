@@ -76,20 +76,34 @@ export function ornatePurplePanelRasterStyle(): CSSProperties {
 }
 
 /** Tighter gold frame for primary HUD action buttons (`border-button.png`) in raster mode. */
-const ORNATE_BUTTON_BORDER_PX = 22;
+const ORNATE_BUTTON_BORDER_PX = 16;
 
-export function ornateGoldCompactButtonRasterStyle(): CSSProperties {
+export type OrnateHudButtonTone = 'amber' | 'slate';
+
+/**
+ * Dock actions (Play / Cash Chips): opaque fill so the PNG frame reads solid; tone tints the raster border via filter.
+ */
+export function ornateGoldCompactButtonRasterStyle(tone: OrnateHudButtonTone = 'amber'): CSSProperties {
   const w = ORNATE_BUTTON_BORDER_PX;
+  const amberFill = 'linear-gradient(180deg, #fde047 0%, #f59e0b 52%, #d97706 100%)';
+  const slateFill = 'linear-gradient(180deg, #475569 0%, #334155 48%, #1e293b 100%)';
+  const borderTint =
+    tone === 'slate'
+      ? 'hue-rotate(195deg) saturate(0.55) brightness(0.92) contrast(1.05)'
+      : 'none';
   return {
-    color: '#022c22',
-    background: 'linear-gradient(180deg, rgba(253, 224, 71, 0.35), rgba(245, 158, 11, 0.55))',
+    color: tone === 'amber' ? '#022c22' : '#e2e8f0',
+    background: tone === 'amber' ? amberFill : slateFill,
     backgroundClip: 'padding-box',
     border: `${w}px solid transparent`,
     borderImageSource: `url("${assetUrl('assets/images/border-button.png')}")`,
     borderImageSlice: ORNATE_SLICE,
-    borderImageRepeat: 'round',
+    /** `stretch` keeps left/right edge tiles visible on wide labels; corners still slice cleanly. */
+    borderImageRepeat: 'stretch',
     borderImageWidth: `${w}px`,
     borderImageOutset: 0,
-    borderRadius: Math.round(w * 0.72),
+    borderRadius: Math.round(w * 0.85),
+    filter: borderTint,
+    WebkitFilter: borderTint,
   };
 }
