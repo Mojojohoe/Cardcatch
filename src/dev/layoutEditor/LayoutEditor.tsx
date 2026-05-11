@@ -7,6 +7,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react';
 import { GAME_ELEMENT_OPTIONS, GAME_UI_OPTIONS } from './constants';
 import './layoutEditor.css';
+import { LayoutEditorLivePreview } from './LayoutEditorLivePreview';
+import { createLayoutEditorPreviewRoom } from './layoutEditorPreviewRoom';
 import {
   LAYOUT_GRID_COLS,
   LAYOUT_GRID_ROWS,
@@ -47,6 +49,7 @@ function labelForAssignment(a: LayoutCellAssignment): string {
 
 function buildExport(args: {
   viewport: { width: number; height: number };
+  previewCanvas: { width: number; height: number };
   gameCells: Record<string, LayoutCellAssignment>;
   uiCells: Record<string, LayoutCellAssignment>;
 }): object {
@@ -82,12 +85,61 @@ function buildExport(args: {
     version: 1,
     exportedAt: new Date().toISOString(),
     viewport: args.viewport,
+    previewCanvas: args.previewCanvas,
     schema: 'cardcatch.layoutEditor.export.v1',
     layers: {
       game: pack('game', args.gameCells),
       ui: pack('ui', args.uiCells),
     },
   };
+}
+
+const PREVIEW_PRESETS = [
+  { label: '1024 × 768 (iPad-class)', w: 1024, h: 768 },
+  { label: '1366 × 768', w: 1366, h: 768 },
+  { label: '1920 × 1080', w: 1920, h: 1080 },
+  { label: '2560 × 1024', w: 2560, h: 1024 },
+] as const;
+
+function seedDemoAssignments(): {
+  game: Record<string, LayoutCellAssignment>;
+  ui: Record<string, LayoutCellAssignment>;
+} {
+  const game: Record<string, LayoutCellAssignment> = {};
+  const ui: Record<string, LayoutCellAssignment> = {};
+  const markRect = (
+    map: Record<string, LayoutCellAssignment>,
+    c0: number,
+    r0: number,
+    c1: number,
+    r1: number,
+    a: LayoutCellAssignment,
+  ) => {
+    const sc = Math.min(c0, c1);
+    const ec = Math.max(c0, c1);
+    const sr = Math.min(r0, r1);
+    const er = Math.max(r0, r1);
+    for (let c = sc; c <= ec; c++) {
+      for (let r = sr; r <= er; r++) {
+        map[cellKey(c, r)] = a;
+      }
+    }
+  };
+  markRect(game, 1, 0, 5, 1, { kind: 'game', element: 'opponent_cards', notes: '' });
+  markRect(game, 6, 2, 9, 5, { kind: 'game', element: 'play_area', notes: 'Target wheel + trump' });
+  markRect(game, 0, 3, 1, 4, { kind: 'game', element: 'curse_zone', notes: '' });
+  markRect(game, 10, 3, 11, 4, { kind: 'game', element: 'deck', notes: '' });
+  markRect(game, 5, 6, 7, 7, { kind: 'game', element: 'fire_bowl', notes: '' });
+  markRect(game, 1, 8, 5, 9, { kind: 'game', element: 'player_cards', notes: '' });
+  markRect(game, 8, 8, 10, 9, { kind: 'game', element: 'player_power_cards', notes: '' });
+  markRect(game, 0, 0, 0, 1, { kind: 'game', element: 'opponent_tokens', notes: '' });
+  markRect(game, 15, 8, 15, 9, { kind: 'game', element: 'player_tokens', notes: '' });
+  markRect(ui, 12, 0, 15, 0, { kind: 'ui', element: 'room_code_copy', notes: '' });
+  markRect(ui, 12, 1, 13, 1, { kind: 'ui', element: 'settings_button', notes: '' });
+  markRect(ui, 14, 1, 15, 1, { kind: 'ui', element: 'rules_button', notes: '' });
+  markRect(ui, 6, 9, 8, 9, { kind: 'ui', element: 'play_card_button', notes: '' });
+  markRect(ui, 9, 9, 10, 9, { kind: 'ui', element: 'cash_chips_button', notes: '' });
+  return { game, ui };
 }
 
 export type LayoutEditorProps = {
@@ -101,6 +153,9 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
   const [selection, setSelection] = useState<Set<string>>(() => new Set());
   const [elementChoice, setElementChoice] = useState<string>('');
   const [notesDraft, setNotesDraft] = useState('');
+  const [previewW, setPreviewW] = useState(1024);
+  const [previewH, setPreviewH] = useState(768);
+  const previewRoom = useMemo(() => createLayoutEditorPreviewRoom(), []);
   const dragRef = useRef<{ anchorCol: number; anchorRow: number } | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
@@ -210,7 +265,12 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
 
   const exportJson = useCallback(() => {
     const viewport = { width: window.innerWidth, height: window.innerHeight };
-    const payload = buildExport({ viewport, gameCells, uiCells });
+    const payload = buildExport({
+      viewport,
+      previewCanvas: { width: previewW, height: previewH },
+      gameCells,
+      uiCells,
+    });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -218,17 +278,29 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
     a.download = `layout-editor-${viewport.width}x${viewport.height}-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [gameCells, uiCells]);
+  }, [gameCells, uiCells, previewW, previewH]);
 
   const copyExport = useCallback(async () => {
     const viewport = { width: window.innerWidth, height: window.innerHeight };
-    const payload = buildExport({ viewport, gameCells, uiCells });
+    const payload = buildExport({
+      viewport,
+      previewCanvas: { width: previewW, height: previewH },
+      gameCells,
+      uiCells,
+    });
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
     } catch {
       /* ignore */
     }
-  }, [gameCells, uiCells]);
+  }, [gameCells, uiCells, previewW, previewH]);
+
+  const loadDemo = useCallback(() => {
+    const { game, ui } = seedDemoAssignments();
+    setGameCells(game);
+    setUiCells(ui);
+    setSelection(new Set());
+  }, []);
 
   return (
     <div className="layout-editor-root fixed inset-0 z-[600] flex flex-col overflow-hidden">
@@ -249,8 +321,9 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
         </button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row lg:gap-6">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
+        <div className="flex min-h-[160px] flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:gap-6">
+        <section className="flex min-h-0 min-w-0 flex-[1.1] flex-col gap-3 lg:max-w-[min(52rem,55%)]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Layer</span>
             <div className="flex rounded-lg border border-slate-600 bg-slate-900/80 p-0.5">
@@ -280,7 +353,7 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
             role="grid"
             aria-colcount={LAYOUT_GRID_COLS}
             aria-rowcount={LAYOUT_GRID_ROWS}
-            className="layout-editor-grid-wrap min-h-0 flex-1 touch-none"
+            className="layout-editor-grid-wrap min-h-[140px] max-h-[min(34vh,22rem)] flex-1 touch-none lg:max-h-none lg:min-h-0"
             onPointerDown={handleGridPointerDown}
           >
             {Array.from({ length: LAYOUT_GRID_ROWS }, (_, row) =>
@@ -311,7 +384,7 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
           </div>
         </section>
 
-        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto rounded-xl border border-slate-700/80 bg-slate-950/75 p-4 lg:w-[22rem]">
+        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto rounded-xl border border-slate-700/80 bg-slate-950/75 p-4 lg:w-[20rem] lg:max-w-[40vw]">
           <div>
             <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
               Assign to selection ({selection.size} cells)
@@ -362,6 +435,13 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
           <div className="flex flex-col gap-2 border-t border-slate-700/80 pt-4">
             <button
               type="button"
+              onClick={loadDemo}
+              className="rounded-lg border border-sky-700/60 bg-sky-950/50 py-2 text-[10px] font-black uppercase tracking-widest text-sky-100"
+            >
+              Load demo placements
+            </button>
+            <button
+              type="button"
               onClick={clearSelectionCells}
               disabled={selection.size === 0}
               className="rounded-lg border border-red-900/60 bg-red-950/40 py-2 text-[10px] font-black uppercase tracking-widest text-red-200 disabled:opacity-40"
@@ -385,10 +465,43 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
           </div>
 
           <p className="text-[9px] leading-relaxed text-slate-500">
-            Extra slots: curse zone, room chat, tyrant crown (game). Local multiplayer + dev menu are Game UI for now.
-            Export: viewport CSS px, per-layer repeat(16|10, minmax(0,1fr)) templates, sparse cells with notes.
+            Live preview uses real components + a fixture room (no GameService). Extra slots: curse zone, room chat,
+            tyrant crown. Export includes browser viewport, preview canvas size, grid FR templates, and cell notes.
           </p>
         </aside>
+        </div>
+
+        <section className="flex min-h-[200px] shrink-0 flex-col gap-2 border-t border-slate-700/70 bg-slate-950/40 pt-3">
+          <div className="flex flex-wrap items-center gap-2 px-1">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Live preview canvas</span>
+            <select
+              value={`${previewW}x${previewH}`}
+              onChange={(e) => {
+                const [w, h] = e.target.value.split('x').map(Number);
+                setPreviewW(w!);
+                setPreviewH(h!);
+              }}
+              className="rounded-lg border border-slate-600 bg-slate-900 px-2 py-1.5 text-[10px] font-bold text-slate-100"
+            >
+              {PREVIEW_PRESETS.map((p) => (
+                <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-[9px] text-slate-500">
+              Scales to fit · each cell region uses overflow-auto so clipping shows scrollbars in the tool.
+            </span>
+          </div>
+          <LayoutEditorLivePreview
+            layer={layer}
+            cells={activeMap}
+            room={previewRoom}
+            myUid={previewRoom.hostUid}
+            previewWidth={previewW}
+            previewHeight={previewH}
+          />
+        </section>
       </div>
     </div>
   );

@@ -81,3 +81,11 @@
     padding: 2px;
   }
 }
+
+/** Faint 16×10 lines behind live preview modules */
+.layout-editor-live-grid-bg {
+  background-size: calc(100% / 16) calc(100% / 10);
+  background-image:
+    linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+}
