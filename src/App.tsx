@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { LayoutGrid, Monitor } from 'lucide-react';
 import { CardCreator } from './cardCreator/CardCreator';
 import { CardAnimationPreview } from './cardCreator/CardAnimationPreview';
+import { LayoutEditor } from './dev/layoutEditor';
 import { GameInstance } from './gameInstance';
 
 function CardCreatorHashOverlay() {
@@ -26,6 +27,28 @@ function CardCreatorHashOverlay() {
       onClose={() => {
         window.location.hash = '';
         setCreatorOpen(false);
+      }}
+    />
+  );
+}
+
+function LayoutEditorHashOverlay() {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setOpen(window.location.hash === '#layout-editor');
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  if (!open) return null;
+
+  return (
+    <LayoutEditor
+      onClose={() => {
+        window.location.hash = '';
+        setOpen(false);
       }}
     />
   );
@@ -64,6 +87,7 @@ export default function App() {
       {/* CardCreator is fixed full-screen; keep outside overflow-hidden so it is not clipped. */}
       <CardCreatorHashOverlay />
       <CardAnimationPreviewHashOverlay />
+      <LayoutEditorHashOverlay />
     <div className="min-h-screen overflow-x-visible overflow-y-hidden bg-emerald-950 font-sans text-white selection:bg-yellow-400 selection:text-black">
       {/* Dev Toggle */}
       <div className="fixed top-4 left-4 z-[220] flex gap-2">

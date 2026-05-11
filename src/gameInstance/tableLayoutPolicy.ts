@@ -24,6 +24,13 @@
  *
  * Implementation note: `GameInstance` and related components should import these constants when
  * wiring `ResizeObserver` / container queries so magic numbers converge here.
+ *
+ * Chip piles (`ChipDropperTest`) use geometry tied to the center column’s max width (`64rem` at xl)
+ * so piles do not sit under the bowl / target suit; update those calcs if the center `max-w` ladder
+ * in `GameInstance` changes.
+ *
+ * Dev layout authoring: open `#layout-editor` (see `DevPowerMenu` / `App.tsx`) for the 16×10 grid
+ * tool used to capture placement notes and JSON exports across resolutions.
  */
 
 /** Minimum width (CSS px) the table layout must support without scrollbars at full chrome. */

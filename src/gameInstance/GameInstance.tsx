@@ -1303,8 +1303,11 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
   return (
     <CardArtSessionBridge room={room} myUid={myUid} serviceRef={serviceRef}>
     <DisplayCardArtModeOverride highVisibilityMode={highVisibilityMode}>
+    {/* Table shell: in-flow game layer; fixed HUD stays in-tree; overlay modals (rules, resolution) use higher z-index. */}
+    <div className="table-shell relative flex h-full min-h-0 flex-col">
     <div
-      className={`relative flex h-full min-h-0 flex-col overflow-x-visible overflow-y-hidden border-x border-emerald-900/50 px-5 py-4 sm:px-7 ${
+      data-table-layer="game"
+      className={`relative flex h-full min-h-0 flex-1 flex-col overflow-x-visible overflow-y-hidden border-x border-emerald-900/50 px-5 py-4 sm:px-7 ${
         artworkFelt ? 'bg-emerald-950/25' : 'bg-emerald-950/40'
       }`}
       style={
@@ -2760,7 +2763,8 @@ ${uids.map(uid => `${room.players[uid].name}: ${formatCard(cardsPlayed[uid])} ${
       <AnimatePresence>
         {showRules && <RulesSheet key="rules-modal" settings={room.settings} onClose={() => setShowRules(false)} />}
       </AnimatePresence>
-              </div>
+    </div>
+    </div>
     </DisplayCardArtModeOverride>
     </CardArtSessionBridge>
   );

@@ -242,6 +242,19 @@ export const DevPowerMenu: React.FC<{
           })}
         </div>
       </div>
+
+      <div className="border-t border-emerald-800/40 pt-4 mt-4">
+        <button
+          type="button"
+          onClick={() => {
+            window.location.hash = '#layout-editor';
+            onClose();
+          }}
+          className="w-full rounded-lg border border-emerald-700/70 bg-emerald-950/70 py-2.5 text-[10px] font-black uppercase tracking-widest text-emerald-200 hover:bg-emerald-900/90"
+        >
+          Layout editor (#layout-editor)
+        </button>
+      </div>
     </div>
   );
 };
