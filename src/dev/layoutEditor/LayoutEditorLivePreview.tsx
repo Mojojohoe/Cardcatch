@@ -7,9 +7,11 @@ import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { DisplayCardArtModeOverride } from '../../cardArt/cardArtContext';
 import type { RoomData } from '../../types';
 import type { LayoutCellAssignment, LayoutEditorLayer } from './types';
-import { LAYOUT_GRID_COLS, LAYOUT_GRID_ROWS } from './types';
+import { LAYOUT_GRID_COLS, LAYOUT_GRID_ROWS, cellKey } from './types';
 import { mergeLayoutRegions, type MergedLayoutRegion } from './mergeLayoutRegions';
 import { LayoutEditorModuleRenderer, LayoutEditorUiModuleRenderer } from './LayoutEditorModuleRenderer';
+
+const EMPTY_SELECTION = new Set<string>();
 
 type Props = {
   layer: LayoutEditorLayer;
@@ -18,6 +20,14 @@ type Props = {
   myUid: string;
   previewWidth: number;
   previewHeight: number;
+  /**
+   * When true, the scaled canvas is the paint surface: modules are non-interactive and
+   * pointer events hit the frame for grid selection (see `gridRef` / `onGridPointerDown`).
+   */
+  paintMode?: boolean;
+  gridRef?: React.RefObject<HTMLDivElement | null>;
+  selection?: ReadonlySet<string>;
+  onGridPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
 };
 
 export function LayoutEditorLivePreview({
@@ -27,11 +37,16 @@ export function LayoutEditorLivePreview({
   myUid,
   previewWidth,
   previewHeight,
+  paintMode = false,
+  gridRef,
+  selection,
+  onGridPointerDown,
 }: Props) {
   const outerRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
   const regions = useMemo(() => mergeLayoutRegions(cells), [cells]);
+  const sel = selection ?? EMPTY_SELECTION;
 
   useLayoutEffect(() => {
     const el = outerRef.current;
@@ -48,17 +63,45 @@ export function LayoutEditorLivePreview({
     return () => ro.disconnect();
   }, [previewWidth, previewHeight]);
 
+  const overlayCells = useMemo(() => {
+    const out: React.ReactNode[] = [];
+    for (let row = 0; row < LAYOUT_GRID_ROWS; row++) {
+      for (let col = 0; col < LAYOUT_GRID_COLS; col++) {
+        const k = cellKey(col, row);
+        const cell = cells[k] ?? { kind: 'empty' as const };
+        const selected = sel.has(k);
+        const filled = cell.kind !== 'empty';
+        out.push(
+          <div
+            key={k}
+            className={`layout-editor-overlay-cell min-h-0 min-w-0 ${selected ? 'layout-editor-overlay-cell--selected' : ''} ${
+              filled ? 'layout-editor-overlay-cell--filled' : ''
+            }`}
+          />,
+        );
+      }
+    }
+    return out;
+  }, [cells, sel]);
+
   return (
-    <div ref={outerRef} className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden p-2">
+    <div ref={outerRef} className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden p-2 sm:p-3">
       <div
-        className="relative shrink-0 rounded-lg border border-slate-600/60 bg-slate-950/50 shadow-inner"
+        ref={paintMode ? gridRef : undefined}
+        role={paintMode ? 'grid' : undefined}
+        aria-colcount={paintMode ? LAYOUT_GRID_COLS : undefined}
+        aria-rowcount={paintMode ? LAYOUT_GRID_ROWS : undefined}
+        onPointerDown={paintMode ? onGridPointerDown : undefined}
+        className={`relative shrink-0 rounded-lg border border-slate-600/60 bg-slate-950/50 shadow-inner ${
+          paintMode ? 'touch-none cursor-crosshair' : ''
+        }`}
         style={{
           width: previewWidth * scale,
           height: previewHeight * scale,
         }}
       >
         <div
-          className="absolute left-0 top-0 origin-top-left"
+          className={`absolute left-0 top-0 origin-top-left ${paintMode ? 'pointer-events-none' : ''}`}
           style={{
             width: previewWidth,
             height: previewHeight,
@@ -84,6 +127,17 @@ export function LayoutEditorLivePreview({
             </div>
           </DisplayCardArtModeOverride>
         </div>
+        {paintMode ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-[20] grid"
+            style={{
+              gridTemplateColumns: `repeat(${LAYOUT_GRID_COLS}, minmax(0, 1fr))`,
+              gridTemplateRows: `repeat(${LAYOUT_GRID_ROWS}, minmax(0, 1fr))`,
+            }}
+          >
+            {overlayCells}
+          </div>
+        ) : null}
       </div>
     </div>
   );

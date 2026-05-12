@@ -25,34 +25,38 @@ export const GameInstanceJoinGate: React.FC<{
   onHost: () => void;
   onJoin: () => void;
 }> = ({ isDual, playerName, setPlayerName, roomCode, setRoomCode, loading, error, onHost, onJoin }) => (
-  <div className="relative h-full flex items-center justify-center p-4">
-    <div className="absolute right-4 top-4 z-10">
+  <div className="relative h-full flex items-center justify-center p-4 sm:p-6">
+    <div className="absolute right-3 top-3 z-10 sm:right-4 sm:top-4">
       <PlayerSettingsMenu />
     </div>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="max-w-xs w-full bg-emerald-900/50 border border-emerald-800 rounded-2xl p-6 space-y-4"
+      className="w-full max-w-md rounded-2xl border border-emerald-700/90 bg-emerald-900/70 p-6 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:max-w-lg sm:p-8 space-y-5"
     >
       <div className="text-center">
-        <h2 className="text-xl font-black text-white uppercase tracking-tight">{isDual ? 'Guest Player' : 'Table Menu'}</h2>
-        <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mt-1">Peer-to-peer table</p>
+        <h2 className="text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
+          {isDual ? 'Guest Player' : 'Table Menu'}
+        </h2>
+        <p className="mt-2 text-sm font-bold uppercase tracking-widest text-emerald-100/95 sm:text-base">
+          Peer-to-peer table
+        </p>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-4">
         <input
           type="text"
           value={playerName}
           onChange={(e) => setPlayerName(e.target.value)}
           placeholder="Your Nickname..."
-          className="w-full bg-emerald-800/50 border-2 border-emerald-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400"
+          className="w-full min-h-[2.75rem] rounded-lg border-2 border-emerald-600 bg-emerald-950/50 px-4 py-3 text-base text-white placeholder:text-emerald-400/70 focus:border-yellow-400 focus:outline-none sm:text-lg"
         />
         {!isDual && (
           <button
             onClick={onHost}
             disabled={loading}
-            className="w-full bg-yellow-400 text-emerald-950 font-black py-2 rounded-lg text-sm uppercase flex items-center justify-center gap-2"
+            className="flex w-full min-h-[2.75rem] items-center justify-center gap-2 rounded-lg bg-yellow-400 py-3 text-base font-black uppercase text-emerald-950 transition hover:bg-yellow-300 disabled:opacity-60 sm:text-lg"
           >
-            {loading ? <RefreshCw className="animate-spin w-4 h-4" /> : 'Host New Table'}
+            {loading ? <RefreshCw className="h-5 w-5 animate-spin" /> : 'Host New Table'}
           </button>
         )}
         <div className="flex gap-2">
@@ -61,26 +65,33 @@ export const GameInstanceJoinGate: React.FC<{
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value)}
             placeholder="Table Code..."
-            className="flex-1 bg-emerald-800/50 border-2 border-emerald-700 rounded-lg px-3 text-sm text-white uppercase"
+            className="min-h-[2.75rem] flex-1 rounded-lg border-2 border-emerald-600 bg-emerald-950/50 px-4 text-base uppercase text-white placeholder:text-emerald-400/70 focus:border-yellow-400 focus:outline-none sm:text-lg"
           />
-          <button onClick={onJoin} disabled={loading} className="bg-emerald-700 py-2 px-3 rounded-lg text-white font-bold text-sm">
-            {loading ? <RefreshCw className="animate-spin w-4 h-4" /> : <Users className="w-4 h-4" />}
+          <button
+            onClick={onJoin}
+            disabled={loading}
+            className="min-h-[2.75rem] shrink-0 rounded-lg bg-emerald-600 px-4 font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60"
+            aria-label="Join table"
+          >
+            {loading ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />}
           </button>
         </div>
       </div>
       {error && (
-        <div className="text-[10px] text-red-400 animate-pulse bg-red-950/20 p-2 rounded border border-red-900/50">{error}</div>
+        <div className="rounded-lg border border-red-800/60 bg-red-950/40 p-3 text-sm font-semibold leading-snug text-red-100 animate-pulse">
+          {error}
+        </div>
       )}
     </motion.div>
   </div>
 );
 
 export const GameInstanceConnecting: React.FC = () => (
-  <div className="relative h-full flex items-center justify-center text-emerald-400 text-[10px] font-mono animate-pulse">
-    <div className="absolute right-3 top-3 z-10">
+  <div className="relative flex h-full items-center justify-center px-4 text-base font-semibold text-emerald-200 sm:text-lg">
+    <div className="absolute right-3 top-3 z-10 sm:right-4 sm:top-4">
       <PlayerSettingsMenu />
     </div>
-    Connecting…
+    <span className="font-mono tracking-wide animate-pulse">Connecting…</span>
   </div>
 );
 

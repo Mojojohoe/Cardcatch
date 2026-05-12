@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { GAME_ELEMENT_OPTIONS, GAME_UI_OPTIONS } from './constants';
 import './layoutEditor.css';
 import { LayoutEditorLivePreview } from './LayoutEditorLivePreview';
@@ -37,14 +37,6 @@ function cellsInRectangle(
     }
   }
   return out;
-}
-
-function labelForAssignment(a: LayoutCellAssignment): string {
-  if (a.kind === 'empty') return '';
-  if (a.kind === 'game') {
-    return GAME_ELEMENT_OPTIONS.find((o) => o.value === a.element)?.label ?? a.element;
-  }
-  return GAME_UI_OPTIONS.find((o) => o.value === a.element)?.label ?? a.element;
 }
 
 function buildExport(args: {
@@ -158,6 +150,9 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
   const previewRoom = useMemo(() => createLayoutEditorPreviewRoom(), []);
   const dragRef = useRef<{ anchorCol: number; anchorRow: number } | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsBtnRef = useRef<HTMLButtonElement | null>(null);
+  const toolsPanelRef = useRef<HTMLDivElement | null>(null);
 
   const activeMap = layer === 'game' ? gameCells : uiCells;
   const setActiveMap = layer === 'game' ? setGameCells : setUiCells;
@@ -170,6 +165,25 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
   useEffect(() => {
     setElementChoice('');
   }, [layer]);
+
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setToolsOpen(false);
+    };
+    const onDocDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (toolsPanelRef.current?.contains(t)) return;
+      if (toolsBtnRef.current?.contains(t)) return;
+      setToolsOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDocDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDocDown);
+    };
+  }, [toolsOpen]);
 
   const hitCell = useCallback((clientX: number, clientY: number): { col: number; row: number } | null => {
     const el = gridRef.current;
@@ -208,7 +222,7 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
   }, [hitCell]);
 
   const handleGridPointerDown = useCallback(
-    (e: React.PointerEvent) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       const hit = hitCell(e.clientX, e.clientY);
       if (!hit) return;
@@ -237,6 +251,7 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
       }
       return next;
     });
+    setToolsOpen(false);
   }, [elementChoice, layer, selection, setActiveMap]);
 
   const applyNotesToSelection = useCallback(() => {
@@ -251,6 +266,7 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
       }
       return next;
     });
+    setToolsOpen(false);
   }, [notesDraft, selection, setActiveMap]);
 
   const clearSelectionCells = useCallback(() => {
@@ -261,6 +277,7 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
       return next;
     });
     setSelection(new Set());
+    setToolsOpen(false);
   }, [selection, setActiveMap]);
 
   const exportJson = useCallback(() => {
@@ -278,6 +295,7 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
     a.download = `layout-editor-${viewport.width}x${viewport.height}-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    setToolsOpen(false);
   }, [gameCells, uiCells, previewW, previewH]);
 
   const copyExport = useCallback(async () => {
@@ -290,6 +308,7 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
     });
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setToolsOpen(false);
     } catch {
       /* ignore */
     }
@@ -300,208 +319,205 @@ export function LayoutEditor({ onClose }: LayoutEditorProps) {
     setGameCells(game);
     setUiCells(ui);
     setSelection(new Set());
+    setToolsOpen(false);
   }, []);
 
   return (
     <div className="layout-editor-root fixed inset-0 z-[600] flex flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-700/80 bg-slate-950/90 px-4 py-3 backdrop-blur-sm">
-        <div>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-700/80 bg-slate-950/90 px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-3">
+        <div className="min-w-0 flex-1">
           <h1 className="text-sm font-black uppercase tracking-[0.2em] text-amber-200">Layout editor</h1>
-          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Dev only · {LAYOUT_GRID_COLS}×{LAYOUT_GRID_ROWS} grid · drag to select · export JSON
+          <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:mt-1">
+            Dev · {LAYOUT_GRID_COLS}×{LAYOUT_GRID_ROWS} · drag on preview to select ·{' '}
+            <span className="text-slate-400">{selection.size} selected</span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200 hover:bg-slate-800"
-        >
-          <X className="h-4 w-4" aria-hidden />
-          Close
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="relative">
+            <button
+              ref={toolsBtnRef}
+              type="button"
+              onClick={() => setToolsOpen((o) => !o)}
+              aria-expanded={toolsOpen}
+              aria-haspopup="dialog"
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition sm:py-2.5 ${
+                toolsOpen
+                  ? 'border-amber-500/60 bg-amber-500/15 text-amber-100'
+                  : 'border-slate-600 bg-slate-900 text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <Menu className="h-4 w-4 shrink-0" aria-hidden />
+              Tools
+            </button>
+            {toolsOpen ? (
+              <div
+                ref={toolsPanelRef}
+                role="dialog"
+                aria-label="Layout editor tools"
+                className="absolute right-0 top-full z-[620] mt-2 max-h-[min(72dvh,32rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-slate-600/90 bg-slate-950/95 p-4 shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-md"
+              >
+                <p className="border-b border-slate-700/80 pb-3 text-[10px] font-semibold uppercase leading-relaxed tracking-wide text-slate-400">
+                  Layer, preview size, assign elements, notes, and export. Click outside or press Escape to close.
+                </p>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Layer</span>
+                  <div className="flex rounded-lg border border-slate-600 bg-slate-900/80 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setLayer('game')}
+                      className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition ${
+                        layer === 'game' ? 'bg-amber-500/25 text-amber-100' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Game elements
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLayer('ui')}
+                      className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition ${
+                        layer === 'ui' ? 'bg-amber-500/25 text-amber-100' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Game UI
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Live preview canvas
+                  </label>
+                  <select
+                    value={`${previewW}x${previewH}`}
+                    onChange={(e) => {
+                      const [w, h] = e.target.value.split('x').map(Number);
+                      setPreviewW(w!);
+                      setPreviewH(h!);
+                    }}
+                    className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs font-bold text-slate-100"
+                  >
+                    {PREVIEW_PRESETS.map((p) => (
+                      <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-[9px] leading-relaxed text-slate-500">
+                    Scales to fit. Regions use overflow-auto so clipping shows scrollbars in the tool.
+                  </p>
+                </div>
+
+                <div className="mt-5 border-t border-slate-700/80 pt-4">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Assign to selection ({selection.size} cells)
+                  </label>
+                  <select
+                    value={elementChoice}
+                    onChange={(e) => setElementChoice(e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs text-slate-100"
+                  >
+                    <option value="">— Choose element —</option>
+                    {dropdownOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={applyElementToSelection}
+                    disabled={!elementChoice || selection.size === 0}
+                    className="mt-2 w-full rounded-lg border border-emerald-700 bg-emerald-900/60 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-100 disabled:opacity-40"
+                  >
+                    Apply element
+                  </button>
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Notes (per cell in selection)
+                  </label>
+                  <textarea
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    rows={4}
+                    placeholder='e.g. "At 1024×768 collapse to icon + context menu"'
+                    className="mt-2 w-full resize-y rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs text-slate-100 placeholder:text-slate-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyNotesToSelection}
+                    disabled={selection.size === 0}
+                    className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-800/80 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200 disabled:opacity-40"
+                  >
+                    Apply notes
+                  </button>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-2 border-t border-slate-700/80 pt-4">
+                  <button
+                    type="button"
+                    onClick={loadDemo}
+                    className="rounded-lg border border-sky-700/60 bg-sky-950/50 py-2 text-[10px] font-black uppercase tracking-widest text-sky-100"
+                  >
+                    Load demo placements
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearSelectionCells}
+                    disabled={selection.size === 0}
+                    className="rounded-lg border border-red-900/60 bg-red-950/40 py-2 text-[10px] font-black uppercase tracking-widest text-red-200 disabled:opacity-40"
+                  >
+                    Clear assignments in selection
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportJson}
+                    className="rounded-lg border border-amber-600/70 bg-amber-500/15 py-2 text-[10px] font-black uppercase tracking-widest text-amber-100"
+                  >
+                    Download JSON export
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyExport()}
+                    className="rounded-lg border border-slate-600 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200"
+                  >
+                    Copy JSON to clipboard
+                  </button>
+                </div>
+
+                <p className="mt-4 text-[9px] leading-relaxed text-slate-500">
+                  Live preview uses real components + a fixture room (no GameService). Export includes viewport, preview
+                  canvas size, grid FR templates, and cell notes.
+                </p>
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200 hover:bg-slate-800"
+          >
+            <X className="h-4 w-4" aria-hidden />
+            Close
+          </button>
+        </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
-        <div className="flex min-h-[160px] flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:gap-6">
-        <section className="flex min-h-0 min-w-0 flex-[1.1] flex-col gap-3 lg:max-w-[min(52rem,55%)]">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Layer</span>
-            <div className="flex rounded-lg border border-slate-600 bg-slate-900/80 p-0.5">
-              <button
-                type="button"
-                onClick={() => setLayer('game')}
-                className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition ${
-                  layer === 'game' ? 'bg-amber-500/25 text-amber-100' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Game elements
-              </button>
-              <button
-                type="button"
-                onClick={() => setLayer('ui')}
-                className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition ${
-                  layer === 'ui' ? 'bg-amber-500/25 text-amber-100' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Game UI
-              </button>
-            </div>
-          </div>
-
-          <div
-            ref={gridRef}
-            role="grid"
-            aria-colcount={LAYOUT_GRID_COLS}
-            aria-rowcount={LAYOUT_GRID_ROWS}
-            className="layout-editor-grid-wrap min-h-[140px] max-h-[min(34vh,22rem)] flex-1 touch-none lg:max-h-none lg:min-h-0"
-            onPointerDown={handleGridPointerDown}
-          >
-            {Array.from({ length: LAYOUT_GRID_ROWS }, (_, row) =>
-              Array.from({ length: LAYOUT_GRID_COLS }, (_, col) => {
-                const k = cellKey(col, row);
-                const cell = activeMap[k] ?? { kind: 'empty' as const };
-                const selected = selection.has(k);
-                const filled = cell.kind !== 'empty';
-                return (
-                  <div
-                    key={k}
-                    role="gridcell"
-                    aria-selected={selected}
-                    tabIndex={-1}
-                    className={`layout-editor-cell pointer-events-none ${selected ? 'layout-editor-cell--selected' : ''} ${
-                      filled ? 'layout-editor-cell--filled' : ''
-                    }`}
-                  >
-                    {filled ? (
-                      <div className="layout-editor-cell-label" title={labelForAssignment(cell)}>
-                        {labelForAssignment(cell)}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              }),
-            ).flat()}
-          </div>
-        </section>
-
-        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto rounded-xl border border-slate-700/80 bg-slate-950/75 p-4 lg:w-[20rem] lg:max-w-[40vw]">
-          <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
-              Assign to selection ({selection.size} cells)
-            </label>
-            <select
-              value={elementChoice}
-              onChange={(e) => setElementChoice(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs text-slate-100"
-            >
-              <option value="">— Choose element —</option>
-              {dropdownOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={applyElementToSelection}
-              disabled={!elementChoice || selection.size === 0}
-              className="mt-2 w-full rounded-lg border border-emerald-700 bg-emerald-900/60 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-100 disabled:opacity-40"
-            >
-              Apply element
-            </button>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
-              Notes (per cell in selection)
-            </label>
-            <textarea
-              value={notesDraft}
-              onChange={(e) => setNotesDraft(e.target.value)}
-              rows={5}
-              placeholder='e.g. "At 1024×768 collapse to icon + context menu"'
-              className="mt-2 w-full resize-y rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs text-slate-100 placeholder:text-slate-600"
-            />
-            <button
-              type="button"
-              onClick={applyNotesToSelection}
-              disabled={selection.size === 0}
-              className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-800/80 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200 disabled:opacity-40"
-            >
-              Apply notes
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-2 border-t border-slate-700/80 pt-4">
-            <button
-              type="button"
-              onClick={loadDemo}
-              className="rounded-lg border border-sky-700/60 bg-sky-950/50 py-2 text-[10px] font-black uppercase tracking-widest text-sky-100"
-            >
-              Load demo placements
-            </button>
-            <button
-              type="button"
-              onClick={clearSelectionCells}
-              disabled={selection.size === 0}
-              className="rounded-lg border border-red-900/60 bg-red-950/40 py-2 text-[10px] font-black uppercase tracking-widest text-red-200 disabled:opacity-40"
-            >
-              Clear assignments in selection
-            </button>
-            <button
-              type="button"
-              onClick={exportJson}
-              className="rounded-lg border border-amber-600/70 bg-amber-500/15 py-2 text-[10px] font-black uppercase tracking-widest text-amber-100"
-            >
-              Download JSON export
-            </button>
-            <button
-              type="button"
-              onClick={() => void copyExport()}
-              className="rounded-lg border border-slate-600 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200"
-            >
-              Copy JSON to clipboard
-            </button>
-          </div>
-
-          <p className="text-[9px] leading-relaxed text-slate-500">
-            Live preview uses real components + a fixture room (no GameService). Extra slots: curse zone, room chat,
-            tyrant crown. Export includes browser viewport, preview canvas size, grid FR templates, and cell notes.
-          </p>
-        </aside>
-        </div>
-
-        <section className="flex min-h-[200px] shrink-0 flex-col gap-2 border-t border-slate-700/70 bg-slate-950/40 pt-3">
-          <div className="flex flex-wrap items-center gap-2 px-1">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Live preview canvas</span>
-            <select
-              value={`${previewW}x${previewH}`}
-              onChange={(e) => {
-                const [w, h] = e.target.value.split('x').map(Number);
-                setPreviewW(w!);
-                setPreviewH(h!);
-              }}
-              className="rounded-lg border border-slate-600 bg-slate-900 px-2 py-1.5 text-[10px] font-bold text-slate-100"
-            >
-              {PREVIEW_PRESETS.map((p) => (
-                <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <span className="text-[9px] text-slate-500">
-              Scales to fit · each cell region uses overflow-auto so clipping shows scrollbars in the tool.
-            </span>
-          </div>
-          <LayoutEditorLivePreview
-            layer={layer}
-            cells={activeMap}
-            room={previewRoom}
-            myUid={previewRoom.hostUid}
-            previewWidth={previewW}
-            previewHeight={previewH}
-          />
-        </section>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <LayoutEditorLivePreview
+          paintMode
+          gridRef={gridRef}
+          selection={selection}
+          onGridPointerDown={handleGridPointerDown}
+          layer={layer}
+          cells={activeMap}
+          room={previewRoom}
+          myUid={previewRoom.hostUid}
+          previewWidth={previewW}
+          previewHeight={previewH}
+        />
       </div>
     </div>
   );
